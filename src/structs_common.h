@@ -25,6 +25,26 @@ typedef struct dynamicAlloc_t {
     int8_t data[0];
 } dynamicAlloc_t;
 
+// Stored at the beginning of each file.
+typedef struct fileHeader_t {
+    uint8_t attributes;
+    uint8_t nameSize;
+    int32_t contentSize;
+    int32_t next;
+} fileHeader_t;
+
+// Represents a file which has been opened. Stored in the data region of a dynamicHeapAlloc_t.
+typedef struct fileHandle_t {
+    int32_t address;
+    uint8_t attributes;
+    uint8_t nameSize;
+    int32_t contentSize;
+    // Pointer to runningApp_t.
+    allocPointer_t runningApp;
+    int8_t initErr;
+    int8_t openDepth;
+} fileHandle_t;
+
 // Stored at the beginning of a running application allocation.
 typedef struct runningAppHeader_t {
     // fileHandle_t of an application.
@@ -102,6 +122,22 @@ typedef struct bytecodeLocalFrameHeader_t {
     // Offset from the beginning of the current function body.
     int32_t errorHandler;
 } bytecodeLocalFrameHeader_t;
+
+typedef struct instructionArg_t {
+    uint8_t prefix;
+    union {
+        // For HEAP_MEM_REF_TYPE, the union contains startAddress, size, and index.
+        // For CONSTANT_REF_TYPE, the union contains constantValue.
+        // For APP_DATA_REF_TYPE, the union contains appDataIndex.
+        struct {
+            heapMemoryOffset_t startAddress;
+            heapMemoryOffset_t index;
+            heapMemoryOffset_t size;
+        };
+        int32_t constantValue;
+        int32_t appDataIndex;
+    };
+} instructionArg_t;
 
 // Defines a function available in a system application.
 typedef struct systemAppFunction_t {

@@ -1,6 +1,8 @@
 
 #include "./headers.h"
 
+const int8_t BOOT_STRING_CONSTANT[] PROGMEM = "boot";
+
 const int8_t argumentAmountOffsetArray[] PROGMEM = {
     0, 8, 13, 17, 22, 28, 32, 37, 43, 49, 55, 58
 };

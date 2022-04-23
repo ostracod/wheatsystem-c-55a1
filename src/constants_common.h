@@ -35,6 +35,18 @@
 #define CAPACITY_ERR_CODE 0x0D
 #define THROTTLE_ERR_CODE 0x0E
 
+#define CONSTANT_REF_TYPE 0x0
+#define GLOBAL_FRAME_REF_TYPE 0x1
+#define LOCAL_FRAME_REF_TYPE 0x2
+#define PREV_ARG_FRAME_REF_TYPE 0x3
+#define NEXT_ARG_FRAME_REF_TYPE 0x4
+#define APP_DATA_REF_TYPE 0x5
+#define DYNAMIC_ALLOC_REF_TYPE 0x6
+#define HEAP_MEM_REF_TYPE 0x7
+
+#define SIGNED_INT_8_TYPE 0x0
+#define SIGNED_INT_32_TYPE 0x1
+
 #define INIT_FUNC_ID 1
 #define KILL_FUNC_ID 2
 #define LISTEN_TERM_FUNC_ID 3
@@ -48,6 +60,9 @@
 #define SET_GPIO_MODE_FUNC_ID 11
 #define READ_GPIO_FUNC_ID 12
 #define WRT_GPIO_FUNC_ID 13
+
+// Fixed array of characters.
+const int8_t BOOT_STRING_CONSTANT[4];
 
 // Mapping from more significant opcode nybble to offset in argumentAmountArray. Fixed array of values.
 const int8_t argumentAmountOffsetArray[12];

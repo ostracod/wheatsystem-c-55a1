@@ -28,7 +28,7 @@ $(AVR_ELF): $(AVR_OBJECTS)
 
 $(UNIX_EXECUTABLE): $(UNIX_OBJECTS)
 	$(ENSURE_BUILD_DIR)
-	$(UNIX_CC) $^ -o $@
+	$(UNIX_CC) -lncurses $^ -o $@
 
 %.o_avr: %.c
 	$(AVR_CC) -Wno-char-subscripts -Os -D WHEATSYSTEM_AVR -DF_CPU=8000000 -mmcu=$(AVR_MCU) -fstack-usage -c $^ -o $@
