@@ -31,10 +31,10 @@ $(UNIX_EXECUTABLE): $(UNIX_OBJECTS)
 	$(UNIX_CC) $^ -o $@
 
 %.o_avr: %.c
-	$(AVR_CC) -Wno-char-subscripts -Os -DF_CPU=8000000 -mmcu=$(AVR_MCU) -fstack-usage -c $^ -o $@
+	$(AVR_CC) -Wno-char-subscripts -Os -D WHEATSYSTEM_AVR -DF_CPU=8000000 -mmcu=$(AVR_MCU) -fstack-usage -c $^ -o $@
 
 %.o_unix: %.c
-	$(UNIX_CC) -Wall -c -D _GNU_SOURCE $^ -o $@
+	$(UNIX_CC) -Wall -c -D WHEATSYSTEM_UNIX -D _GNU_SOURCE $^ -o $@
 
 clean:
 	rm -f $(wildcard $(SRC_DIR)/*.o_avr) $(wildcard $(SRC_DIR)/*.o_unix) $(wildcard $(SRC_DIR)/*.su) $(AVR_ELF) $(AVR_HEX) $(UNIX_EXECUTABLE)
