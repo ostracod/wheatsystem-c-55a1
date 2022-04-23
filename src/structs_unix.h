@@ -1,6 +1,4 @@
 
-#pragma pack(push, 1)
-
 // Represents a file which has been opened. Stored in the data region of a dynamicHeapAlloc_t.
 typedef struct fileHandle_t {
     int8_t *name;
@@ -25,7 +23,5 @@ typedef struct termAppGlobalFrame_t {
     allocPointer_t observer;
     int32_t termInputIndex;
 } termAppGlobalFrame_t;
-
-#pragma pack(pop)
 
 

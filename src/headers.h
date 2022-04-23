@@ -18,6 +18,16 @@
 #endif
 #include "./structs_common.h"
 
+#ifdef WHEATSYSTEM_AVR
+#include "./constants_avr.h"
+#endif
+#ifdef WHEATSYSTEM_UNIX
+#include "./constants_unix.h"
+#endif
+#include "./constants_common.h"
+
+#include "./funcs_common.h"
+
 // HEADER_FILE
 #endif
 

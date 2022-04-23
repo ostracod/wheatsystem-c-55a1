@@ -1,5 +1,7 @@
 
+#ifdef WHEATSYSTEM_AVR
 #pragma pack(push, 1)
+#endif
 
 // Stored at the beginning of each heap allocation.
 typedef struct allocHeader_t {
@@ -126,6 +128,8 @@ typedef struct systemGlobalFrameHeader_t {
     int8_t id;
 } systemGlobalFrameHeader_t;
 
+#ifdef WHEATSYSTEM_AVR
 #pragma pack(pop)
+#endif
 
 
