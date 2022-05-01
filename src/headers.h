@@ -34,6 +34,12 @@
 #endif
 #include "./vars_common.h"
 
+#ifdef WHEATSYSTEM_AVR
+#include "./funcs_avr.h"
+#endif
+#ifdef WHEATSYSTEM_UNIX
+#include "./funcs_unix.h"
+#endif
 #include "./funcs_common.h"
 
 // HEADER_FILE
