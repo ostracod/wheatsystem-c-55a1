@@ -21,4 +21,6 @@ void writeStorageSpaceRange(int32_t address, void *source, int32_t amount);
 // Persists any pending changes to non-volatile storage.
 void flushStorageSpace();
 
+void sleepMilliseconds(int32_t milliseconds);
+
 

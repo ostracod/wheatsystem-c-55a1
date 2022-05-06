@@ -1,4 +1,6 @@
 
+#include <util/delay.h>
+
 // Retrieves a value within the given fixed array.
 // "name" is a fixed array.
 // "index" is the offset of byte from which to start reading.
@@ -10,6 +12,8 @@
 
 // Persists any pending changes to non-volatile storage.
 #define flushStorageSpace()
+
+#define sleepMilliseconds(milliseconds) _delay_ms(milliseconds)
 
 // Sets up the AVR SPI bus. Must be called before using the SPI bus.
 void initializeSpi();

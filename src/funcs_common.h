@@ -162,10 +162,182 @@
 // Retrieves the type of a file from the given bit field.
 #define getTypeFromFileAttributes(fileAttributes) (fileAttributes & 0x03)
 
+// Retrieves a member of the running application header in the given running application.
+// "runningApp" is an allocPointer_t to a runningApp_t.
+// "memberName" is the name of a member in runningAppHeader_t.
+#define getRunningAppMember(runningApp, memberName) \
+    readAlloc(runningApp, getStructMemberOffset(runningAppHeader_t, memberName), getStructMemberType(runningAppHeader_t, memberName))
+// Modifies a member of the running application header in the given running application.
+// "runningApp" is an allocPointer_t to a runningApp_t.
+// "memberName" is the name of a member in runningAppHeader_t.
+#define setRunningAppMember(runningApp, memberName, value) \
+    writeAlloc(runningApp, getStructMemberOffset(runningAppHeader_t, memberName), getStructMemberType(runningAppHeader_t, memberName), value)
+
+// Retrieves the address of the global frame data region in the given running application.
+// "runningApp" is an allocPointer_t to a runningApp_t.
+#define getGlobalFrameDataAddress(runningApp) \
+    (getAllocDataAddress(runningApp) + sizeof(runningAppHeader_t))
+// Retrieves the size of the global frame data region in the given running application.
+// "runningApp" is an allocPointer_t to a runningApp_t.
+#define getGlobalFrameSize(runningApp) \
+    (getAllocSize(runningApp) - sizeof(runningAppHeader_t))
+
+// Reads a value from the global frame data region in the given running application.
+// "runningApp" is an allocPointer_t to a runningApp_t.
+// "index" is the offset of first byte to read.
+#define readGlobalFrame(runningApp, index, type) \
+    readHeapMemory(getGlobalFrameDataAddress(runningApp) + index, type)
+// Writes a value to the global frame data region in the given running application.
+// "runningApp" is an allocPointer_t to a runningApp_t.
+// "index" is the offset of first byte to read.
+#define writeGlobalFrame(runningApp, index, type, value) \
+    writeHeapMemory(getGlobalFrameDataAddress(runningApp) + index, type, value)
+
+// Retrieves a member of the local frame header in the given local frame.
+// "localFrame" is an allocPointer_t to a localFrame_t.
+// "memberName" is the name of a member in localFrameHeader_t.
+#define getLocalFrameMember(localFrame, memberName) \
+    readAlloc(localFrame, getStructMemberOffset(localFrameHeader_t, memberName), getStructMemberType(localFrameHeader_t, memberName))
+// Modifies a member of the local frame header in the given local frame.
+// "localFrame" is an allocPointer_t to a localFrame_t.
+// "memberName" is the name of a member in localFrameHeader_t.
+#define setLocalFrameMember(localFrame, memberName, value) \
+    writeAlloc(localFrame, getStructMemberOffset(localFrameHeader_t, memberName), getStructMemberType(localFrameHeader_t, memberName), value)
+
+// Retrieves the address of the data region in the given local frame.
+// "localFrame" is an allocPointer_t to a localFrame_t.
+#define getLocalFrameDataAddress(localFrame) \
+    (getAllocDataAddress(localFrame) + sizeof(localFrameHeader_t))
+// Retrieves the size of the data region in the given local frame.
+// "localFrame" is an allocPointer_t to a localFrame_t.
+#define getLocalFrameSize(localFrame) \
+    (getAllocSize(localFrame) - sizeof(localFrameHeader_t))
+
+// Reads a value from the data region in the given local frame.
+// "localFrame" is an allocPointer_t to a localFrame_t.
+// "index" is the offset of first byte to read.
+#define readLocalFrame(localFrame, index, type) \
+    readHeapMemory(getLocalFrameDataAddress(localFrame) + index, type)
+// Writes a value to the data region in the given local frame.
+// "localFrame" is an allocPointer_t to a localFrame_t.
+// "index" is the offset of first byte to read.
+#define writeLocalFrame(localFrame, index, type, value) \
+    writeHeapMemory(getLocalFrameDataAddress(localFrame) + index, type, value)
+
+// Retrieves the address of the data region in the given argument frame.
+// "argFrame" is an allocPointer_t to an argFrame_t.
+#define getArgFrameDataAddress(argFrame) getAllocDataAddress(argFrame)
+// Retrieves the size of the data region in the given argument frame.
+// "argFrame" is an allocPointer_t to an argFrame_t.
+#define getArgFrameSize(argFrame) getAllocSize(argFrame)
+
+// Reads a value from the data region in the given argument frame.
+// "argFrame" is an allocPointer_t to an argFrame_t.
+// "index" is the offset of first byte to read.
+#define readArgFrame(argFrame, index, type) \
+    readAlloc(argFrame, index, type)
+// Writes a value to the data region in the given argument frame.
+// "argFrame" is an allocPointer_t to an argFrame_t.
+// "index" is the offset of first byte to read.
+#define writeArgFrame(argFrame, index, type, value) \
+    writeAlloc(argFrame, index, type, value)
+
+// Retrieves the argument frame which has been passed to the current function invocation.
+#define getPreviousArgFrame() ({ \
+    allocPointer_t tempLocalFrame = getLocalFrameMember(currentLocalFrame, previousLocalFrame); \
+    getLocalFrameMember(tempLocalFrame, nextArgFrame); \
+})
+// Deletes any argument frame which has been created by the current function invocation.
+#define cleanUpNextArgFrame() cleanUpNextArgFrameHelper(currentLocalFrame)
+
+// Retrieves a member from the header of the given bytecode application.
+// "fileHandle" is an allocPointer_t to a fileHandle_t.
+// "memberName" is the name of a member in bytecodeAppHeader_t
+#define getBytecodeAppMember(fileHandle, memberName) \
+    readFile(fileHandle, getStructMemberOffset(bytecodeAppHeader_t, memberName), getStructMemberType(bytecodeAppHeader_t, memberName))
+
+// Reads a value from the function table of a bytecode app.
+// "fileHandle" is an allocPointer_t to a fileHandle_t.
+// "index" is the offset of first byte to read.
+#define readBytecodeFunctionTable(fileHandle, index, type) \
+    readFile(fileHandle, sizeof(bytecodeAppHeader_t) + index, type)
+
+// Retrieves a member from a function in the given bytecode application.
+// "fileHandle" is an allocPointer_t to a fileHandle_t.
+// "memberName" is the name of a member in bytecodeFunction_t
+#define getBytecodeFunctionMember(fileHandle, functionIndex, memberName) \
+    readBytecodeFunctionTable(fileHandle, functionIndex * sizeof(bytecodeFunction_t) + getStructMemberOffset(bytecodeFunction_t, memberName), getStructMemberType(bytecodeFunction_t, memberName))
+
+// Retrieves a member from the global frame header belonging to the given bytecode application.
+// "runningApp" is an allocPointer_t to a runningApp_t.
+// "memberName" is the name of a member in bytecodeGlobalFrameHeader_t.
+#define getBytecodeGlobalFrameMember(runningApp, memberName) \
+    readGlobalFrame(runningApp, getStructMemberOffset(bytecodeGlobalFrameHeader_t, memberName), getStructMemberType(bytecodeGlobalFrameHeader_t, memberName))
+// Modifies a member in the global frame header belonging to the given bytecode application.
+// "runningApp" is an allocPointer_t to a runningApp_t.
+// "memberName" is the name of a member in bytecodeGlobalFrameHeader_t.
+#define setBytecodeGlobalFrameMember(runningApp, memberName, value) \
+    writeGlobalFrame(runningApp, getStructMemberOffset(bytecodeGlobalFrameHeader_t, memberName), getStructMemberType(bytecodeGlobalFrameHeader_t, memberName), value)
+
+// Retrieves a member from the header of the given bytecode local frame.
+// "localFrame" is an allocPointer_t to a localFrame_t.
+// "memberName" is the name of a member in bytecodeLocalFrameHeader_t.
+#define getBytecodeLocalFrameMember(localFrame, memberName) \
+    readLocalFrame(localFrame, getStructMemberOffset(bytecodeLocalFrameHeader_t, memberName), getStructMemberType(bytecodeLocalFrameHeader_t, memberName))
+// Modifies a member in the header of the given bytecode local frame.
+// "localFrame" is an allocPointer_t to a localFrame_t.
+// "memberName" is the name of a member in bytecodeLocalFrameHeader_t.
+#define setBytecodeLocalFrameMember(localFrame, memberName, value) \
+    writeLocalFrame(localFrame, getStructMemberOffset(bytecodeLocalFrameHeader_t, memberName), getStructMemberType(bytecodeLocalFrameHeader_t, memberName), value)
+
 // Convenience function to create a system application.
 // "systemAppFunctionArray" is a fixed array of systemAppFunction_t.
 #define createSystemApp(globalFrameSize, systemAppFunctionArray) \
     (systemApp_t){globalFrameSize, systemAppFunctionArray, getArrayLength(systemAppFunctionArray)}
+
+// Retrieves a member from the system application with the given ID.
+// "memberName" is the name of a member in systemApp_t.
+#define getSystemAppMember(id, memberName) \
+    readFixedArrayValue(systemAppArray, id * sizeof(systemApp_t) + getStructMemberOffset(systemApp_t, memberName), getStructMemberType(systemApp_t, memberName))
+// "systemAppFunctionArray" is a fixed array of systemAppFunction_t.
+// "index" is the index of function in "systemAppFunctionArray".
+// "memberName" is the name of a member in systemAppFunction_t.
+#define getSystemAppFunctionListMember(systemAppFunctionArray, index, memberName) \
+    readFixedArrayValue(systemAppFunctionArray, index * sizeof(systemAppFunction_t) + getStructMemberOffset(systemAppFunction_t, memberName), getStructMemberType(systemAppFunction_t, memberName))
+// Retrieves a member from a function belonging to the system application with the given ID.
+// "index" is the index of function in functionList of systemApp_t.
+// "memberName" is the name of a member in systemAppFunction_t.
+#define getSystemAppFunctionMember(id, index, memberName) ({ \
+    const systemAppFunction_t *functionList = getSystemAppMember(id, functionList); \
+    getSystemAppFunctionListMember(functionList, index, memberName); \
+})
+
+// Retrieves a member from the global frame header belonging to the given system application.
+// "runningApp" is an allocPointer_t to a runningApp_t.
+// "memberName" is the name of a member in systemGlobalFrameHeader_t.
+#define getSystemGlobalFrameMember(runningApp, memberName) \
+    readGlobalFrame(runningApp, getStructMemberOffset(systemGlobalFrameHeader_t, memberName), getStructMemberType(systemGlobalFrameHeader_t, memberName))
+// Modifies a member in the global frame header belonging to the given system application.
+// "runningApp" is an allocPointer_t to a runningApp_t.
+// "memberName" is the name of a member in systemGlobalFrameHeader_t.
+#define setSystemGlobalFrameMember(runningApp, memberName, value) \
+    writeGlobalFrame(runningApp, getStructMemberOffset(systemGlobalFrameHeader_t, memberName), getStructMemberType(systemGlobalFrameHeader_t, memberName), value)
+
+// Retrieves a member from the given system application.
+// "runningApp" is an allocPointer_t to a runningApp_t.
+// "memberName" is the name of a member in systemApp_t.
+#define getRunningSystemAppMember(runningApp, memberName) ({ \
+    int8_t systemAppId = getSystemGlobalFrameMember(runningApp, id); \
+    getSystemAppMember(systemAppId, memberName); \
+})
+// Retrieves a member from a function belonging to the given system application.
+// "runningApp" is an allocPointer_t to a runningApp_t.
+// "index" is the index of function in functionList of systemApp_t.
+// "memberName" is the name of a member in systemAppFunction_t.
+#define getRunningSystemAppFunctionMember(runningApp, functionIndex, memberName) ({ \
+    int8_t systemAppId = getSystemGlobalFrameMember(runningApp, id); \
+    getSystemAppFunctionMember(systemAppId, functionIndex, memberName); \
+})
 
 // Creates a heap allocation.
 // "size" is the size of data region in the new allocation.
@@ -237,6 +409,40 @@ int8_t allocIsFileHandle(allocPointer_t pointer);
 // Verifies whether the given pointer references a valid file handle. May assign a new value to unhandledErrorCode.
 // "fileHandle" is a pointer to a fileHandle_t.
 void validateFileHandle(allocPointer_t fileHandle);
+
+// Retrieves an index in the function table of the given running application.
+// "runningApp" is a pointer to a runningApp_t.
+int32_t findFunctionById(allocPointer_t runningApp, int32_t functionId);
+// Retrieves the running application which implements the caller of the currently active function invocation.
+// Returns a pointer to a runningApp_t.
+allocPointer_t getCurrentCaller();
+// Creates an argument frame to be passed to the next function invocation.
+// "size" is the size of data region in the new argument frame.
+// Returns a pointer to a argFrame_t.
+allocPointer_t createNextArgFrame(heapMemoryOffset_t size);
+// "localFrame" is a pointer to a localFrame_t.
+void cleanUpNextArgFrameHelper(allocPointer_t localFrame);
+// Launches a running application from the given file handle.
+// "fileHandle" is a pointer to a fileHandle_t.
+void launchApp(allocPointer_t fileHandle);
+// Invokes a function in the given thread.
+// "threadApp" and "implementer" are pointers to runningApp_t.
+// "functionIndex" is the index of the function in "implementer".
+void callFunction(
+    allocPointer_t threadApp,
+    allocPointer_t implementer,
+    int32_t functionIndex
+);
+// Stops evaluation of the current function invocation, and returns control to the previous function invocation.
+void returnFromFunction();
+// Enters a blocking loop to run all WheatSystem applications.
+void runAppSystem();
+
+// Causes the bytecode interpreter to jump to the given position in the current function.
+// "instructionOffset" is the offset from the beginning of the current function body.
+void jumpToBytecodeInstruction(int32_t instructionOffset);
+// Interprets one bytecode instruction of the currently scheduled bytecode application.
+void evaluateBytecodeInstruction();
 
 // Implements the "init" WheatSystem function.
 void initializeTermApp();

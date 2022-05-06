@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 int32_t getNativeFileSize(FILE *fileHandle) {
     fseek(fileHandle, 0, SEEK_END);
@@ -58,6 +59,13 @@ void getTermSize() {
 
 void writeTermText() {
     // TODO: Implement.
+}
+
+void sleepMilliseconds(int32_t milliseconds) {
+    struct timespec ts;
+    ts.tv_sec = milliseconds / 1000;
+    ts.tv_nsec = (milliseconds % 1000) * 1000000;
+    nanosleep(&ts, NULL);
 }
 
 
