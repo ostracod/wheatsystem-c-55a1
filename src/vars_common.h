@@ -15,4 +15,11 @@ allocPointer_t currentImplementer;
 allocPointer_t currentImplementerFileHandle;
 int8_t currentImplementerFileType;
 
+// Stores arguments of the bytecode instruction which is currently being interpreted.
+instructionArg_t instructionArgArray[MAXIMUM_ARG_AMOUNT];
+// Describes the location of the current bytecode instruction within its application file.
+int32_t currentInstructionFilePos;
+int32_t instructionBodyStartFilePos;
+int32_t instructionBodyEndFilePos;
+
 

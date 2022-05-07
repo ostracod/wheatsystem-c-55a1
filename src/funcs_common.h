@@ -279,6 +279,15 @@
 #define setBytecodeGlobalFrameMember(runningApp, memberName, value) \
     writeGlobalFrame(runningApp, getStructMemberOffset(bytecodeGlobalFrameHeader_t, memberName), getStructMemberType(bytecodeGlobalFrameHeader_t, memberName), value)
 
+// Retrieves the address of the global frame data region belonging to the given bytecode application.
+// "runningApp" is an allocPointer_t to a runningApp_t.
+#define getBytecodeGlobalFrameDataAddress(runningApp) \
+    (getGlobalFrameDataAddress(runningApp) + sizeof(bytecodeGlobalFrameHeader_t))
+// Retrieves the size of the global frame data region belonging to the given bytecode application.
+// "runningApp" is an allocPointer_t to a runningApp_t.
+#define getBytecodeGlobalFrameSize(runningApp) \
+    (getGlobalFrameSize(runningApp) - sizeof(bytecodeGlobalFrameHeader_t))
+
 // Retrieves a member from the header of the given bytecode local frame.
 // "localFrame" is an allocPointer_t to a localFrame_t.
 // "memberName" is the name of a member in bytecodeLocalFrameHeader_t.
@@ -289,6 +298,76 @@
 // "memberName" is the name of a member in bytecodeLocalFrameHeader_t.
 #define setBytecodeLocalFrameMember(localFrame, memberName, value) \
     writeLocalFrame(localFrame, getStructMemberOffset(bytecodeLocalFrameHeader_t, memberName), getStructMemberType(bytecodeLocalFrameHeader_t, memberName), value)
+
+// Retrieves the address of the data region in the given bytecode local frame.
+// "localFrame" is an allocPointer_t to a localFrame_t.
+#define getBytecodeLocalFrameDataAddress(localFrame) \
+    (getLocalFrameDataAddress(localFrame) + sizeof(bytecodeLocalFrameHeader_t))
+// Retrieves the size of the data region in the given bytecode local frame.
+// "localFrame" is an allocPointer_t to a localFrame_t.
+#define getBytecodeLocalFrameSize(localFrame) \
+    (getLocalFrameSize(localFrame) - sizeof(bytecodeLocalFrameHeader_t))
+
+// Reads a value at currentInstructionFilePos within the current bytecode application.
+#define readInstructionData(type) ({ \
+    if (currentInstructionFilePos < instructionBodyStartFilePos || currentInstructionFilePos + sizeof(type) > instructionBodyEndFilePos) { \
+        unhandledErrorCode = INDEX_ERR_CODE; \
+        return; \
+    } \
+    type result = readFile(currentImplementerFileHandle, currentInstructionFilePos, type); \
+    currentInstructionFilePos += sizeof(type); \
+    result; \
+})
+
+// Macros to read attributes in an bytecode instruction argument prefix.
+#define getArgPrefixReferenceType(argPrefix) (argPrefix >> 4)
+#define getArgPrefixDataType(argPrefix) (argPrefix & 0x0F)
+
+// Retrieves the number of bytes which the given argument type occupies.
+#define getArgDataTypeSize(dataType) (dataType == SIGNED_INT_8_TYPE ? 1 : 4)
+
+// Reads an integer from a bytecode argument.
+#define readArgInt(index) ({ \
+    int32_t tempResult = readArgIntHelper(instructionArgArray + index, 0, -1); \
+    if (unhandledErrorCode != 0) { \
+        return; \
+    } \
+    tempResult; \
+})
+// Writes an integer to a bytecode argument.
+#define writeArgInt(index, value) \
+    writeArgIntHelper(instructionArgArray + index, 0, -1, value); \
+    if (unhandledErrorCode != 0) { \
+        return; \
+    }
+
+// Reads an integer from a bytecode argument, and enforces that the integer is constant.
+#define readArgConstantInt(index) ({ \
+    int32_t tempResult = readArgConstantIntHelper(index); \
+    if (unhandledErrorCode != 0) { \
+        return; \
+    } \
+    tempResult; \
+});
+// Reads a pointer to a dynamic allocation from a bytecode argument.
+#define readArgDynamicAlloc(index) ({ \
+    allocPointer_t pointer = readArgInt(index); \
+    validateDynamicAlloc(pointer); \
+    pointer; \
+})
+
+// Reads a pointer to a file handle from a bytecode argument.
+#define readArgFileHandle(index) ({ \
+    allocPointer_t fileHandle = readArgInt(index); \
+    validateFileHandle(fileHandle); \
+    fileHandle; \
+});
+// Reads a pointer to a running app from a bytecode argument.
+#define readArgRunningApp(index) ({ \
+    allocPointer_t runningApp; \
+    readArgRunningAppHelper(&runningApp, index); \
+    runningApp; \
+});
 
 // Convenience function to create a system application.
 // "systemAppFunctionArray" is a fixed array of systemAppFunction_t.
@@ -438,9 +517,30 @@ void returnFromFunction();
 // Enters a blocking loop to run all WheatSystem applications.
 void runAppSystem();
 
+// Determines the address of a bytecode argument which references a heap allocation.
+heapMemoryOffset_t getArgHeapMemoryAddress(
+    instructionArg_t *arg,
+    int32_t offset,
+    int8_t dataTypeSize
+);
+// Determines the size of the data interval which is referenced by the given bytecode argument.
+int32_t getArgBufferSize(instructionArg_t *arg);
+
+// Helper functions for corresponding macros.
+int32_t readArgIntHelper(instructionArg_t *arg, int32_t offset, int8_t dataType);
+void writeArgIntHelper(
+    instructionArg_t *arg,
+    int32_t offset,
+    int8_t dataType,
+    int32_t value
+);
+int32_t readArgConstantIntHelper(int8_t index);
+void readArgRunningAppHelper(allocPointer_t *destination, int8_t index);
+
 // Causes the bytecode interpreter to jump to the given position in the current function.
 // "instructionOffset" is the offset from the beginning of the current function body.
 void jumpToBytecodeInstruction(int32_t instructionOffset);
+void parseInstructionArg(instructionArg_t *destination);
 // Interprets one bytecode instruction of the currently scheduled bytecode application.
 void evaluateBytecodeInstruction();
 
