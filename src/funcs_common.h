@@ -189,7 +189,7 @@
     readHeapMemory(getGlobalFrameDataAddress(runningApp) + index, type)
 // Writes a value to the global frame data region in the given running application.
 // "runningApp" is an allocPointer_t to a runningApp_t.
-// "index" is the offset of first byte to read.
+// "index" is the offset of first byte to write.
 #define writeGlobalFrame(runningApp, index, type, value) \
     writeHeapMemory(getGlobalFrameDataAddress(runningApp) + index, type, value)
 
@@ -220,7 +220,7 @@
     readHeapMemory(getLocalFrameDataAddress(localFrame) + index, type)
 // Writes a value to the data region in the given local frame.
 // "localFrame" is an allocPointer_t to a localFrame_t.
-// "index" is the offset of first byte to read.
+// "index" is the offset of first byte to write.
 #define writeLocalFrame(localFrame, index, type, value) \
     writeHeapMemory(getLocalFrameDataAddress(localFrame) + index, type, value)
 
@@ -238,7 +238,7 @@
     readAlloc(argFrame, index, type)
 // Writes a value to the data region in the given argument frame.
 // "argFrame" is an allocPointer_t to an argFrame_t.
-// "index" is the offset of first byte to read.
+// "index" is the offset of first byte to write.
 #define writeArgFrame(argFrame, index, type, value) \
     writeAlloc(argFrame, index, type, value)
 
@@ -401,6 +401,33 @@
 // "memberName" is the name of a member in systemGlobalFrameHeader_t.
 #define setSystemGlobalFrameMember(runningApp, memberName, value) \
     writeGlobalFrame(runningApp, getStructMemberOffset(systemGlobalFrameHeader_t, memberName), getStructMemberType(systemGlobalFrameHeader_t, memberName), value)
+
+// Retrieves the address of the global frame data region belonging to the given system application.
+// "runningApp" is an allocPointer_t to a runningApp_t.
+#define getSystemGlobalFrameDataAddress(runningApp) \
+    (getGlobalFrameDataAddress(runningApp) + sizeof(systemGlobalFrameHeader_t))
+
+// Reads a value from the global frame data region belonging to the given system application.
+// "runningApp" is an allocPointer_t to a runningApp_t.
+// "index" is the offset of first byte to read.
+#define readSystemGlobalFrame(runningApp, index, type) \
+    readHeapMemory(getSystemGlobalFrameDataAddress(runningApp) + index, type)
+// Writes a value to the global frame data region belonging to the given system application.
+// "runningApp" is an allocPointer_t to a runningApp_t.
+// "index" is the offset of first byte to write.
+#define writeSystemGlobalFrame(runningApp, index, type, value) \
+    writeHeapMemory(getSystemGlobalFrameDataAddress(runningApp) + index, type, value)
+
+// Reads a global variable of the currently active system application.
+// "structDefinition" is the structure of global frame data region.
+// "memberName" is the name of a member in "structDefinition".
+#define readSystemAppGlobalVariable(structDefinition, memberName) \
+    readSystemGlobalFrame(currentImplementer, getStructMemberOffset(structDefinition, memberName), getStructMemberType(structDefinition, memberName))
+// Writes a global variable of the currently active system application.
+// "structDefinition" is the structure of global frame data region.
+// "memberName" is the name of a member in "structDefinition".
+#define writeSystemAppGlobalVariable(structDefinition, memberName, value) \
+    writeSystemGlobalFrame(currentImplementer, getStructMemberOffset(structDefinition, memberName), getStructMemberType(structDefinition, memberName), value)
 
 // Retrieves a member from the given system application.
 // "runningApp" is an allocPointer_t to a runningApp_t.
