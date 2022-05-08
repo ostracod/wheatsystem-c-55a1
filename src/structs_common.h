@@ -1,7 +1,5 @@
 
-#ifdef WHEATSYSTEM_AVR
 #pragma pack(push, 1)
-#endif
 
 // Stored at the beginning of each heap allocation.
 typedef struct allocHeader_t {
@@ -139,6 +137,12 @@ typedef struct instructionArg_t {
     };
 } instructionArg_t;
 
+// The structs here cannot be packed, or else we get a
+// compilation error under macOS arm64.
+#ifdef WHEATSYSTEM_UNIX
+#pragma pack(pop)
+#endif
+
 // Defines a function available in a system application.
 typedef struct systemAppFunction_t {
     // ID of the function.
@@ -158,14 +162,16 @@ typedef struct systemApp_t {
     int8_t functionAmount;
 } systemApp_t;
 
+#ifdef WHEATSYSTEM_UNIX
+#pragma pack(push, 1)
+#endif
+
 // Stored at the beginning of the global frame of a system application.
 typedef struct systemGlobalFrameHeader_t {
     // ID of the system application.
     int8_t id;
 } systemGlobalFrameHeader_t;
 
-#ifdef WHEATSYSTEM_AVR
 #pragma pack(pop)
-#endif
 
 

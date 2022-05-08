@@ -8,7 +8,7 @@ const assemblerDirectoryPath = pathUtils.join(__dirname, "../wheatbytecode-asm")
 const fileTypeSet = {
     generic: 0,
     bytecodeApp: 1,
-    systemApp: 2
+    systemApp: 2,
 };
 
 let logIndentationLevel = 0;
@@ -85,7 +85,7 @@ const createFileAttributes = (fileConfig) => {
     if (typeof fileType === "undefined") {
         throw new Error("Invalid file type. Possible file types include: " + Object.keys(fileTypeSet).join(", "));
     }
-    let output = fileType
+    let output = fileType;
     if (fileConfig.hasAdminPerm) {
         output |= 0x08;
     }
@@ -103,7 +103,7 @@ const assembleBytecodeFile = (sourcePath, destinationPath) => {
     }
     const assemblerMessages = childProcess.execFileSync("node", [
         pathUtils.join(assemblerDirectoryPath, "/dist/assemble.js"),
-        sourcePath
+        sourcePath,
     ]).toString();
     if (!fs.existsSync(destinationPath)) {
         throw new AssemblerError(assemblerMessages);

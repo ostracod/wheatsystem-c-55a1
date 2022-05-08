@@ -1,7 +1,7 @@
 
 // Retrieves the number of elements in the given array.
 #define getArrayLength(name) (int32_t)(sizeof(name) / sizeof(*name))
-#define getArrayElementOffset(name, index) (index * sizeof(name))
+#define getArrayElementOffset(name, index) (index * sizeof(*name))
 #define getArrayElementType(name) typeof(*name)
 
 // Retrieves the type of "memberName" in "structDefinition".

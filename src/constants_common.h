@@ -62,7 +62,7 @@
 #define WRT_GPIO_FUNC_ID 13
 
 // Fixed array of characters.
-const int8_t BOOT_STRING_CONSTANT[4];
+const int8_t BOOT_STRING_CONSTANT[5];
 
 // Mapping from more significant opcode nybble to offset in argumentAmountArray. Fixed array of values.
 const int8_t argumentAmountOffsetArray[12];
