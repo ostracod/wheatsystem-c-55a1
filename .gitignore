@@ -3,5 +3,7 @@
 *.o_unix
 *.su
 build
+boot
+*.dat
 
 

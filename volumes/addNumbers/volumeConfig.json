@@ -1,0 +1,10 @@
+{
+    "files": [
+        {
+            "name": "boot",
+            "type": "bytecodeApp",
+            "hasAdminPerm": true,
+            "isGuarded": false
+        }
+    ]
+}
