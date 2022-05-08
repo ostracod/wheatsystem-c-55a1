@@ -445,6 +445,15 @@
     getSystemAppFunctionMember(systemAppId, functionIndex, memberName); \
 })
 
+// Retrieves a global variable of a term driver.
+// "memberName" is the name of a member in termAppGlobalFrame_t.
+#define readTermAppGlobalVariable(memberName) \
+    readSystemAppGlobalVariable(termAppGlobalFrame_t, memberName)
+// Modifies a global variable of a term driver.
+// "memberName" is the name of a member in termAppGlobalFrame_t.
+#define writeTermAppGlobalVariable(memberName, value) \
+    writeSystemAppGlobalVariable(termAppGlobalFrame_t, memberName, value)
+
 // Creates a heap allocation.
 // "size" is the size of data region in the new allocation.
 allocPointer_t createAlloc(int8_t type, heapMemoryOffset_t size);

@@ -1,0 +1,93 @@
+
+# Create a text allocation from application data.
+MACRO newTextAlloc, dest, startLbl, endLbl
+    newAlloc dest, 0, ?endLbl - ?startLbl
+    wrtBuff dest[0]:s8, startLbl, ?endLbl - ?startLbl
+END
+
+DEF termTextSize, 6
+
+FUNC isPrime
+    
+    ARG isPrime, s8
+    ARG number, s32
+    VAR factor, s32
+    VAR condition, s32
+    
+    wrt isPrime, 1
+    wrt factor, 2
+    LBL checkFactorLoop
+    
+    gre condition, number, factor
+    jmpNZ retSkip, condition
+    ret
+    LBL retSkip
+    mod condition, number, factor
+    jmpNZ registerCompositeSkip, condition
+    wrt isPrime, 0
+    ret
+    LBL registerCompositeSkip
+    
+    add factor, factor, 1
+    jmp checkFactorLoop
+END
+
+FUNC init, init_ID
+    
+    VAR termName, s32
+    VAR termHandle, s32
+    VAR wrtTermIndex, s32
+    newTextAlloc termName, termNameStart, termNameEnd
+    openFile termHandle, termName
+    launch termHandle
+    findFunc wrtTermIndex, termHandle, wrtTerm_ID
+    
+    VAR number, s32
+    VAR termText, s32
+    newAlloc termText, 0, termTextSize
+    
+    wrt number, 2
+    LBL loop
+    
+    newArgFrame 5
+    wrt nextArgFrame[1]:s32, number
+    call isPrime
+    jmpZ printSkip, nextArgFrame[0]:s8
+    
+    VAR termTextIndex, s8
+    VAR unitPlace, s32
+    VAR tempNumber, s32
+    VAR termDigit, s8
+    VAR condition, s8
+    
+    wrt termTextIndex, 0
+    wrt unitPlace, 100000
+    wrt tempNumber, number
+    
+    LBL digitLoop
+    div termDigit, tempNumber, unitPlace
+    add termText[termTextIndex]:s8, 48, termDigit
+    mod tempNumber, tempNumber, unitPlace
+    div unitPlace, unitPlace, 10
+    add termTextIndex, termTextIndex, 1
+    gre condition, termTextSize, termTextIndex
+    jmpNZ digitLoop, condition
+    
+    newArgFrame 12
+    wrt nextArgFrame[0]:s32, 0
+    wrt nextArgFrame[4]:s32, 0
+    wrt nextArgFrame[8]:s32, termText
+    callRemote termHandle, wrtTermIndex
+    
+    LBL printSkip
+    add number, number, 1
+    jmp loop
+END
+
+APP_DATA
+    LBL termNameStart
+    DATA "term"
+    LBL termNameEnd
+END
+
+
