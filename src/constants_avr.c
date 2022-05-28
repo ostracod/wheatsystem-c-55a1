@@ -1,7 +1,7 @@
 
 #include "./headers.h"
 
-const int8_t LCD_INIT_COMMANDS[] PROGMEM = {
+const int8_t lcdInitCommands[] PROGMEM = {
     0x39, 0x1C, 0x52, 0x69, 0x74, 0x38, 0x0C, 0x01, 0x06
 };
 

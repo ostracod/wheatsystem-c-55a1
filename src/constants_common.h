@@ -61,18 +61,20 @@
 #define READ_GPIO_FUNC_ID 12
 #define WRT_GPIO_FUNC_ID 13
 
-// Fixed array of characters.
-const int8_t BOOT_STRING_CONSTANT[5];
-
-// Mapping from more significant opcode nybble to offset in argumentAmountArray. Fixed array of values.
-const int8_t argumentAmountOffsetArray[12];
-// Expected number of arguments for each bytecode instruction. Fixed array of values.
-const int8_t argumentAmountArray[62];
 // The maximum number of arguments which any bytecode instruction accepts.
 #define MAXIMUM_ARG_AMOUNT 4
 
 // Global frame size of a terminal driver.
 #define TERM_APP_GLOBAL_FRAME_SIZE sizeof(termAppGlobalFrame_t)
+
+// Fixed array of characters.
+const int8_t bootStringConstant[5];
+
+// Mapping from more significant opcode nybble to offset in argumentAmountArray. Fixed array of values.
+const int8_t argumentAmountOffsetArray[12];
+// Expected number of arguments for each bytecode instruction. Fixed array of values.
+const int8_t argumentAmountArray[62];
+
 // List of functions which the term driver implements. Fixed array of values.
 const systemAppFunction_t termAppFunctionArray[4];
 

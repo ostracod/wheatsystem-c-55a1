@@ -661,7 +661,7 @@ void scheduleAppThread(allocPointer_t runningApp) {
 void runAppSystem() {
     
     // Launch boot application.
-    allocPointer_t bootFileName = createStringAllocFromFixedArray(BOOT_STRING_CONSTANT);
+    allocPointer_t bootFileName = createStringAllocFromFixedArray(bootStringConstant);
     allocPointer_t bootFileHandle = openFileByStringAlloc(bootFileName);
     deleteAlloc(bootFileName);
     if (bootFileHandle == NULL_ALLOC_POINTER) {

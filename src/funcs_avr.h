@@ -6,11 +6,12 @@
 // "index" is the offset of byte from which to start reading.
 #define readFixedArrayValue(name, index, type) ({int8_t result[sizeof(type)]; memcpy_P(&result, (int8_t *)name + index, sizeof(type)); *(type *)result;})
 
-#define eepromCsPinOutput() DDRB |= 1 << DDB1
-#define eepromCsPinHigh() PORTB |= 1 << PORTB1
-#define eepromCsPinLow() PORTB &= ~(1 << PORTB1)
+#define eepromCsPinOutput() DDRD |= 1 << DDD3
+#define eepromCsPinHigh() PORTD |= 1 << PORTD3
+#define eepromCsPinLow() PORTD &= ~(1 << PORTD3)
 
 // Persists any pending changes to non-volatile storage.
+// Since writeStorageSpaceRange writes to EEPROM immediately, flushStorageSpace does not need to do anything.
 #define flushStorageSpace()
 
 #define sleepMilliseconds(milliseconds) _delay_ms(milliseconds)

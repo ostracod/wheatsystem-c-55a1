@@ -8,6 +8,6 @@
 #define BAUD_RATE_NUMBER (F_CPU / (16 * (int32_t)BAUD_RATE) - 1)
 
 // Fixed array of values.
-const int8_t LCD_INIT_COMMANDS[9];
+const int8_t lcdInitCommands[9];
 
 
