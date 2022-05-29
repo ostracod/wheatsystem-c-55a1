@@ -135,18 +135,28 @@ const assembleVolume = (volumeDirectoryPath) => {
     return volumePath;
 };
 
-logPush("Assembling volumes...");
-
 try {
-    fs.readdirSync(volumesDirectoryPath).forEach((name) => {
-        const volumeDirectoryPath = pathUtils.join(volumesDirectoryPath, name);
-        if (fs.lstatSync(volumeDirectoryPath).isDirectory()) {
-            logPush(`Assembling volume "${name}"...`);
-            const volumePath = assembleVolume(volumeDirectoryPath);
-            logPop(`Finished assembling volume "${name}".`);
-            logMessage("Assembled volume path: " + volumePath);
-        }
-    });
+    if (process.argv.length === 3) {
+        logPush("Assembling volume...");
+        const volumePath = assembleVolume(process.argv[2]);
+        logPop("Finished assembling volume.");
+        logMessage("Assembled volume path: " + volumePath);
+    } else if (process.argv.length === 2) {
+        logPush("Assembling volumes...");
+        fs.readdirSync(volumesDirectoryPath).forEach((name) => {
+            const volumeDirectoryPath = pathUtils.join(volumesDirectoryPath, name);
+            if (fs.lstatSync(volumeDirectoryPath).isDirectory()) {
+                logPush(`Assembling volume "${name}"...`);
+                const volumePath = assembleVolume(volumeDirectoryPath);
+                logPop(`Finished assembling volume "${name}".`);
+                logMessage("Assembled volume path: " + volumePath);
+            }
+        });
+        logPop("Finished assembling volumes.");
+    } else {
+        console.log("Usage: node ./assembleVolumes.js (path?)");
+        process.exit(1);
+    }
 } catch (error) {
     if (error instanceof AssemblerError) {
         console.log("Assembler failed with the following output:");
@@ -157,7 +167,5 @@ try {
         throw error;
     }
 }
-
-logPop("Finished assembling volumes.");
 
 

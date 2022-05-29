@@ -4,8 +4,8 @@
 int8_t *unixVolumePath;
 
 int8_t *storageSpace;
-int32_t storageSpaceSize;
 int8_t storageSpaceIsDirty = false;
+int32_t volumeFileSize;
 
 WINDOW *window = NULL;
 

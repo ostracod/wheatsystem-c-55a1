@@ -71,8 +71,7 @@ int8_t deleteAlloc(allocPointer_t pointer) {
 
 void validateAllocPointer(allocPointer_t pointer) {
     if (pointer == NULL_ALLOC_POINTER) {
-        unhandledErrorCode = NULL_ERR_CODE;
-        return;
+        throw(NULL_ERR_CODE);
     }
     allocPointer_t tempAlloc = firstAlloc;
     while (tempAlloc != NULL_ALLOC_POINTER) {
@@ -81,7 +80,7 @@ void validateAllocPointer(allocPointer_t pointer) {
         }
         tempAlloc = getAllocNext(tempAlloc);
     }
-    unhandledErrorCode = PTR_ERR_CODE;
+    throw(PTR_ERR_CODE);
 }
 
 allocPointer_t createDynamicAlloc(
@@ -119,8 +118,7 @@ void validateDynamicAlloc(allocPointer_t pointer) {
         return;
     }
     if (getAllocType(pointer) != DYNAMIC_ALLOC_TYPE) {
-        unhandledErrorCode = TYPE_ERR_CODE;
-        return;
+        throw(TYPE_ERR_CODE);
     }
 }
 
@@ -154,6 +152,89 @@ void copyStorageNameToMemory(
     }
 }
 
+void createFile(allocPointer_t name, int8_t type, int8_t isGuarded, int32_t contentSize) {
+    
+    // Verify argument values.
+    heapMemoryOffset_t nameAllocAddress = getDynamicAllocDataAddress(name);
+    heapMemoryOffset_t nameSize = getDynamicAllocSize(name);
+    if (nameSize > 127) {
+        throw(DATA_ERR_CODE);
+    }
+    if (type < GENERIC_FILE_TYPE || type > SYSTEM_APP_FILE_TYPE) {
+        throw(TYPE_ERR_CODE);
+    }
+    if (contentSize < 0) {
+        throw(NUM_RANGE_ERR_CODE);
+    }
+    int fileStorageSize = getFileStorageSize(nameSize, contentSize);
+    
+    // Find a storage space gap which is large enough,
+    // and ensure that there is no duplicate name.
+    int32_t previousFileAddress = 0;
+    int32_t nextFileAddress = getFirstFileAddress();
+    int32_t newFileAddress = 0;
+    while (true) {
+        int8_t hasReachedEnd = (nextFileAddress == 0);
+        if (newFileAddress == 0) {
+            int32_t startAddress;
+            if (previousFileAddress == 0) {
+                startAddress = sizeof(storageSpaceHeader_t);
+            } else {
+                int8_t tempNameSize = getFileHeaderMember(previousFileAddress, nameSize);
+                int32_t tempContentSize = getFileHeaderMember(previousFileAddress, contentSize);
+                startAddress = previousFileAddress + getFileStorageSize(tempNameSize, tempContentSize);
+            }
+            int32_t endAddress = hasReachedEnd ? STORAGE_SPACE_SIZE : nextFileAddress;
+            if (endAddress - startAddress >= fileStorageSize) {
+                newFileAddress = startAddress;
+            }
+        }
+        if (hasReachedEnd) {
+            break;
+        }
+        if (memoryNameEqualsStorageName(
+            nameAllocAddress,
+            nameSize,
+            getFileNameAddress(nextFileAddress),
+            getFileHeaderMember(nextFileAddress, nameSize)
+        )) {
+            throw(DATA_ERR_CODE);
+        }
+        previousFileAddress = nextFileAddress;
+        nextFileAddress = getFileHeaderMember(previousFileAddress, next);
+    }
+    if (newFileAddress == 0) {
+        throw(CAPACITY_ERR_CODE);
+    }
+    
+    // Update file linked list.
+    if (previousFileAddress == 0) {
+        setStorageSpaceMember(firstFileAddress, newFileAddress);
+    } else {
+        setFileHeaderMember(previousFileAddress, next, newFileAddress);
+    }
+    
+    // Set up the new file.
+    int8_t attributes = type;
+    if (isGuarded) {
+        attributes |= GUARDED_FILE_ATTR;
+    }
+    setFileHeaderMember(newFileAddress, attributes, attributes);
+    setFileHeaderMember(newFileAddress, nameSize, nameSize);
+    setFileHeaderMember(newFileAddress, contentSize, contentSize);
+    setFileHeaderMember(newFileAddress, next, nextFileAddress);
+    int32_t nameAddress = newFileAddress + sizeof(fileHeader_t);
+    for (uint8_t offset = 0; offset < nameSize; offset++) {
+        int8_t character = readDynamicAlloc(name, offset, int8_t);
+        writeStorageSpace(nameAddress + offset, int8_t, character);
+    }
+    int32_t contentAddress = nameAddress + nameSize;
+    for (int32_t offset = 0; offset < contentSize; offset++) {
+        writeStorageSpace(contentAddress + offset, int8_t, 0);
+    }
+    flushStorageSpace();
+}
+
 allocPointer_t openFile(heapMemoryOffset_t nameAddress, heapMemoryOffset_t nameSize) {
     
     // Return matching file handle if it already exists.
@@ -167,7 +248,7 @@ allocPointer_t openFile(heapMemoryOffset_t nameAddress, heapMemoryOffset_t nameS
         if (!memoryNameEqualsStorageName(
             nameAddress,
             nameSize,
-            getFileHandleMember(tempPointer, address) + sizeof(fileHeader_t),
+            getFileNameAddress(getFileHandleMember(tempPointer, address)),
             getFileHandleMember(tempPointer, nameSize)
         )) {
             continue;
@@ -291,7 +372,7 @@ void validateFileHandle(allocPointer_t fileHandle) {
         return;
     }
     if (getDynamicAllocMember(fileHandle, creator) != NULL_ALLOC_POINTER) {
-        unhandledErrorCode = TYPE_ERR_CODE;
+        throw(TYPE_ERR_CODE);
     }
 }
 
@@ -384,14 +465,12 @@ void launchApp(allocPointer_t fileHandle) {
                 instructionBodySize
             );
             if (instructionBodyFilePos != expectedFilePos) {
-                unhandledErrorCode = DATA_ERR_CODE;
-                return;
+                throw(DATA_ERR_CODE);
             }
             expectedFilePos += instructionBodySize;
         }
         if (expectedFilePos != appDataFilePos || appDataFilePos > fileSize) {
-            unhandledErrorCode = DATA_ERR_CODE;
-            return;
+            throw(DATA_ERR_CODE);
         }
         
         globalFrameSize = sizeof(bytecodeGlobalFrameHeader_t) + (heapMemoryOffset_t)getBytecodeAppMember(fileHandle, globalFrameSize);
@@ -399,15 +478,13 @@ void launchApp(allocPointer_t fileHandle) {
         
         // Validate system app file.
         if (fileSize != 1) {
-            unhandledErrorCode = DATA_ERR_CODE;
-            return;
+            throw(DATA_ERR_CODE);
         }
         
         systemAppId = readFile(fileHandle, 0, int8_t);
         globalFrameSize = sizeof(systemGlobalFrameHeader_t) + getSystemAppMember(systemAppId, globalFrameSize);
     } else {
-        unhandledErrorCode = TYPE_ERR_CODE;
-        return;
+        throw(TYPE_ERR_CODE);
     }
     
     // Create allocation for the running app.
@@ -503,8 +580,7 @@ void callFunction(
         functionAmount = getSystemAppMember(systemAppId, functionAmount);
     }
     if (functionIndex < 0 || functionIndex >= functionAmount) {
-        unhandledErrorCode = INDEX_ERR_CODE;
-        return;
+        throw(INDEX_ERR_CODE);
     }
     
     // Validate arg frame size.
@@ -527,8 +603,7 @@ void callFunction(
         }
         if (previousArgFrame == NULL_ALLOC_POINTER
                 || getArgFrameSize(previousArgFrame) != argFrameSize) {
-            unhandledErrorCode = ARG_FRAME_ERR_CODE;
-            return;
+            throw(ARG_FRAME_ERR_CODE);
         }
     }
     
@@ -798,7 +873,7 @@ void writeArgIntHelper(
             writeHeapMemory(tempAddress, int32_t, value);
         }
     } else {
-        unhandledErrorCode = TYPE_ERR_CODE;
+        throw(TYPE_ERR_CODE);
     }
 }
 
@@ -816,11 +891,10 @@ void readArgRunningAppHelper(allocPointer_t *destination, int8_t index) {
     allocPointer_t runningApp = getFileHandleRunningApp(appHandle);
     if (runningApp == NULL_ALLOC_POINTER) {
         if (getFileHandleType(runningApp) == GENERIC_FILE_TYPE) {
-            unhandledErrorCode = TYPE_ERR_CODE;
+            throw(TYPE_ERR_CODE);
         } else {
-            unhandledErrorCode = STATE_ERR_CODE;
+            throw(STATE_ERR_CODE);
         }
-        return;
     }
     *destination = runningApp;
 }
@@ -842,8 +916,7 @@ void parseInstructionArg(instructionArg_t *destination) {
     uint8_t referenceType = getArgPrefixReferenceType(argPrefix);
     uint8_t dataType = getArgPrefixDataType(argPrefix);
     if (dataType > SIGNED_INT_32_TYPE) {
-        unhandledErrorCode = TYPE_ERR_CODE;
-        return;
+        throw(TYPE_ERR_CODE);
     }
     if (referenceType == CONSTANT_REF_TYPE) {
         destination->prefix = argPrefix;
@@ -901,22 +974,19 @@ void parseInstructionArg(instructionArg_t *destination) {
                             previousLocalFrame
                         );
                         if (tempLocalFrame == NULL_ALLOC_POINTER) {
-                            unhandledErrorCode = ARG_FRAME_ERR_CODE;
-                            return;
+                            throw(ARG_FRAME_ERR_CODE);
                         }
                     } else if (referenceType == NEXT_ARG_FRAME_REF_TYPE) {
                         tempLocalFrame = currentLocalFrame;
                     } else {
-                        unhandledErrorCode = TYPE_ERR_CODE;
-                        return;
+                        throw(TYPE_ERR_CODE);
                     }
                     allocPointer_t argFrame = getLocalFrameMember(
                         tempLocalFrame,
                         nextArgFrame
                     );
                     if (argFrame == NULL_ALLOC_POINTER) {
-                        unhandledErrorCode = ARG_FRAME_ERR_CODE;
-                        return;
+                        throw(ARG_FRAME_ERR_CODE);
                     }
                     startAddress = getArgFrameDataAddress(argFrame);
                     tempSize = getArgFrameSize(argFrame);
@@ -983,8 +1053,7 @@ void evaluateBytecodeInstruction() {
             int32_t destinationBufferSize = getArgBufferSize(destination);
             int32_t sourceBufferSize = getArgBufferSize(source);
             if (size < 0 || size > destinationBufferSize || size > sourceBufferSize) {
-                unhandledErrorCode = NUM_RANGE_ERR_CODE;
-                return;
+                throw(NUM_RANGE_ERR_CODE);
             }
             for (int32_t offset = 0; offset < size; offset++) {
                 int8_t tempValue = readArgIntHelper(source, offset, SIGNED_INT_8_TYPE);
@@ -1000,8 +1069,7 @@ void evaluateBytecodeInstruction() {
             // newArgFrame.
             heapMemoryOffset_t argFrameSize = (heapMemoryOffset_t)readArgInt(0);
             if (argFrameSize < 0) {
-                unhandledErrorCode = NUM_RANGE_ERR_CODE;
-                return;
+                throw(NUM_RANGE_ERR_CODE);
             }
             createNextArgFrame(argFrameSize);
         } else if (opcodeOffset == 0x3) {
@@ -1010,8 +1078,7 @@ void evaluateBytecodeInstruction() {
                 & (GUARDED_ALLOC_ATTR | SENTRY_ALLOC_ATTR);
             heapMemoryOffset_t tempSize = (heapMemoryOffset_t)readArgInt(2);
             if (tempSize < 0) {
-                unhandledErrorCode = NUM_RANGE_ERR_CODE;
-                return;
+                throw(NUM_RANGE_ERR_CODE);
             }
             allocPointer_t tempAlloc = createDynamicAlloc(
                 tempSize,
@@ -1039,8 +1106,7 @@ void evaluateBytecodeInstruction() {
             allocPointer_t tempCreator = getDynamicAllocMember(tempAlloc, creator);
             writeArgInt(0, tempCreator);
         } else {
-            unhandledErrorCode = NO_IMPL_ERR_CODE;
-            return;
+            throw(NO_IMPL_ERR_CODE);
         }
     } else if (opcodeCategory == 0x1) {
         // Control flow instructions.
@@ -1063,8 +1129,7 @@ void evaluateBytecodeInstruction() {
                 jumpToBytecodeInstruction(instructionOffset);
             }
         } else {
-            unhandledErrorCode = NO_IMPL_ERR_CODE;
-            return;
+            throw(NO_IMPL_ERR_CODE);
         }
     } else if (opcodeCategory == 0x2) {
         // Error instructions.
@@ -1079,18 +1144,15 @@ void evaluateBytecodeInstruction() {
             // throw.
             int32_t tempCode = readArgInt(0);
             if (tempCode < -128 || tempCode > 127) {
-                unhandledErrorCode = NUM_RANGE_ERR_CODE;
-                return;
+                throw(NUM_RANGE_ERR_CODE);
             }
-            unhandledErrorCode = tempCode;
-            return;
+            throw(tempCode);
         } else if (opcodeOffset == 0x3) {
             // err.
             int8_t tempCode = getLocalFrameMember(currentLocalFrame, lastErrorCode);
             writeArgInt(0, tempCode);
         } else {
-            unhandledErrorCode = NO_IMPL_ERR_CODE;
-            return;
+            throw(NO_IMPL_ERR_CODE);
         }
     } else if (opcodeCategory == 0x3) {
         // Function instructions.
@@ -1123,8 +1185,7 @@ void evaluateBytecodeInstruction() {
             }
             writeArgInt(0, fileHandle);
         } else {
-            unhandledErrorCode = NO_IMPL_ERR_CODE;
-            return;
+            throw(NO_IMPL_ERR_CODE);
         }
     } else if (opcodeCategory == 0x4) {
         // Bitwise instructions.
@@ -1152,8 +1213,7 @@ void evaluateBytecodeInstruction() {
                 // bRight.
                 result = (operand1 >> operand2);
             } else {
-                unhandledErrorCode = NO_IMPL_ERR_CODE;
-                return;
+                throw(NO_IMPL_ERR_CODE);
             }
         }
         writeArgInt(0, result);
@@ -1175,8 +1235,7 @@ void evaluateBytecodeInstruction() {
             // nGre.
             result = (operand1 <= operand2);
         } else {
-            unhandledErrorCode = NO_IMPL_ERR_CODE;
-            return;
+            throw(NO_IMPL_ERR_CODE);
         }
         writeArgInt(0, result);
     } else if (opcodeCategory == 0x6) {
@@ -1196,20 +1255,17 @@ void evaluateBytecodeInstruction() {
         } else if (opcodeOffset == 0x3) {
             // div.
             if (operand2 == 0) {
-                unhandledErrorCode = NUM_RANGE_ERR_CODE;
-                return;
+                throw(NUM_RANGE_ERR_CODE);
             }
             result = operand1 / operand2;
         } else if (opcodeOffset == 0x4) {
             // mod.
             if (operand2 == 0) {
-                unhandledErrorCode = NUM_RANGE_ERR_CODE;
-                return;
+                throw(NUM_RANGE_ERR_CODE);
             }
             result = operand1 % operand2;
         } else {
-            unhandledErrorCode = NO_IMPL_ERR_CODE;
-            return;
+            throw(NO_IMPL_ERR_CODE);
         }
         writeArgInt(0, result);
     } else if (opcodeCategory == 0x7) {
@@ -1219,18 +1275,23 @@ void evaluateBytecodeInstruction() {
             allocPointer_t appHandle = readArgFileHandle(0);
             launchApp(appHandle);
         } else {
-            unhandledErrorCode = NO_IMPL_ERR_CODE;
-            return;
+            throw(NO_IMPL_ERR_CODE);
         }
     } else if (opcodeCategory == 0x8) {
         // File instructions.
-        if (opcodeOffset == 0x2) {
+        if (opcodeOffset == 0x0) {
+            // newFile.
+            allocPointer_t fileName = readArgDynamicAlloc(0);
+            int32_t type = readArgInt(1);
+            int8_t isGuarded = (readArgInt(2) != 0);
+            int32_t size = readArgInt(3);
+            createFile(fileName, type, isGuarded, size);
+        } else if (opcodeOffset == 0x2) {
             // openFile.
             allocPointer_t fileName = readArgDynamicAlloc(1);
             allocPointer_t fileHandle = openFileByStringAlloc(fileName);
             if (fileHandle == NULL_ALLOC_POINTER) {
-                unhandledErrorCode = MISSING_ERR_CODE;
-                return;
+                throw(MISSING_ERR_CODE);
             }
             writeArgInt(0, fileHandle);
         } else if (opcodeOffset == 0x3) {
@@ -1238,8 +1299,7 @@ void evaluateBytecodeInstruction() {
             allocPointer_t fileHandle = readArgFileHandle(0);
             closeFile(fileHandle);
         } else {
-            unhandledErrorCode = NO_IMPL_ERR_CODE;
-            return;
+            throw(NO_IMPL_ERR_CODE);
         }
     } else if (opcodeCategory == 0x9) {
         // File metadata instructions.
@@ -1248,12 +1308,10 @@ void evaluateBytecodeInstruction() {
             allocPointer_t nameArray = getAllFileNames();
             writeArgInt(0, nameArray);
         } else {
-            unhandledErrorCode = NO_IMPL_ERR_CODE;
-            return;
+            throw(NO_IMPL_ERR_CODE);
         }
     } else {
-        unhandledErrorCode = NO_IMPL_ERR_CODE;
-        return;
+        throw(NO_IMPL_ERR_CODE);
     }
 }
 

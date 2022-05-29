@@ -1,4 +1,8 @@
 
+#define throw(errorCode) \
+    unhandledErrorCode = errorCode; \
+    return;
+
 // Retrieves the number of elements in the given array.
 #define getArrayLength(name) (int32_t)(sizeof(name) / sizeof(*name))
 #define getArrayElementOffset(name, index) (index * sizeof(*name))
@@ -108,10 +112,20 @@
 #define writeStorageSpace(address, type, value) \
     ({type tempValue = value; writeStorageSpaceRange(address, &tempValue, sizeof(type));})
 
+// Retrieves a member of the storage space header.
+// "memberName" is the name of a member in storageSpaceHeader_t.
+#define getStorageSpaceMember(memberName) readStorageSpace(getStructMemberOffset(storageSpaceHeader_t, memberName), getStructMemberType(storageSpaceHeader_t, memberName))
+// Modifies a member of the storage space header.
+// "memberName" is the name of a member in storageSpaceHeader_t.
+#define setStorageSpaceMember(memberName, value) writeStorageSpace(getStructMemberOffset(storageSpaceHeader_t, memberName), getStructMemberType(storageSpaceHeader_t, memberName), value)
+
 // Retrieves the address of the first file in the linked list.
-#define getFirstFileAddress() readStorageSpace(0, int32_t)
+#define getFirstFileAddress() getStorageSpaceMember(firstFileAddress)
 // Retrieves the name address of the given file.
 #define getFileNameAddress(fileAddress) (fileAddress + sizeof(fileHeader_t))
+// Retrieves the total amount of storage space which a file occupies.
+#define getFileStorageSize(nameSize, contentSize) \
+    (sizeof(fileHeader_t) + nameSize + contentSize)
 
 // Retrieves a member of the file header at the given storage address.
 // "memberName" is the name of a member in fileHeader_t.
@@ -156,9 +170,11 @@
     ({type result; readFileRange(&result, fileHandle, pos, sizeof(type)); result;})
 
 // Retrieves whether a file has admin permission from the given bit field.
-#define getHasAdminPermFromFileAttributes(fileAttributes) ((fileAttributes & 0x08) > 0)
+#define getHasAdminPermFromFileAttributes(fileAttributes) \
+    ((fileAttributes & ADMIN_FILE_ATTR) > 0)
 // Retrieves whether a file is guarded from the given bit field.
-#define getIsGuardedFromFileAttributes(fileAttributes) ((fileAttributes & 0x04) > 0)
+#define getIsGuardedFromFileAttributes(fileAttributes) \
+    ((fileAttributes & GUARDED_FILE_ATTR) > 0)
 // Retrieves the type of a file from the given bit field.
 #define getTypeFromFileAttributes(fileAttributes) (fileAttributes & 0x03)
 
@@ -311,8 +327,7 @@
 // Reads a value at currentInstructionFilePos within the current bytecode application.
 #define readInstructionData(type) ({ \
     if (currentInstructionFilePos < instructionBodyStartFilePos || currentInstructionFilePos + sizeof(type) > instructionBodyEndFilePos) { \
-        unhandledErrorCode = INDEX_ERR_CODE; \
-        return; \
+        throw(INDEX_ERR_CODE); \
     } \
     type result = readFile(currentImplementerFileHandle, currentInstructionFilePos, type); \
     currentInstructionFilePos += sizeof(type); \
@@ -499,6 +514,9 @@ void copyStorageNameToMemory(
     uint8_t nameSize
 );
 
+// Creates a file with the given name and attributes.
+// "name" is a pointer to a dynamicAlloc_t.
+void createFile(allocPointer_t name, int8_t type, int8_t isGuarded, int32_t contentSize);
 // Opens the file with the given name, returning a file handle. If the file has already been opened, this function returns the existing file handle and increments its open depth. If the file is missing, this function returns NULL_ALLOC_POINTER.
 allocPointer_t openFile(heapMemoryOffset_t nameAddress, heapMemoryOffset_t nameSize);
 // Closes the given file, decrementing the open depth of the file handle. If the open depth reaches zero, the file handle is deleted.

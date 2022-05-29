@@ -19,9 +19,9 @@ int8_t initializeStorageSpace() {
         printf("Could not find volume file.\n");
         return false;
     }
-    storageSpaceSize = getNativeFileSize(fileHandle);
-    storageSpace = malloc(storageSpaceSize);
-    fread(storageSpace, 1, storageSpaceSize, fileHandle);
+    volumeFileSize = getNativeFileSize(fileHandle);
+    storageSpace = malloc(STORAGE_SPACE_SIZE);
+    fread(storageSpace, 1, volumeFileSize, fileHandle);
     fclose(fileHandle);
     return true;
 }
@@ -29,9 +29,8 @@ int8_t initializeStorageSpace() {
 void writeStorageSpaceRange(int32_t address, void *source, int32_t amount) {
     storageSpaceIsDirty = true;
     int32_t endAddress = address + amount;
-    if (endAddress > storageSpaceSize) {
-        storageSpaceSize = endAddress + 10 * 1000;
-        storageSpace = realloc(storageSpace, storageSpaceSize);
+    if (endAddress > volumeFileSize) {
+        volumeFileSize = endAddress;
     }
     memcpy(storageSpace + address, source, amount);
 }
@@ -41,7 +40,7 @@ void flushStorageSpace() {
         return;
     }
     FILE *fileHandle = fopen((char *)unixVolumePath, "w");
-    fwrite(storageSpace, 1, storageSpaceSize, fileHandle);
+    fwrite(storageSpace, 1, volumeFileSize, fileHandle);
     fclose(fileHandle);
     storageSpaceIsDirty = false;
 }

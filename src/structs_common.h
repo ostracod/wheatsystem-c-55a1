@@ -23,6 +23,11 @@ typedef struct dynamicAlloc_t {
     int8_t data[0];
 } dynamicAlloc_t;
 
+// Stored at the beginning of non-volatile storage
+typedef struct storageSpaceHeader_t {
+    int32_t firstFileAddress;
+} storageSpaceHeader_t;
+
 // Stored at the beginning of each file.
 typedef struct fileHeader_t {
     uint8_t attributes;

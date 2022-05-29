@@ -13,12 +13,18 @@
 #define ARG_FRAME_ALLOC_TYPE 2
 #define DYNAMIC_ALLOC_TYPE 3
 
-#define GUARDED_ALLOC_ATTR 1
-#define SENTRY_ALLOC_ATTR 2
+#define GUARDED_ALLOC_ATTR 0x01
+#define SENTRY_ALLOC_ATTR 0x02
+
+// Size available to store files.
+#define STORAGE_SPACE_SIZE (128 * 1024)
 
 #define GENERIC_FILE_TYPE 0
 #define BYTECODE_APP_FILE_TYPE 1
 #define SYSTEM_APP_FILE_TYPE 2
+
+#define GUARDED_FILE_ATTR 0x04
+#define ADMIN_FILE_ATTR 0x08
 
 #define GENERIC_ERR_CODE 0x01
 #define NO_IMPL_ERR_CODE 0x02
@@ -73,7 +79,7 @@ const int8_t bootStringConstant[5];
 // Mapping from more significant opcode nybble to offset in argumentAmountArray. Fixed array of values.
 const int8_t argumentAmountOffsetArray[12];
 // Expected number of arguments for each bytecode instruction. Fixed array of values.
-const int8_t argumentAmountArray[62];
+const int8_t argumentAmountArray[63];
 
 // List of functions which the term driver implements. Fixed array of values.
 const systemAppFunction_t termAppFunctionArray[4];
