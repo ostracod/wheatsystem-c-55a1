@@ -19,6 +19,8 @@
 // Size available to store files.
 #define STORAGE_SPACE_SIZE ((int32_t)128 * (int32_t)1024)
 
+#define MISSING_FILE_ADDRESS 0
+
 #define GENERIC_FILE_TYPE 0
 #define BYTECODE_APP_FILE_TYPE 1
 #define SYSTEM_APP_FILE_TYPE 2

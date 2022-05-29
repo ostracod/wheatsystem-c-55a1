@@ -170,14 +170,14 @@ void createFile(allocPointer_t name, int8_t type, int8_t isGuarded, int32_t cont
     
     // Find a storage space gap which is large enough,
     // and ensure that there is no duplicate name.
-    int32_t previousFileAddress = 0;
+    int32_t previousFileAddress = MISSING_FILE_ADDRESS;
     int32_t nextFileAddress = getFirstFileAddress();
-    int32_t newFileAddress = 0;
+    int32_t newFileAddress = MISSING_FILE_ADDRESS;
     while (true) {
-        int8_t hasReachedEnd = (nextFileAddress == 0);
-        if (newFileAddress == 0) {
+        int8_t hasReachedEnd = (nextFileAddress == MISSING_FILE_ADDRESS);
+        if (newFileAddress == MISSING_FILE_ADDRESS) {
             int32_t startAddress;
-            if (previousFileAddress == 0) {
+            if (previousFileAddress == MISSING_FILE_ADDRESS) {
                 startAddress = sizeof(storageSpaceHeader_t);
             } else {
                 int8_t tempNameSize = getFileHeaderMember(previousFileAddress, nameSize);
@@ -203,12 +203,12 @@ void createFile(allocPointer_t name, int8_t type, int8_t isGuarded, int32_t cont
         previousFileAddress = nextFileAddress;
         nextFileAddress = getFileHeaderMember(previousFileAddress, next);
     }
-    if (newFileAddress == 0) {
+    if (newFileAddress == MISSING_FILE_ADDRESS) {
         throw(CAPACITY_ERR_CODE);
     }
     
     // Update file linked list.
-    if (previousFileAddress == 0) {
+    if (previousFileAddress == MISSING_FILE_ADDRESS) {
         setStorageSpaceMember(firstFileAddress, newFileAddress);
     } else {
         setFileHeaderMember(previousFileAddress, next, newFileAddress);
@@ -239,10 +239,10 @@ void deleteFile(allocPointer_t fileHandle) {
     int32_t fileAddress = getFileHandleMember(fileHandle, address);
     
     // Find previous and next files.
-    int32_t previousFileAddress = 0;
+    int32_t previousFileAddress = MISSING_FILE_ADDRESS;
     int32_t nextFileAddress = getFirstFileAddress();
     while (true) {
-        if (nextFileAddress == 0) {
+        if (nextFileAddress == MISSING_FILE_ADDRESS) {
             // This should not happen if invariants hold true.
             return;
         }
@@ -255,13 +255,29 @@ void deleteFile(allocPointer_t fileHandle) {
     }
     
     // Delete the file.
-    if (previousFileAddress == 0) {
+    if (previousFileAddress == MISSING_FILE_ADDRESS) {
         setStorageSpaceMember(firstFileAddress, nextFileAddress);
     } else {
         setFileHeaderMember(previousFileAddress, next, nextFileAddress);
     }
     flushStorageSpace();
     deleteAlloc(fileHandle);
+}
+
+int32_t getFileAddressByName(heapMemoryOffset_t nameAddress, heapMemoryOffset_t nameSize) {
+    int32_t fileAddress = getFirstFileAddress();
+    while (fileAddress != MISSING_FILE_ADDRESS) {
+        if (memoryNameEqualsStorageName(
+            nameAddress,
+            nameSize,
+            getFileNameAddress(fileAddress),
+            getFileHeaderMember(fileAddress, nameSize)
+        )) {
+            return fileAddress;
+        }
+        fileAddress = getFileHeaderMember(fileAddress, next);
+    }
+    return MISSING_FILE_ADDRESS;
 }
 
 allocPointer_t openFile(heapMemoryOffset_t nameAddress, heapMemoryOffset_t nameSize) {
@@ -288,21 +304,9 @@ allocPointer_t openFile(heapMemoryOffset_t nameAddress, heapMemoryOffset_t nameS
     }
     
     // Try to find file in storage.
-    int32_t fileAddress = getFirstFileAddress();
-    while (true) {
-        if (fileAddress == 0) {
-            // File is missing.
-            return NULL_ALLOC_POINTER;
-        }
-        if (memoryNameEqualsStorageName(
-            nameAddress,
-            nameSize,
-            getFileNameAddress(fileAddress),
-            getFileHeaderMember(fileAddress, nameSize)
-        )) {
-            break;
-        }
-        fileAddress = getFileHeaderMember(fileAddress, next);
+    int32_t fileAddress = getFileAddressByName(nameAddress, nameSize);
+    if (fileAddress == MISSING_FILE_ADDRESS) {
+        return NULL_ALLOC_POINTER;
     }
     
     // Read file header.
@@ -350,7 +354,7 @@ allocPointer_t getAllFileNames() {
     // First find the number of files in the volume.
     int32_t fileCount = 0;
     int32_t fileAddress = getFirstFileAddress();
-    while (fileAddress != 0) {
+    while (fileAddress != MISSING_FILE_ADDRESS) {
         fileCount += 1;
         fileAddress = getFileHeaderMember(fileAddress, next);
     }
@@ -1336,13 +1340,7 @@ void evaluateBytecodeInstruction() {
             allocPointer_t fileHandle = readArgFileHandle(1);
             int32_t pos = readArgInt(2);
             int32_t size = readArgInt(3);
-            int32_t contentSize = getFileHandleSize(fileHandle);
-            if (pos < 0 || pos >= contentSize) {
-                throw(INDEX_ERR_CODE);
-            }
-            if (size < 0 || pos + size > contentSize) {
-                throw(NUM_RANGE_ERR_CODE);
-            }
+            validateFileRange(fileHandle, pos, size);
             int32_t contentAddress = getFileHandleDataAddress(fileHandle) + pos;
             for (int32_t offset = 0; offset < size; offset++) {
                 int8_t value = readStorageSpace(contentAddress + offset, int8_t);
@@ -1350,6 +1348,21 @@ void evaluateBytecodeInstruction() {
                 if (unhandledErrorCode != 0) {
                     return;
                 }
+            }
+        } else if (opcodeOffset == 0x5) {
+            // wrtFile.
+            allocPointer_t fileHandle = readArgFileHandle(0);
+            int32_t pos = readArgInt(1);
+            instructionArg_t *source = instructionArgArray + 2;
+            int32_t size = readArgInt(3);
+            validateFileRange(fileHandle, pos, size);
+            int32_t contentAddress = getFileHandleDataAddress(fileHandle) + pos;
+            for (int32_t offset = 0; offset < size; offset++) {
+                int8_t value = readArgIntHelper(source, offset, SIGNED_INT_8_TYPE);
+                if (unhandledErrorCode != 0) {
+                    return;
+                }
+                writeStorageSpace(contentAddress + offset, int8_t, value);
             }
         } else {
             throw(NO_IMPL_ERR_CODE);
@@ -1360,6 +1373,13 @@ void evaluateBytecodeInstruction() {
             // allFileNames.
             allocPointer_t nameArray = getAllFileNames();
             writeArgInt(0, nameArray);
+        } else if (opcodeOffset == 0x1) {
+            // fileExists.
+            allocPointer_t fileName = readArgDynamicAlloc(1);
+            heapMemoryOffset_t nameAddress = getDynamicAllocDataAddress(fileName);
+            heapMemoryOffset_t nameSize = getDynamicAllocSize(fileName);
+            int32_t fileAddress = getFileAddressByName(nameAddress, nameSize);
+            writeArgInt(0, (fileAddress != MISSING_FILE_ADDRESS));
         } else {
             throw(NO_IMPL_ERR_CODE);
         }

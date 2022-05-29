@@ -175,6 +175,18 @@
 // "pos" is the offset of first byte to read.
 #define readFile(fileHandle, pos, type) \
     ({type result; readFileRange(&result, fileHandle, pos, sizeof(type)); result;})
+// Throws an error if the given file range is out of bounds.
+// "pos" is the offset of first byte in the range.
+// "size" is the number of bytes in the range.
+#define validateFileRange(fileHandle, pos, size) { \
+    int32_t contentSize = getFileHandleSize(fileHandle); \
+    if (pos < 0 || pos >= contentSize) { \
+        throw(INDEX_ERR_CODE); \
+    } \
+    if (size < 0 || pos + size > contentSize) { \
+        throw(NUM_RANGE_ERR_CODE); \
+    } \
+}
 
 // Retrieves whether a file has admin permission from the given bit field.
 #define getHasAdminPermFromFileAttributes(fileAttributes) \
@@ -527,6 +539,8 @@ void createFile(allocPointer_t name, int8_t type, int8_t isGuarded, int32_t cont
 // Deletes the given file.
 // "fileHandle" is a pointer to a dynamicAlloc_t.
 void deleteFile(allocPointer_t fileHandle);
+// Finds the address of the file with the given name. Returns MISSING_FILE_ADDRESS if the file cannot be found.
+int32_t getFileAddressByName(heapMemoryOffset_t nameAddress, heapMemoryOffset_t nameSize);
 // Opens the file with the given name, returning a file handle. If the file has already been opened, this function returns the existing file handle and increments its open depth. If the file is missing, this function returns NULL_ALLOC_POINTER.
 allocPointer_t openFile(heapMemoryOffset_t nameAddress, heapMemoryOffset_t nameSize);
 // Closes the given file, decrementing the open depth of the file handle. If the open depth reaches zero, the file handle is deleted.
