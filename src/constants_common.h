@@ -17,7 +17,7 @@
 #define SENTRY_ALLOC_ATTR 0x02
 
 // Size available to store files.
-#define STORAGE_SPACE_SIZE (128 * 1024)
+#define STORAGE_SPACE_SIZE ((int32_t)128 * (int32_t)1024)
 
 #define GENERIC_FILE_TYPE 0
 #define BYTECODE_APP_FILE_TYPE 1

@@ -235,6 +235,35 @@ void createFile(allocPointer_t name, int8_t type, int8_t isGuarded, int32_t cont
     flushStorageSpace();
 }
 
+void deleteFile(allocPointer_t fileHandle) {
+    int32_t fileAddress = getFileHandleMember(fileHandle, address);
+    
+    // Find previous and next files.
+    int32_t previousFileAddress = 0;
+    int32_t nextFileAddress = getFirstFileAddress();
+    while (true) {
+        if (nextFileAddress == 0) {
+            // This should not happen if invariants hold true.
+            return;
+        }
+        int32_t tempAddress = nextFileAddress;
+        nextFileAddress = getFileHeaderMember(tempAddress, next);
+        if (tempAddress == fileAddress) {
+            break;
+        }
+        previousFileAddress = tempAddress;
+    }
+    
+    // Delete the file.
+    if (previousFileAddress == 0) {
+        setStorageSpaceMember(firstFileAddress, nextFileAddress);
+    } else {
+        setFileHeaderMember(previousFileAddress, next, nextFileAddress);
+    }
+    flushStorageSpace();
+    deleteAlloc(fileHandle);
+}
+
 allocPointer_t openFile(heapMemoryOffset_t nameAddress, heapMemoryOffset_t nameSize) {
     
     // Return matching file handle if it already exists.
@@ -312,8 +341,7 @@ void readFileRange(
     int32_t pos,
     int32_t amount
 ) {
-    int32_t address = getFileHandleMember(fileHandle, address) + sizeof(fileHeader_t) \
-        + getFileHandleMember(fileHandle, nameSize) + pos;
+    int32_t address = getFileHandleDataAddress(fileHandle) + pos;
     readStorageSpaceRange(destination, address, amount);
 }
 
@@ -1286,6 +1314,10 @@ void evaluateBytecodeInstruction() {
             int8_t isGuarded = (readArgInt(2) != 0);
             int32_t size = readArgInt(3);
             createFile(fileName, type, isGuarded, size);
+        } else if (opcodeOffset == 0x1) {
+            // delFile.
+            allocPointer_t fileHandle = readArgFileHandle(0);
+            deleteFile(fileHandle);
         } else if (opcodeOffset == 0x2) {
             // openFile.
             allocPointer_t fileName = readArgDynamicAlloc(1);
@@ -1298,6 +1330,27 @@ void evaluateBytecodeInstruction() {
             // closeFile.
             allocPointer_t fileHandle = readArgFileHandle(0);
             closeFile(fileHandle);
+        } else if (opcodeOffset == 0x4) {
+            // readFile.
+            instructionArg_t *destination = instructionArgArray;
+            allocPointer_t fileHandle = readArgFileHandle(1);
+            int32_t pos = readArgInt(2);
+            int32_t size = readArgInt(3);
+            int32_t contentSize = getFileHandleSize(fileHandle);
+            if (pos < 0 || pos >= contentSize) {
+                throw(INDEX_ERR_CODE);
+            }
+            if (size < 0 || pos + size > contentSize) {
+                throw(NUM_RANGE_ERR_CODE);
+            }
+            int32_t contentAddress = getFileHandleDataAddress(fileHandle) + pos;
+            for (int32_t offset = 0; offset < size; offset++) {
+                int8_t value = readStorageSpace(contentAddress + offset, int8_t);
+                writeArgIntHelper(destination, offset, SIGNED_INT_8_TYPE, value);
+                if (unhandledErrorCode != 0) {
+                    return;
+                }
+            }
         } else {
             throw(NO_IMPL_ERR_CODE);
         }

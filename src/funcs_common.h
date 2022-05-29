@@ -121,11 +121,6 @@
 
 // Retrieves the address of the first file in the linked list.
 #define getFirstFileAddress() getStorageSpaceMember(firstFileAddress)
-// Retrieves the name address of the given file.
-#define getFileNameAddress(fileAddress) (fileAddress + sizeof(fileHeader_t))
-// Retrieves the total amount of storage space which a file occupies.
-#define getFileStorageSize(nameSize, contentSize) \
-    (sizeof(fileHeader_t) + nameSize + contentSize)
 
 // Retrieves a member of the file header at the given storage address.
 // "memberName" is the name of a member in fileHeader_t.
@@ -135,6 +130,15 @@
 // "memberName" is the name of a member in fileHeader_t.
 #define setFileHeaderMember(address, memberName, value) \
     writeStorageSpace(address + getStructMemberOffset(fileHeader_t, memberName), getStructMemberType(fileHeader_t, memberName), value)
+
+// Retrieves the name address of the given file.
+#define getFileNameAddress(fileAddress) (fileAddress + sizeof(fileHeader_t))
+// Retrieves the start address of the data region in the given file.
+#define getFileDataAddress(fileAddress, nameSize) \
+    (getFileNameAddress(fileAddress) + nameSize)
+// Retrieves the total amount of storage space which a file occupies.
+#define getFileStorageSize(nameSize, contentSize) \
+    (sizeof(fileHeader_t) + nameSize + contentSize)
 
 // Retrieves a member of the given file handle.
 // "fileHandle" is an allocPointer_t to a dynamicAlloc_t.
@@ -156,6 +160,9 @@
 #define getFileHandleRunningApp(fileHandle) getFileHandleMember(fileHandle, runningApp)
 // Retrieves the last unhandled error code when launching an app from the given file. Returns 0 if there is no such error.
 #define getFileHandleInitErr(fileHandle) getFileHandleMember(fileHandle, initErr)
+// Retrieves the start address of the data region in the given file.
+#define getFileHandleDataAddress(fileHandle) \
+    getFileDataAddress(getFileHandleMember(fileHandle, address), getFileHandleMember(fileHandle, nameSize))
 
 // Assigns a running app to the given file.
 #define setFileHandleRunningApp(fileHandle, runningAppValue) \
@@ -517,6 +524,9 @@ void copyStorageNameToMemory(
 // Creates a file with the given name and attributes.
 // "name" is a pointer to a dynamicAlloc_t.
 void createFile(allocPointer_t name, int8_t type, int8_t isGuarded, int32_t contentSize);
+// Deletes the given file.
+// "fileHandle" is a pointer to a dynamicAlloc_t.
+void deleteFile(allocPointer_t fileHandle);
 // Opens the file with the given name, returning a file handle. If the file has already been opened, this function returns the existing file handle and increments its open depth. If the file is missing, this function returns NULL_ALLOC_POINTER.
 allocPointer_t openFile(heapMemoryOffset_t nameAddress, heapMemoryOffset_t nameSize);
 // Closes the given file, decrementing the open depth of the file handle. If the open depth reaches zero, the file handle is deleted.
