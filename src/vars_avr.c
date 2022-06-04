@@ -1,9 +1,7 @@
 
 #include "./headers.h"
 
-int8_t currentSpiDeviceId;
-
-int32_t eepromAddress = -100;
-int8_t lastEepromData;
+int8_t currentSpiMode = NONE_SPI_MODE;
+int32_t eepromAddress;
 
 

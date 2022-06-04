@@ -4,6 +4,7 @@
 #include <util/delay.h>
 
 void initializePinModes() {
+    
     DDRB |= (1 << DDB5); // SCK.
     DDRB &= ~(1 << DDB4); // MISO.
     DDRB |= (1 << DDB3); // MOSI.
@@ -22,15 +23,28 @@ void initializePinModes() {
     lcdResetPinOutput();
 }
 
-void acquireSpiDevice(int8_t id) {
-    if (currentSpiDeviceId == id) {
-        return;
+int8_t setSpiMode(int8_t mode) {
+    if (currentSpiMode == mode) {
+        return false;
     }
-    releaseSramSpiDevice();
-    releaseEepromSpiDevice();
-    releaseLcdSpiDevice();
-    currentSpiDeviceId = id;
-    _delay_us(5);
+    sramCsPinHigh();
+    eepromCsPinHigh();
+    lcdCsPinHigh();
+    if (currentSpiMode == EEPROM_WRITE_SPI_MODE) {
+        _delay_ms(8);
+    } else {
+        _delay_us(5);
+    }
+    currentSpiMode = mode;
+    int8_t spiDevice = currentSpiMode & 0xF0;
+    if (spiDevice == SRAM_SPI_DEVICE) {
+        sramCsPinLow();
+    } else if (spiDevice == EEPROM_SPI_DEVICE) {
+        eepromCsPinLow();
+    } else if (spiDevice == LCD_SPI_DEVICE) {
+        lcdCsPinLow();
+    }
+    return true;
 }
 
 int8_t receiveSpiInt8() {
@@ -48,23 +62,38 @@ void sendSpiInt8(int8_t value) {
     }
 }
 
-void releaseSramSpiDevice() {
-    sramCsPinHigh();
+void initializeUart() {
+    // Set UART baud rate.
+    UBRR0L = BAUD_RATE_NUMBER & 0xFF;
+    UBRR0H = BAUD_RATE_NUMBER >> 8;
+    // Enable UART transmitter and receiver.
+    UCSR0B |= (1 << RXEN0) | (1 << TXEN0);
+}
+
+void sendUartCharacter(int8_t character) {
+    // Wait for transmit buffer to be empty.
+    while (!(UCSR0A & (1 << UDRE0))) {
+        
+    }
+    // Load character into transmit register.
+    UDR0 = character;
+}
+
+int8_t receiveUartCharacter() {
+    // Wait for receive buffer to be full.
+    while (!(UCSR0A & (1 << RXC0))) {
+        
+    }
+    // Read character from receive register.
+    return UDR0;
 }
 
 void initializeSram() {
     // Enable SRAM sequential mode.
-    acquireSpiDevice(SRAM_SPI_DEVICE_ID);
-    sramCsPinLow();
+    setSpiMode(SRAM_SPI_DEVICE | COMMAND_SPI_ACTION);
     sendSpiInt8(0x01);
     sendSpiInt8(0x81);
-    sramCsPinHigh();
-    _delay_us(5);
-}
-
-void releaseEepromSpiDevice() {
-    eepromCsPinHigh();
-    eepromAddress = -100;
+    setSpiMode(NONE_SPI_MODE);
 }
 
 void sendAddressToEeprom(int32_t address) {
@@ -77,25 +106,16 @@ void readStorageSpaceRange(void *destination, int32_t address, int32_t amount) {
     if (amount <= 0) {
         return;
     }
-    acquireSpiDevice(EEPROM_SPI_DEVICE_ID);
-    int32_t index = 0;
-    if (address == eepromAddress - 1) {
-        *(int8_t *)(destination + index) = lastEepromData;
-        index += 1;
-    } else if (address != eepromAddress) {
-        eepromCsPinHigh();
-        _delay_us(5);
-        eepromCsPinLow();
-        sendSpiInt8(0x03);
-        sendAddressToEeprom(address);
+    int8_t modeHasChanged = setSpiMode(EEPROM_SPI_DEVICE | READ_SPI_ACTION);
+    if (modeHasChanged || eepromAddress != address) {
         eepromAddress = address;
+        sendSpiInt8(0x03);
+        sendAddressToEeprom(eepromAddress);
     }
-    while (index < amount) {
-        int8_t tempData = receiveSpiInt8();
-        *(int8_t *)(destination + index) = tempData;
-        lastEepromData = tempData;
+    for (int32_t index = 0; index < amount; index++) {
+        int8_t value = receiveSpiInt8();
+        *(int8_t *)(destination + index) = value;
         eepromAddress += 1;
-        index += 1;
     }
 }
 
@@ -103,54 +123,43 @@ void writeStorageSpaceRange(int32_t address, void *source, int32_t amount) {
     if (amount <= 0) {
         return;
     }
-    acquireSpiDevice(EEPROM_SPI_DEVICE_ID);
-    eepromAddress = address;
-    int8_t tempShouldWrite = true;
-    int32_t index = 0;
-    while (tempShouldWrite) {
-        eepromCsPinHigh();
-        _delay_us(5);
-        eepromCsPinLow();
-        sendSpiInt8(0x06);
-        eepromCsPinHigh();
-        _delay_us(5);
-        eepromCsPinLow();
-        sendSpiInt8(0x02);
-        sendAddressToEeprom(eepromAddress);
-        while (true) {
-            if (index >= amount) {
-                tempShouldWrite = false;
-                break;
-            }
-            sendSpiInt8(*(int8_t *)(source + index));
-            eepromAddress += 1;
-            index += 1;
-            if (eepromAddress % 256 == 0) {
-                break;
-            }
+    int32_t targetAddress = address;
+    for (int32_t index = 0; index < amount; index++) {
+        int8_t modeHasChanged = setSpiMode(EEPROM_WRITE_SPI_MODE);
+        if (modeHasChanged || eepromAddress != targetAddress) {
+            eepromAddress = targetAddress;
+            setSpiMode(EEPROM_SPI_DEVICE | COMMAND_SPI_ACTION);
+            sendSpiInt8(0x06);
+            setSpiMode(EEPROM_WRITE_SPI_MODE);
+            sendSpiInt8(0x02);
+            sendAddressToEeprom(eepromAddress);
         }
-        eepromCsPinHigh();
-        _delay_ms(8);
+        int8_t value = *(int8_t *)(source + index);
+        sendSpiInt8(value);
+        eepromAddress += 1;
+        targetAddress += 1;
+        if ((eepromAddress & 0x000000FF) == 0) {
+            setSpiMode(NONE_SPI_MODE);
+        }
     }
-    eepromAddress = -100;
 }
 
-void releaseLcdSpiDevice() {
-    lcdCsPinHigh();
+void flushStorageSpace() {
+    if (currentSpiMode == EEPROM_WRITE_SPI_MODE) {
+        setSpiMode(NONE_SPI_MODE);
+    }
 }
 
 void sendLcdCommand(int8_t command) {
-    acquireSpiDevice(LCD_SPI_DEVICE_ID);
+    setSpiMode(LCD_SPI_DEVICE | COMMAND_SPI_ACTION);
     lcdModePinLow();
-    lcdCsPinLow();
     sendSpiInt8(command);
     sleepMilliseconds(5);
 }
 
 void sendLcdCharacter(int8_t character) {
-    acquireSpiDevice(LCD_SPI_DEVICE_ID);
+    setSpiMode(LCD_SPI_DEVICE | WRITE_SPI_ACTION);
     lcdModePinHigh();
-    lcdCsPinLow();
     sendSpiInt8(character);
     sleepMilliseconds(2);
 }
@@ -170,7 +179,7 @@ void initializeLcd() {
 }
 
 void initializeTermApp() {
-    // TODO: Implement.
+    // Do nothing.
 }
 
 void setTermObserver() {
@@ -182,7 +191,17 @@ void getTermSize() {
 }
 
 void writeTermText() {
-    // TODO: Implement.
+    allocPointer_t previousArgFrame = getPreviousArgFrame();
+    int32_t posX = readArgFrame(previousArgFrame, 0, int32_t);
+    int32_t posY = readArgFrame(previousArgFrame, 4, int32_t);
+    allocPointer_t textAlloc = readArgFrame(previousArgFrame, 8, int32_t);
+    heapMemoryOffset_t textSize = getDynamicAllocSize(textAlloc);
+    sendLcdCommand(0x80 | (posX + posY * 0x40));
+    for (heapMemoryOffset_t index = 0; index < textSize; index++) {
+        int8_t character = readDynamicAlloc(textAlloc, index, int8_t);
+        sendLcdCharacter(character);
+    }
+    returnFromFunction();
 }
 
 

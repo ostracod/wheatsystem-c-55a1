@@ -1,7 +1,5 @@
 
-int8_t currentSpiDeviceId;
-
+int8_t currentSpiMode;
 int32_t eepromAddress;
-int8_t lastEepromData;
 
 
