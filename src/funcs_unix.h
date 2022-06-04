@@ -15,6 +15,8 @@
 // Retrieves the number of bytes in the given file.
 int32_t getNativeFileSize(FILE *fileHandle);
 
+// Initializes non-volatile storage. Must be called before using non-volatile storage. Returns false if non-volatile storage could not be initialized successfully.
+int8_t initializeStorageSpace();
 // Writes an interval of data to non-volatile storage. Changes might not be persisted until calling flushStorageSpace.
 // "address" is the offset of first byte to write.
 void writeStorageSpaceRange(int32_t address, void *source, int32_t amount);

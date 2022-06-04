@@ -1,4 +1,5 @@
 
+// TODO: Move this into external SRAM for AVR target.
 int8_t heapMemory[HEAP_MEMORY_SIZE];
 allocPointer_t firstAlloc;
 

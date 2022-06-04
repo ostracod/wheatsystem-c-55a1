@@ -3,23 +3,34 @@
 #include <avr/io.h>
 #include <util/delay.h>
 
-void initializeSpi() {
-    
-    DDRB |= 1 << DDB5; // SCK.
+void initializePinModes() {
+    DDRB |= (1 << DDB5); // SCK.
     DDRB &= ~(1 << DDB4); // MISO.
-    DDRB |= 1 << DDB3; // MOSI.
+    DDRB |= (1 << DDB3); // MOSI.
+    DDRB |= (1 << DDB2); // Fix SS pin.
     
-    DDRB |= 1 << DDB2; // Fix SS pin.
-    SPCR = (1 << SPE) | (1 << MSTR);
+    sramCsPinHigh();
+    sramCsPinOutput();
+    
+    eepromCsPinHigh();
+    eepromCsPinOutput();
+    
+    lcdCsPinHigh();
+    lcdResetPinHigh();
+    lcdCsPinOutput();
+    lcdModePinOutput();
+    lcdResetPinOutput();
 }
 
 void acquireSpiDevice(int8_t id) {
     if (currentSpiDeviceId == id) {
         return;
     }
+    releaseSramSpiDevice();
     releaseEepromSpiDevice();
     releaseLcdSpiDevice();
     currentSpiDeviceId = id;
+    _delay_us(5);
 }
 
 int8_t receiveSpiInt8() {
@@ -37,10 +48,18 @@ void sendSpiInt8(int8_t value) {
     }
 }
 
-int8_t initializeStorageSpace() {
-    eepromCsPinHigh();
-    eepromCsPinOutput();
-    return true;
+void releaseSramSpiDevice() {
+    sramCsPinHigh();
+}
+
+void initializeSram() {
+    // Enable SRAM sequential mode.
+    acquireSpiDevice(SRAM_SPI_DEVICE_ID);
+    sramCsPinLow();
+    sendSpiInt8(0x01);
+    sendSpiInt8(0x81);
+    sramCsPinHigh();
+    _delay_us(5);
 }
 
 void releaseEepromSpiDevice() {
@@ -117,7 +136,37 @@ void writeStorageSpaceRange(int32_t address, void *source, int32_t amount) {
 }
 
 void releaseLcdSpiDevice() {
-    // TODO: Implement.
+    lcdCsPinHigh();
+}
+
+void sendLcdCommand(int8_t command) {
+    acquireSpiDevice(LCD_SPI_DEVICE_ID);
+    lcdModePinLow();
+    lcdCsPinLow();
+    sendSpiInt8(command);
+    sleepMilliseconds(5);
+}
+
+void sendLcdCharacter(int8_t character) {
+    acquireSpiDevice(LCD_SPI_DEVICE_ID);
+    lcdModePinHigh();
+    lcdCsPinLow();
+    sendSpiInt8(character);
+    sleepMilliseconds(2);
+}
+
+void initializeLcd() {
+    
+    sleepMilliseconds(20);
+    lcdResetPinLow();
+    sleepMilliseconds(20);
+    lcdResetPinHigh();
+    sleepMilliseconds(20);
+    
+    for (int8_t index = 0; index < sizeof(lcdInitCommands); index++) {
+        int8_t command = pgm_read_byte(lcdInitCommands + index);
+        sendLcdCommand(command);
+    }
 }
 
 void initializeTermApp() {

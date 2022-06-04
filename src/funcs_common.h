@@ -516,9 +516,6 @@ void validateDynamicAlloc(
     allocPointer_t dynamicAlloc
 );
 
-// Initializes non-volatile storage. Must be called before using non-volatile storage. Returns false if non-volatile storage could not be initialized successfully.
-int8_t initializeStorageSpace();
-
 // Determines whether a file name in heap memory equals a file name in storage.
 int8_t memoryNameEqualsStorageName(
     heapMemoryOffset_t memoryNameAddress,
