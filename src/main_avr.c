@@ -12,8 +12,7 @@ int main(void) {
     if (button == ACTION_BUTTON) {
         runTransferMode();
     } else {
-        // TODO: Uncomment this.
-        //runAppSystem();
+        runAppSystem();
     }
     return 0;
 }

@@ -61,8 +61,8 @@
 // Sets the initial mode of each AVR GPIO pin.
 void initializePinModes();
 
-// Changes the currently active SPI mode. Mode number = device ID | action ID. Returns whether the mode has changed.
-int8_t setSpiMode(int8_t mode);
+// Changes the currently active SPI mode. Mode number = device ID | action ID.
+void setSpiMode(int8_t mode);
 // Blocks execution until the SPI bus receives one byte. Returns the byte received over the SPI bus.
 int8_t receiveSpiInt8();
 // Sends the given value over the SPI bus.
@@ -70,10 +70,10 @@ void sendSpiInt8(int8_t value);
 
 // Sets up serial UART communication.
 void initializeUart();
-// Blocks execution until UART receives one character. Returns the character received over UART.
-int8_t receiveUartCharacter();
-// Sends a character over UART.
-void sendUartCharacter(int8_t character);
+// Blocks execution until UART receives one byte. Returns the byte received over UART.
+int8_t receiveUartInt8();
+// Sends a byte over UART.
+void sendUartInt8(int8_t character);
 
 // Sets up external SRAM over SPI.
 void initializeSram();

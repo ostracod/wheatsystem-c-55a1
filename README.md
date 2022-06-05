@@ -9,7 +9,8 @@ This project has the following system-wide dependencies:
 
 * avr-gcc
 * gcc (to compile the emulator for Unix-like systems)
-* Node.js version 16 or later (to assemble example volumes)
+* Node.js version ^16.4 (to assemble example volumes)
+* pnpm version ^6.24 (to write volume to EEPROM)
 
 To compile the AVR firmware:
 
@@ -34,5 +35,19 @@ To run the emulator:
 ```
 ./build/main_unix (volumeFilePath)
 ```
+
+To flash the firmware:
+
+```
+make flash
+```
+
+To write example volume to EEPROM:
+
+1. Assemble the example volumes as described earlier.
+1. Install JavaScript dependencies: `pnpm install`
+1. Connect a USB serial cable to your WheatBox 55A1.
+1. Power on WheatBox 55A1 while holding the ACTIONS button to activate storage transfer mode.
+1. Write the volume: `node ./writeEeprom.js (volumeFilePath)`
 
 

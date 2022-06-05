@@ -35,9 +35,9 @@ void initializePinModes() {
     buttonColumn4PinInput();
 }
 
-int8_t setSpiMode(int8_t mode) {
+void setSpiMode(int8_t mode) {
     if (currentSpiMode == mode) {
-        return false;
+        return;
     }
     sramCsPinHigh();
     eepromCsPinHigh();
@@ -56,7 +56,6 @@ int8_t setSpiMode(int8_t mode) {
     } else if (spiDevice == LCD_SPI_DEVICE) {
         lcdCsPinLow();
     }
-    return true;
 }
 
 int8_t receiveSpiInt8() {
@@ -82,22 +81,22 @@ void initializeUart() {
     UCSR0B |= (1 << RXEN0) | (1 << TXEN0);
 }
 
-void sendUartCharacter(int8_t character) {
-    // Wait for transmit buffer to be empty.
-    while (!(UCSR0A & (1 << UDRE0))) {
-        
-    }
-    // Load character into transmit register.
-    UDR0 = character;
-}
-
-int8_t receiveUartCharacter() {
+int8_t receiveUartInt8() {
     // Wait for receive buffer to be full.
     while (!(UCSR0A & (1 << RXC0))) {
         
     }
     // Read character from receive register.
     return UDR0;
+}
+
+void sendUartInt8(int8_t character) {
+    // Wait for transmit buffer to be empty.
+    while (!(UCSR0A & (1 << UDRE0))) {
+        
+    }
+    // Load character into transmit register.
+    UDR0 = character;
 }
 
 void initializeSram() {
@@ -118,8 +117,16 @@ void readStorageSpaceRange(void *destination, int32_t address, int32_t amount) {
     if (amount <= 0) {
         return;
     }
-    int8_t modeHasChanged = setSpiMode(EEPROM_SPI_DEVICE | READ_SPI_ACTION);
-    if (modeHasChanged || eepromAddress != address) {
+    int8_t shouldStartRead = true;
+    if (currentSpiMode == EEPROM_READ_SPI_MODE) {
+        if (eepromAddress == address) {
+            shouldStartRead = false;
+        } else {
+            setSpiMode(NONE_SPI_MODE);
+        }
+    }
+    if (shouldStartRead) {
+        setSpiMode(EEPROM_READ_SPI_MODE);
         eepromAddress = address;
         sendSpiInt8(0x03);
         sendAddressToEeprom(eepromAddress);
@@ -137,8 +144,7 @@ void writeStorageSpaceRange(int32_t address, void *source, int32_t amount) {
     }
     int32_t targetAddress = address;
     for (int32_t index = 0; index < amount; index++) {
-        int8_t modeHasChanged = setSpiMode(EEPROM_WRITE_SPI_MODE);
-        if (modeHasChanged || eepromAddress != targetAddress) {
+        if (currentSpiMode != EEPROM_WRITE_SPI_MODE || eepromAddress != targetAddress) {
             eepromAddress = targetAddress;
             setSpiMode(EEPROM_SPI_DEVICE | COMMAND_SPI_ACTION);
             sendSpiInt8(0x06);
@@ -240,6 +246,7 @@ int8_t getPressedButton() {
 }
 
 void runTransferMode() {
+    
     sendLcdCommand(0x80);
     int8_t index = 0;
     while (true) {
@@ -252,6 +259,35 @@ void runTransferMode() {
             sendLcdCharacter(character);
         }
         index += 1;
+    }
+    
+    while (true) {
+        while (true) {
+            int8_t prefix = receiveUartInt8();
+            if (prefix == '!') {
+                break;
+            }
+        }
+        int8_t command = receiveUartInt8();
+        int32_t address = 0;
+        ((int8_t *)&address)[0] = receiveUartInt8();
+        ((int8_t *)&address)[1] = receiveUartInt8();
+        ((int8_t *)&address)[2] = receiveUartInt8();
+        int8_t buffer[TRANSFER_MODE_BUFFER_SIZE];
+        if (command == 'R') {
+            readStorageSpaceRange(buffer, address, TRANSFER_MODE_BUFFER_SIZE);
+            sendUartInt8('!');
+            for (int16_t index = 0; index < TRANSFER_MODE_BUFFER_SIZE; index++) {
+                sendUartInt8(buffer[index]);
+            }
+        } else if (command == 'W') {
+            for (int16_t index = 0; index < TRANSFER_MODE_BUFFER_SIZE; index++) {
+                buffer[index] = receiveUartInt8();
+            }
+            writeStorageSpaceRange(address, buffer, TRANSFER_MODE_BUFFER_SIZE);
+            flushStorageSpace();
+            sendUartInt8('!');
+        }
     }
 }
 
