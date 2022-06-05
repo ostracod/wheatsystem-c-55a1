@@ -21,6 +21,18 @@ void initializePinModes() {
     lcdCsPinOutput();
     lcdModePinOutput();
     lcdResetPinOutput();
+    
+    buttonRow1PinLow();
+    buttonRow2PinLow();
+    buttonRow3PinLow();
+    buttonRow1PinInput();
+    buttonRow2PinInput();
+    buttonRow3PinInput();
+    
+    buttonColumn1PinInput();
+    buttonColumn2PinInput();
+    buttonColumn3PinInput();
+    buttonColumn4PinInput();
 }
 
 int8_t setSpiMode(int8_t mode) {
@@ -175,6 +187,71 @@ void initializeLcd() {
     for (int8_t index = 0; index < sizeof(lcdInitCommands); index++) {
         int8_t command = pgm_read_byte(lcdInitCommands + index);
         sendLcdCommand(command);
+    }
+}
+
+int8_t getPressedButtonColumn(int8_t row) {
+    if (row == 0) {
+        buttonRow1PinOutput();
+    } else if (row == 1) {
+        buttonRow2PinOutput();
+    } else if (row == 2) {
+        buttonRow3PinOutput();
+    }
+    int8_t column = 0;
+    int8_t columnCount = 0;
+    if (!buttonColumn1PinRead()) {
+        column = 1;
+        columnCount += 1;
+    }
+    if (!buttonColumn2PinRead()) {
+        column = 2;
+        columnCount += 1;
+    }
+    if (!buttonColumn3PinRead()) {
+        column = 3;
+        columnCount += 1;
+    }
+    if (!buttonColumn4PinRead()) {
+        column = 4;
+        columnCount += 1;
+    }
+    buttonRow1PinInput();
+    buttonRow2PinInput();
+    buttonRow3PinInput();
+    return (columnCount > 1) ? -1 : column;
+}
+
+int8_t getPressedButton() {
+    int8_t output = 0;
+    for (int8_t row = 0; row < 3; row += 1) {
+        int8_t column = getPressedButtonColumn(row);
+        if (column < 0) {
+            return -1;
+        } else if (column > 0) {
+            if (output > 0) {
+                return -1;
+            } else {
+                output = column + row * 4;
+            }
+        }
+    }
+    return output;
+}
+
+void runTransferMode() {
+    sendLcdCommand(0x80);
+    int8_t index = 0;
+    while (true) {
+        int8_t character = pgm_read_byte(transferModeStringConstant + index);
+        if (character == 0) {
+            break;
+        } else if (character == '\n') {
+            sendLcdCommand(0xC0);
+        } else {
+            sendLcdCharacter(character);
+        }
+        index += 1;
     }
 }
 

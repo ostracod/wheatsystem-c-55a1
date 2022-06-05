@@ -28,6 +28,30 @@
 #define lcdModePinHigh() PORTC |= (1 << PORTC4)
 #define lcdModePinLow() PORTC &= ~(1 << PORTC4)
 
+#define buttonRow1PinOutput() DDRB |= (1 << DDB1)
+#define buttonRow1PinInput() DDRB &= ~(1 << DDB1)
+#define buttonRow1PinLow() PORTB &= ~(1 << PORTB1)
+
+#define buttonRow2PinOutput() DDRD |= (1 << DDD7)
+#define buttonRow2PinInput() DDRD &= ~(1 << DDD7)
+#define buttonRow2PinLow() PORTD &= ~(1 << PORTD7)
+
+#define buttonRow3PinOutput() DDRB |= (1 << DDB0)
+#define buttonRow3PinInput() DDRB &= ~(1 << DDB0)
+#define buttonRow3PinLow() PORTB &= ~(1 << PORTB0)
+
+#define buttonColumn1PinInput() DDRC &= ~(1 << DDC0)
+#define buttonColumn1PinRead() (PINC & (1 << PINC0))
+
+#define buttonColumn2PinInput() DDRC &= ~(1 << DDC1)
+#define buttonColumn2PinRead() (PINC & (1 << PINC1))
+
+#define buttonColumn3PinInput() DDRD &= ~(1 << DDD2)
+#define buttonColumn3PinRead() (PIND & (1 << PIND2))
+
+#define buttonColumn4PinInput() DDRC &= ~(1 << DDC2)
+#define buttonColumn4PinRead() (PINC & (1 << PINC2))
+
 // Sets up the AVR SPI bus. Must be called before using the SPI bus.
 #define initializeSpi() SPCR = (1 << SPE) | (1 << MSTR)
 
@@ -71,5 +95,24 @@ void sendLcdCommand(int8_t command);
 void sendLcdCharacter(int8_t character);
 // Sets up the character LCD.
 void initializeLcd();
+
+// Determines which column is pressed in the given row of buttons.
+// "row" is a number between 0 and 2 inclusive.
+// Returns 1 through 4 if a single column is pressed, 0 if no column is pressed, or -1 if multiple columns are pressed.
+int8_t getPressedButtonColumn(int8_t row);
+// Determines which button is pressed on the keypad.
+// Returns 1 through 12 if a single button is pressed, 0 if no button is pressed, or -1 if multiple buttons are pressed.
+// The button numbers are ordered on the keypad like so:
+// +----+----+----+----+
+// | 1  | 2  | 3  | 4  |
+// +----+----+----+----+
+// | 5  | 6  | 7  | 8  |
+// +----+----+----+----+
+// | 9  | 10 | 11 | 12 |
+// +----+----+----+----+
+int8_t getPressedButton();
+
+// Runs a mode where EEPROM data may be written and read over UART.
+void runTransferMode();
 
 

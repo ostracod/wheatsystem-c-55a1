@@ -17,7 +17,13 @@
 #define BAUD_RATE 9600
 #define BAUD_RATE_NUMBER (F_CPU / (16 * (int32_t)BAUD_RATE) - 1)
 
+#define CHARACTERS_BUTTON 4
+#define ACTION_BUTTON 8
+
 // Fixed array of values.
 const int8_t lcdInitCommands[9];
+
+// Fixed array of characters.
+const int8_t transferModeStringConstant[25];
 
 

@@ -8,7 +8,13 @@ int main(void) {
     initializeSram();
     initializeStorageSpace();
     initializeLcd();
-    runAppSystem();
+    int8_t button = getPressedButton();
+    if (button == ACTION_BUTTON) {
+        runTransferMode();
+    } else {
+        // TODO: Uncomment this.
+        //runAppSystem();
+    }
     return 0;
 }
 

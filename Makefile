@@ -19,6 +19,9 @@ avr: $(AVR_HEX) $(AVR_ELF)
 
 unix: $(UNIX_EXECUTABLE)
 
+flash: $(AVR_HEX)
+	avrdude -c usbtiny -p atmega328p -B 2 -U flash:w:$(AVR_HEX):i
+
 $(AVR_HEX): $(AVR_ELF)
 	avr-objcopy -j .text -j .data -O ihex $^ $@
 
