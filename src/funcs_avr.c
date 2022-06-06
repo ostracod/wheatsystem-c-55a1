@@ -103,8 +103,65 @@ void initializeSram() {
     // Enable SRAM sequential mode.
     setSpiMode(SRAM_SPI_DEVICE | COMMAND_SPI_ACTION);
     sendSpiInt8(0x01);
-    sendSpiInt8(0x81);
+    sendSpiInt8(0x41);
     setSpiMode(NONE_SPI_MODE);
+}
+
+void sendAddressToSram(int16_t address) {
+    sendSpiInt8((address & 0xFF00) >> 8);
+    sendSpiInt8(address & 0x00FF);
+}
+
+void readHeapMemoryRange(
+    void *destination,
+    heapMemoryOffset_t address,
+    heapMemoryOffset_t amount
+) {
+    int8_t shouldStartRead = true;
+    if (currentSpiMode == SRAM_READ_SPI_MODE) {
+        if (sramAddress == address) {
+            shouldStartRead = false;
+        } else {
+            setSpiMode(NONE_SPI_MODE);
+        }
+    }
+    if (shouldStartRead) {
+        setSpiMode(SRAM_READ_SPI_MODE);
+        sramAddress = address;
+        sendSpiInt8(0x03);
+        sendAddressToSram(sramAddress);
+    }
+    for (heapMemoryOffset_t index = 0; index < amount; index++) {
+        int8_t value = receiveSpiInt8();
+        *(int8_t *)(destination + index) = value;
+    }
+    sramAddress += amount;
+}
+
+void writeHeapMemoryRange(
+    heapMemoryOffset_t address,
+    void *source,
+    heapMemoryOffset_t amount
+) {
+    int8_t shouldStartWrite = true;
+    if (currentSpiMode == SRAM_WRITE_SPI_MODE) {
+        if (sramAddress == address) {
+            shouldStartWrite = false;
+        } else {
+            setSpiMode(NONE_SPI_MODE);
+        }
+    }
+    if (shouldStartWrite) {
+        setSpiMode(SRAM_WRITE_SPI_MODE);
+        sramAddress = address;
+        sendSpiInt8(0x02);
+        sendAddressToSram(sramAddress);
+    }
+    for (heapMemoryOffset_t index = 0; index < amount; index++) {
+        int8_t value = *(int8_t *)(source + index);
+        sendSpiInt8(value);
+    }
+    sramAddress += amount;
 }
 
 void sendAddressToEeprom(int32_t address) {
@@ -134,8 +191,8 @@ void readStorageSpaceRange(void *destination, int32_t address, int32_t amount) {
     for (int32_t index = 0; index < amount; index++) {
         int8_t value = receiveSpiInt8();
         *(int8_t *)(destination + index) = value;
-        eepromAddress += 1;
     }
+    eepromAddress += amount;
 }
 
 void writeStorageSpaceRange(int32_t address, void *source, int32_t amount) {

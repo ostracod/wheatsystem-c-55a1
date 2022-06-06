@@ -20,7 +20,8 @@ allocPointer_t createAlloc(int8_t type, heapMemoryOffset_t size) {
     }
     
     // Return null if there is not enough free memory.
-    if (startAddress + sizeWithHeader > HEAP_MEMORY_SIZE) {
+    heapMemoryOffset_t endAddress = startAddress + sizeWithHeader;
+    if (endAddress > HEAP_MEMORY_SIZE || endAddress < 0) {
         return NULL_ALLOC_POINTER;
     }
     

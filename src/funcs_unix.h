@@ -7,6 +7,13 @@
 // "index" is the offset of byte from which to start reading.
 #define readFixedArrayValue(name, index, type) *(type *)((int8_t *)name + index)
 
+// Reads a value from heap memory.
+// "address" is the address of first byte to read.
+#define readHeapMemory(address, type) (*(type *)(heapMemory + address))
+// Writes a value to heap memory.
+// "address" is the address of first byte to write.
+#define writeHeapMemory(address, type, value) (*(type *)(heapMemory + address) = value)
+
 // Reads an interval of data from non-volatile storage.
 // "address" is the offset of first byte to read.
 #define readStorageSpaceRange(destination, address, amount) \

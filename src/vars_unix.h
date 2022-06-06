@@ -1,4 +1,6 @@
 
+int8_t heapMemory[HEAP_MEMORY_SIZE];
+
 // The Unix path of the file to use for the WheatSystem volume.
 int8_t *unixVolumePath;
 

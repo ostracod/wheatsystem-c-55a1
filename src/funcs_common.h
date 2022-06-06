@@ -19,13 +19,6 @@
 #define readFixedArrayElement(fixedArray, index) \
     readFixedArrayValue(fixedArray, getArrayElementOffset(fixedArray, index), getArrayElementType(fixedArray))
 
-// Reads a value from heap memory.
-// "address" is the address of first byte to read.
-#define readHeapMemory(address, type) (*(type *)(heapMemory + address))
-// Writes a value to heap memory.
-// "address" is the address of first byte to write.
-#define writeHeapMemory(address, type, value) (*(type *)(heapMemory + address) = value)
-
 // We need the zero pointer to be null, so we offset all addresses by one.
 #define convertPointerToAddress(pointer) (pointer - 1)
 #define convertAddressToPointer(address) (address + 1)

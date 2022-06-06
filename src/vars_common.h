@@ -1,6 +1,5 @@
 
-// TODO: Move this into external SRAM for AVR target.
-int8_t heapMemory[HEAP_MEMORY_SIZE];
+// First allocation in the linked list.
 allocPointer_t firstAlloc;
 
 // Stores the last thrown error code. The value of this variable must be checked after invoking certain functions.

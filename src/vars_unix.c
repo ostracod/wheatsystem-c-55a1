@@ -1,6 +1,8 @@
 
 #include "./headers.h"
 
+int8_t heapMemory[HEAP_MEMORY_SIZE];
+
 int8_t *unixVolumePath;
 
 int8_t *storageSpace;

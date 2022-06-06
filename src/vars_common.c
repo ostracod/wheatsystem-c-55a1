@@ -1,7 +1,6 @@
 
 #include "./headers.h"
 
-int8_t heapMemory[HEAP_MEMORY_SIZE];
 allocPointer_t firstAlloc = NULL_ALLOC_POINTER;
 
 int8_t unhandledErrorCode = 0;

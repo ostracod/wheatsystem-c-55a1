@@ -3,7 +3,7 @@
 #define false 0
 
 // Size of memory available in the heap.
-#define HEAP_MEMORY_SIZE 1000
+#define HEAP_MEMORY_SIZE 32767
 
 // Has the type allocPointer_t.
 #define NULL_ALLOC_POINTER 0
