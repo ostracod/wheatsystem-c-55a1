@@ -1381,6 +1381,25 @@ void evaluateBytecodeInstruction() {
             heapMemoryOffset_t nameSize = getDynamicAllocSize(fileName);
             int32_t fileAddress = getFileAddressByName(nameAddress, nameSize);
             writeArgInt(0, (fileAddress != MISSING_FILE_ADDRESS));
+        } else if (opcodeOffset == 0x2) {
+            allocPointer_t fileHandle = readArgFileHandle(1);
+            uint8_t nameSize = getFileHandleMember(fileHandle, nameSize);
+            allocPointer_t nameAlloc = createDynamicAlloc(
+                nameSize,
+                GUARDED_ALLOC_ATTR,
+                currentImplementerFileHandle
+            );
+            int32_t fileAddress = getFileHandleMember(fileHandle, address);
+            copyStorageNameToMemory(
+                getFileNameAddress(fileAddress),
+                getDynamicAllocDataAddress(nameAlloc),
+                nameSize
+            );
+            writeArgInt(0, nameAlloc);
+        } else if (opcodeOffset == 0x3) {
+            allocPointer_t fileHandle = readArgFileHandle(1);
+            int8_t fileType = getFileHandleType(fileHandle);
+            writeArgInt(0, fileType);
         } else {
             throw(NO_IMPL_ERR_CODE);
         }

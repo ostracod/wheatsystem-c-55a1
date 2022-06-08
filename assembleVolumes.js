@@ -1,8 +1,10 @@
 
-const fs = require("fs");
-const pathUtils = require("path");
-const childProcess = require("child_process");
+import * as fs from "fs";
+import * as pathUtils from "path";
+import * as childProcess from "child_process";
+import * as url from "url";
 
+const __dirname = url.fileURLToPath(new URL(".", import.meta.url));
 const volumesDirectoryPath = pathUtils.join(__dirname, "volumes");
 const assemblerDirectoryPath = pathUtils.join(__dirname, "../wheatbytecode-asm");
 const fileTypeSet = {
