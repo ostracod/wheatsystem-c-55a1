@@ -1382,6 +1382,7 @@ void evaluateBytecodeInstruction() {
             int32_t fileAddress = getFileAddressByName(nameAddress, nameSize);
             writeArgInt(0, (fileAddress != MISSING_FILE_ADDRESS));
         } else if (opcodeOffset == 0x2) {
+            // fileName.
             allocPointer_t fileHandle = readArgFileHandle(1);
             uint8_t nameSize = getFileHandleMember(fileHandle, nameSize);
             allocPointer_t nameAlloc = createDynamicAlloc(
@@ -1397,9 +1398,21 @@ void evaluateBytecodeInstruction() {
             );
             writeArgInt(0, nameAlloc);
         } else if (opcodeOffset == 0x3) {
+            // fileType.
             allocPointer_t fileHandle = readArgFileHandle(1);
             int8_t fileType = getFileHandleType(fileHandle);
             writeArgInt(0, fileType);
+        } else if (opcodeOffset == 0x4) {
+            // fileIsGuarded.
+            allocPointer_t fileHandle = readArgFileHandle(1);
+            int8_t attributes = getFileHandleMember(fileHandle, attributes);
+            int8_t isGuarded = getIsGuardedFromFileAttributes(attributes);
+            writeArgInt(0, isGuarded);
+        } else if (opcodeOffset == 0x5) {
+            // fileSize.
+            allocPointer_t fileHandle = readArgFileHandle(1);
+            int32_t size = getFileHandleSize(fileHandle);
+            writeArgInt(0, size);
         } else {
             throw(NO_IMPL_ERR_CODE);
         }
