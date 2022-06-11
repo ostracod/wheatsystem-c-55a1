@@ -113,12 +113,12 @@ allocPointer_t createStringAllocFromFixedArrayHelper(
     return output;
 }
 
-void validateDynamicAlloc(allocPointer_t pointer) {
-    validateAllocPointer(pointer);
+void validateDynamicAlloc(allocPointer_t dynamicAlloc) {
+    validateAllocPointer(dynamicAlloc);
     if (unhandledErrorCode != 0) {
         return;
     }
-    if (getAllocType(pointer) != DYNAMIC_ALLOC_TYPE) {
+    if (getAllocType(dynamicAlloc) != DYNAMIC_ALLOC_TYPE) {
         throw(TYPE_ERR_CODE);
     }
 }
@@ -821,6 +821,21 @@ void runAppSystem() {
     }
 }
 
+int8_t currentImplementerHasAdminPerm() {
+    int8_t attributes = getFileHandleMember(currentImplementerFileHandle, attributes);
+    return getHasAdminPermFromFileAttributes(attributes);
+}
+
+int8_t currentImplementerMayAccessAlloc(allocPointer_t dynamicAlloc) {
+    int8_t attributes = getDynamicAllocMember(dynamicAlloc, attributes);
+    if ((attributes & GUARDED_ALLOC_ATTR) == 0) {
+        return true;
+    }
+    allocPointer_t creator = getDynamicAllocMember(dynamicAlloc, creator);
+    return (creator == currentImplementerFileHandle
+        || currentImplementerHasAdminPerm());
+}
+
 heapMemoryOffset_t getArgHeapMemoryAddress(
     instructionArg_t *arg,
     int32_t offset,
@@ -980,6 +995,9 @@ void parseInstructionArg(instructionArg_t *destination) {
                 if (unhandledErrorCode != 0) {
                     return;
                 }
+                if (!currentImplementerMayAccessAlloc(argValue1)) {
+                    throw(PERM_ERR_CODE);
+                }
                 startAddress = getDynamicAllocDataAddress(argValue1);
                 instructionArg_t tempArg2;
                 parseInstructionArg(&tempArg2);
@@ -1122,6 +1140,9 @@ void evaluateBytecodeInstruction() {
         } else if (opcodeOffset == 0x4) {
             // delAlloc.
             allocPointer_t tempAlloc = readArgDynamicAlloc(0);
+            if (!currentImplementerMayAccessAlloc(tempAlloc)) {
+                throw(PERM_ERR_CODE);
+            }
             deleteAlloc(tempAlloc);
         } else if (opcodeOffset == 0x5) {
             // allocAttrs.

@@ -504,10 +504,8 @@ allocPointer_t createStringAllocFromFixedArrayHelper(
     heapMemoryOffset_t size
 );
 // Verifies whether the given pointer references a valid dynamic allocation. May assign a new value to unhandledErrorCode.
-void validateDynamicAlloc(
-    // Pointer to dynamicAlloc_t.
-    allocPointer_t dynamicAlloc
-);
+// "dynamicAlloc" is a pointer to dynamicAlloc_t.
+void validateDynamicAlloc(allocPointer_t dynamicAlloc);
 
 // Determines whether a file name in heap memory equals a file name in storage.
 int8_t memoryNameEqualsStorageName(
@@ -584,6 +582,12 @@ void callFunction(
 void returnFromFunction();
 // Enters a blocking loop to run all WheatSystem applications.
 void runAppSystem();
+
+// Returns whether the implementer of the current function has admin permission.
+int8_t currentImplementerHasAdminPerm();
+// Returns whether the implementer of the current function has permission to read or modify the data region of the given dynamic allocation.
+// "dynamicAlloc" is a pointer to a dynamicAlloc_t.
+int8_t currentImplementerMayAccessAlloc(allocPointer_t dynamicAlloc);
 
 // Determines the address of a bytecode argument which references a heap allocation.
 heapMemoryOffset_t getArgHeapMemoryAddress(

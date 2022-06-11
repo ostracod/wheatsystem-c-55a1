@@ -127,6 +127,8 @@ typedef struct bytecodeLocalFrameHeader_t {
 } bytecodeLocalFrameHeader_t;
 
 typedef struct instructionArg_t {
+    // The prefix reference type can only be HEAP_MEM_REF_TYPE,
+    // CONSTANT_REF_TYPE, or APP_DATA_REF_TYPE.
     uint8_t prefix;
     union {
         // For HEAP_MEM_REF_TYPE, the union contains startAddress, size, and index.
