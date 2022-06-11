@@ -546,7 +546,7 @@ void launchApp(allocPointer_t fileHandle) {
     // Call init function if available.
     int32_t initFunctionIndex = findFunctionById(runningApp, INIT_FUNC_ID);
     if (initFunctionIndex >= 0) {
-        callFunction(runningApp, runningApp, initFunctionIndex);
+        callFunction(runningApp, runningApp, initFunctionIndex, false);
     }
 }
 
@@ -592,7 +592,8 @@ void hardKillApp(allocPointer_t runningApp, int8_t errorCode) {
 void callFunction(
     allocPointer_t threadApp,
     allocPointer_t implementer,
-    int32_t functionIndex
+    int32_t functionIndex,
+    int8_t shouldCheckPerm
 ) {
     
     allocPointer_t fileHandle = getRunningAppMember(implementer, fileHandle);
@@ -614,6 +615,24 @@ void callFunction(
     }
     if (functionIndex < 0 || functionIndex >= functionAmount) {
         throw(INDEX_ERR_CODE);
+    }
+    
+    // Validate current implementer permission.
+    if (shouldCheckPerm && currentImplementer != implementer
+            && !currentImplementerHasAdminPerm()) {
+        int8_t isGuarded;
+        if (fileType == BYTECODE_APP_FILE_TYPE) {
+            isGuarded = getBytecodeFunctionMember(fileHandle, functionIndex, isGuarded);
+        } else {
+            isGuarded = getSystemAppFunctionListMember(
+                systemAppFunctionList,
+                functionIndex,
+                isGuarded
+            );
+        }
+        if (isGuarded) {
+            throw(PERM_ERR_CODE);
+        }
     }
     
     // Validate arg frame size.
@@ -1219,12 +1238,12 @@ void evaluateBytecodeInstruction() {
         } else if (opcodeOffset == 0x1) {
             // call.
             int32_t functionIndex = readArgInt(0);
-            callFunction(currentThreadApp, currentImplementer, functionIndex);
+            callFunction(currentThreadApp, currentImplementer, functionIndex, false);
         } else if (opcodeOffset == 0x2) {
             // callRemote.
             allocPointer_t tempImplementer = readArgRunningApp(0);
             int32_t functionIndex = readArgInt(1);
-            callFunction(currentThreadApp, tempImplementer, functionIndex);
+            callFunction(currentThreadApp, tempImplementer, functionIndex, true);
         } else if (opcodeOffset == 0x3) {
             // ret.
             returnFromFunction();

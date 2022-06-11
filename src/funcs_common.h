@@ -573,10 +573,12 @@ void launchApp(allocPointer_t fileHandle);
 // Invokes a function in the given thread.
 // "threadApp" and "implementer" are pointers to runningApp_t.
 // "functionIndex" is the index of the function in "implementer".
+// "shouldCheckPerm" determines whether to check the permission of the current function implementer to invoke the given function.
 void callFunction(
     allocPointer_t threadApp,
     allocPointer_t implementer,
-    int32_t functionIndex
+    int32_t functionIndex,
+    int8_t shouldCheckPerm
 );
 // Stops evaluation of the current function invocation, and returns control to the previous function invocation.
 void returnFromFunction();

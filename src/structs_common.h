@@ -154,6 +154,7 @@ typedef struct instructionArg_t {
 typedef struct systemAppFunction_t {
     // ID of the function.
     int8_t id;
+    int8_t isGuarded;
     int8_t argFrameSize;
     int8_t localFrameSize;
     // Task to perform whenever the function is scheduled.
