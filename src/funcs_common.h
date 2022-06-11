@@ -593,6 +593,10 @@ int8_t currentImplementerMayAccessAlloc(allocPointer_t dynamicAlloc);
 // Returns whether the implementer of the current function has permission to read or modify the data region of the given file.
 // "fileHandle" is an allocPointer_t to a fileHandle_t.
 int8_t currentImplementerMayAccessFile(allocPointer_t fileHandle);
+// Changes whether the given file holds admin permission.
+// "fileHandle" is an allocPointer_t to a fileHandle_t.
+// Will set unhandledErrorCode to PERM_ERR_CODE if the implementer of the current function does not have admin permission.
+void setFileHasAdminPerm(allocPointer_t fileHandle, int8_t hasAdminPerm);
 
 // Determines the address of a bytecode argument which references a heap allocation.
 heapMemoryOffset_t getArgHeapMemoryAddress(

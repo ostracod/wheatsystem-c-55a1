@@ -863,6 +863,22 @@ int8_t currentImplementerMayAccessFile(allocPointer_t fileHandle) {
     return !getIsGuardedFromFileAttributes(attributes);
 }
 
+void setFileHasAdminPerm(allocPointer_t fileHandle, int8_t hasAdminPerm) {
+    if (!currentImplementerHasAdminPerm()) {
+        throw(PERM_ERR_CODE);
+    }
+    uint8_t attributes = getFileHandleMember(fileHandle, attributes);
+    if (hasAdminPerm) {
+        attributes |= ADMIN_FILE_ATTR;
+    } else {
+        attributes &= ~ADMIN_FILE_ATTR;
+    }
+    setFileHandleMember(fileHandle, attributes, attributes);
+    int32_t address = getFileHandleMember(fileHandle, address);
+    setFileHeaderMember(address, attributes, attributes);
+    flushStorageSpace();
+}
+
 heapMemoryOffset_t getArgHeapMemoryAddress(
     instructionArg_t *arg,
     int32_t offset,
@@ -1470,6 +1486,25 @@ void evaluateBytecodeInstruction() {
             allocPointer_t fileHandle = readArgFileHandle(1);
             int32_t size = getFileHandleSize(fileHandle);
             writeArgInt(0, size);
+        } else {
+            throw(NO_IMPL_ERR_CODE);
+        }
+    } else if (opcodeCategory == 0xA) {
+        // Permission instructions.
+        if (opcodeOffset == 0x0) {
+            // hasAdminPerm.
+            allocPointer_t fileHandle = readArgFileHandle(1);
+            int8_t attributes = getFileHandleMember(fileHandle, attributes);
+            int8_t hasAdminPerm = getHasAdminPermFromFileAttributes(attributes);
+            writeArgInt(0, hasAdminPerm);
+        } else if (opcodeOffset == 0x1) {
+            // giveAdminPerm.
+            allocPointer_t fileHandle = readArgFileHandle(0);
+            setFileHasAdminPerm(fileHandle, true);
+        } else if (opcodeOffset == 0x2) {
+            // delAdminPerm.
+            allocPointer_t fileHandle = readArgFileHandle(0);
+            setFileHasAdminPerm(fileHandle, false);
         } else {
             throw(NO_IMPL_ERR_CODE);
         }
