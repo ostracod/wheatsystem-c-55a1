@@ -590,6 +590,9 @@ int8_t currentImplementerHasAdminPerm();
 // Returns whether the implementer of the current function has permission to read or modify the data region of the given dynamic allocation.
 // "dynamicAlloc" is a pointer to a dynamicAlloc_t.
 int8_t currentImplementerMayAccessAlloc(allocPointer_t dynamicAlloc);
+// Returns whether the implementer of the current function has permission to read or modify the data region of the given file.
+// "fileHandle" is an allocPointer_t to a fileHandle_t.
+int8_t currentImplementerMayAccessFile(allocPointer_t fileHandle);
 
 // Determines the address of a bytecode argument which references a heap allocation.
 heapMemoryOffset_t getArgHeapMemoryAddress(

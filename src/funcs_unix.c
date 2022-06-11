@@ -117,6 +117,11 @@ void writeTermText() {
     int32_t posX = readArgFrame(previousArgFrame, 0, int32_t);
     int32_t posY = readArgFrame(previousArgFrame, 4, int32_t);
     allocPointer_t textAlloc = readArgFrame(previousArgFrame, 8, int32_t);
+    if (!currentImplementerMayAccessAlloc(textAlloc)) {
+        unhandledErrorCode = PERM_ERR_CODE;
+        returnFromFunction();
+        return;
+    }
     heapMemoryOffset_t textSize = getDynamicAllocSize(textAlloc);
     wmove(window, posY, posX);
     for (heapMemoryOffset_t index = 0; index < textSize; index++) {

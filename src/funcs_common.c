@@ -855,6 +855,14 @@ int8_t currentImplementerMayAccessAlloc(allocPointer_t dynamicAlloc) {
         || currentImplementerHasAdminPerm());
 }
 
+int8_t currentImplementerMayAccessFile(allocPointer_t fileHandle) {
+    if (currentImplementerHasAdminPerm()) {
+        return true;
+    }
+    int8_t attributes = getFileHandleMember(fileHandle, attributes);
+    return !getIsGuardedFromFileAttributes(attributes);
+}
+
 heapMemoryOffset_t getArgHeapMemoryAddress(
     instructionArg_t *arg,
     int32_t offset,
@@ -1362,6 +1370,9 @@ void evaluateBytecodeInstruction() {
         } else if (opcodeOffset == 0x1) {
             // delFile.
             allocPointer_t fileHandle = readArgFileHandle(0);
+            if (!currentImplementerMayAccessFile(fileHandle)) {
+                throw(PERM_ERR_CODE);
+            }
             deleteFile(fileHandle);
         } else if (opcodeOffset == 0x2) {
             // openFile.
@@ -1379,6 +1390,9 @@ void evaluateBytecodeInstruction() {
             // readFile.
             instructionArg_t *destination = instructionArgArray;
             allocPointer_t fileHandle = readArgFileHandle(1);
+            if (!currentImplementerMayAccessFile(fileHandle)) {
+                throw(PERM_ERR_CODE);
+            }
             int32_t pos = readArgInt(2);
             int32_t size = readArgInt(3);
             validateFileRange(fileHandle, pos, size);
@@ -1393,6 +1407,9 @@ void evaluateBytecodeInstruction() {
         } else if (opcodeOffset == 0x5) {
             // wrtFile.
             allocPointer_t fileHandle = readArgFileHandle(0);
+            if (!currentImplementerMayAccessFile(fileHandle)) {
+                throw(PERM_ERR_CODE);
+            }
             int32_t pos = readArgInt(1);
             instructionArg_t *source = instructionArgArray + 2;
             int32_t size = readArgInt(3);
