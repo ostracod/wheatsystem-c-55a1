@@ -56,8 +56,10 @@ typedef struct runningAppHeader_t {
     allocPointer_t localFrame;
     // Whether the application is blocked by a "wait" instruction.
     int8_t isWaiting;
-    // Progress of the resource system in killing the application.
-    int8_t killState;
+    // The last action performed when attempting to kill the app.
+    int8_t killAction;
+    // The amount of time since the last kill action.
+    int8_t killActionDelay;
 } runningAppHeader_t;
 
 // Contains the state of a running application. This struct is stored in the data region of a heap allocation.

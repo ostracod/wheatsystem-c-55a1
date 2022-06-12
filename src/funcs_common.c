@@ -531,7 +531,7 @@ void launchApp(allocPointer_t fileHandle) {
     setRunningAppMember(runningApp, fileHandle, fileHandle);
     setRunningAppMember(runningApp, localFrame, NULL_ALLOC_POINTER);
     setRunningAppMember(runningApp, isWaiting, false);
-    setRunningAppMember(runningApp, killState, NONE_KILL_STATE);
+    setRunningAppMember(runningApp, killAction, NONE_KILL_ACTION);
     setFileHandleRunningApp(fileHandle, runningApp);
     setFileHandleInitErr(fileHandle, NONE_ERR_CODE);
     
@@ -552,6 +552,11 @@ void launchApp(allocPointer_t fileHandle) {
     if (initFunctionIndex >= 0) {
         callFunction(runningApp, runningApp, initFunctionIndex, false);
     }
+}
+
+void softKillApp(allocPointer_t runningApp) {
+    // TODO: Implement.
+    
 }
 
 void hardKillApp(allocPointer_t runningApp, int8_t errorCode) {
@@ -807,10 +812,10 @@ void runAppSystem() {
     int8_t runningAppIndex = 0;
     while (true) {
         
-        memoryManagementDelay += 1;
-        if (memoryManagementDelay >= MEMORY_MANAGEMENT_PERIOD) {
-            manageMemoryUsage();
-            memoryManagementDelay = 0;
+        killStatesDelay += 1;
+        if (killStatesDelay >= KILL_STATES_PERIOD) {
+            updateKillStates();
+            killStatesDelay = 0;
         }
         
         // Find running app with index equal to runningAppIndex.
@@ -889,7 +894,19 @@ void setFileHasAdminPerm(allocPointer_t fileHandle, int8_t hasAdminPerm) {
     flushStorageSpace();
 }
 
-void manageMemoryUsage() {
+int8_t performKillAction(allocPointer_t runningApp, int8_t killAction) {
+    if (killAction == WARN_KILL_ACTION) {
+        // TODO: Implement.
+        
+    } else if (killAction == THROTTLE_KILL_ACTION) {
+        // TODO: Implement.
+        
+    } else if (killAction == HARD_KILL_ACTION) {
+        hardKillApp(runningApp, THROTTLE_ERR_CODE);
+    }
+}
+
+void updateKillStates() {
     // TODO: Implement.
     
 }
@@ -1386,6 +1403,16 @@ void evaluateBytecodeInstruction() {
             // launch.
             allocPointer_t appHandle = readArgFileHandle(0);
             launchApp(appHandle);
+        } else if (opcodeOffset == 0x5) {
+            // killApp.
+            if (!currentImplementerHasAdminPerm()) {
+                throw(PERM_ERR_CODE);
+            }
+            allocPointer_t appHandle = readArgFileHandle(0);
+            allocPointer_t runningApp = getFileHandleRunningApp(appHandle);
+            if (runningApp != NULL_ALLOC_POINTER) {
+                softKillApp(runningApp);
+            }
         } else {
             throw(NO_IMPL_ERR_CODE);
         }

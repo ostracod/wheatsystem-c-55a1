@@ -567,9 +567,17 @@ allocPointer_t getCurrentCaller();
 allocPointer_t createNextArgFrame(heapMemoryOffset_t size);
 // "localFrame" is a pointer to a localFrame_t.
 void cleanUpNextArgFrameHelper(allocPointer_t localFrame);
+
 // Launches a running application from the given file handle.
 // "fileHandle" is a pointer to a fileHandle_t.
 void launchApp(allocPointer_t fileHandle);
+// Requests the given application to clean up resources and quit.
+// "runningApp" is a pointer to a runningApp_t.
+void softKillApp(allocPointer_t runningApp);
+// Terminates the given application without requesting it to clean up resources.
+// "runningApp" is a pointer to a runningApp_t.
+void hardKillApp(allocPointer_t runningApp, int8_t errorCode);
+
 // Invokes a function in the given thread.
 // "threadApp" and "implementer" are pointers to runningApp_t.
 // "functionIndex" is the index of the function in "implementer".
@@ -602,8 +610,12 @@ int8_t currentImplementerMayAccessFile(allocPointer_t fileHandle);
 // Will set unhandledErrorCode to PERM_ERR_CODE if the implementer of the current function does not have admin permission.
 void setFileHasAdminPerm(allocPointer_t fileHandle, int8_t hasAdminPerm);
 
-// Attempts to kill apps when available memory is low.
-void manageMemoryUsage();
+// Attempts to kill an application with the given action.
+// "runningApp" is a pointer to a runningApp_t.
+// Returns whether the action is possible to perform.
+int8_t performKillAction(allocPointer_t runningApp, int8_t killAction);
+// Controls how apps are throttled and killed.
+void updateKillStates();
 
 // Determines the address of a bytecode argument which references a heap allocation.
 heapMemoryOffset_t getArgHeapMemoryAddress(

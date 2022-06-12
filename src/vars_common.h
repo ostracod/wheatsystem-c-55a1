@@ -3,8 +3,8 @@
 allocPointer_t firstAlloc;
 // The amount of unused space remaining in heap memory.
 heapMemoryOffset_t heapMemorySizeLeft;
-// The amount of time since the resource system last managed memory usage.
-int16_t memoryManagementDelay;
+// The amount of time since app kill states were last updated.
+int16_t killStatesDelay;
 
 // Stores the last thrown error code. The value of this variable must be checked after invoking certain functions.
 int8_t unhandledErrorCode;
