@@ -1,6 +1,10 @@
 
 // First allocation in the linked list.
 allocPointer_t firstAlloc;
+// The amount of unused space remaining in heap memory.
+heapMemoryOffset_t heapMemorySizeLeft;
+// The amount of time since the resource system last managed memory usage.
+int16_t memoryManagementDelay;
 
 // Stores the last thrown error code. The value of this variable must be checked after invoking certain functions.
 int8_t unhandledErrorCode;

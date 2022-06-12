@@ -2,6 +2,8 @@
 #include "./headers.h"
 
 allocPointer_t firstAlloc = NULL_ALLOC_POINTER;
+heapMemoryOffset_t heapMemorySizeLeft = HEAP_MEMORY_SIZE;
+int16_t memoryManagementDelay = 0;
 
 int8_t unhandledErrorCode = 0;
 

@@ -582,6 +582,10 @@ void callFunction(
 );
 // Stops evaluation of the current function invocation, and returns control to the previous function invocation.
 void returnFromFunction();
+
+// Provides some time for the given app to perform work.
+// "runningApp" is a pointer to a runningApp_t.
+void scheduleAppThread(allocPointer_t runningApp);
 // Enters a blocking loop to run all WheatSystem applications.
 void runAppSystem();
 
@@ -597,6 +601,9 @@ int8_t currentImplementerMayAccessFile(allocPointer_t fileHandle);
 // "fileHandle" is an allocPointer_t to a fileHandle_t.
 // Will set unhandledErrorCode to PERM_ERR_CODE if the implementer of the current function does not have admin permission.
 void setFileHasAdminPerm(allocPointer_t fileHandle, int8_t hasAdminPerm);
+
+// Attempts to kill apps when available memory is low.
+void manageMemoryUsage();
 
 // Determines the address of a bytecode argument which references a heap allocation.
 heapMemoryOffset_t getArgHeapMemoryAddress(

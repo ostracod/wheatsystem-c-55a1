@@ -30,6 +30,7 @@ allocPointer_t createAlloc(int8_t type, heapMemoryOffset_t size) {
     setAllocMember(output, type, type);
     setAllocMember(output, size, size);
     setAllocMember(output, next, nextPointer);
+    heapMemorySizeLeft -= sizeWithHeader;
     
     // Update previous allocation or firstAlloc.
     if (previousPointer == NULL_ALLOC_POINTER) {
@@ -59,8 +60,10 @@ int8_t deleteAlloc(allocPointer_t pointer) {
         previousPointer = tempPointer;
     }
     
+    
     // Update previous allocation or firstAlloc to
     // point to the next allocation.
+    heapMemorySizeLeft += sizeof(allocHeader_t) + getAllocSize(pointer);
     if (previousPointer == NULL_ALLOC_POINTER) {
         firstAlloc = nextPointer;
     } else {
@@ -325,7 +328,7 @@ allocPointer_t openFile(heapMemoryOffset_t nameAddress, heapMemoryOffset_t nameS
     setFileHandleMember(output, nameSize, nameSize);
     setFileHandleMember(output, contentSize, contentSize);
     setFileHandleRunningApp(output, NULL_ALLOC_POINTER);
-    setFileHandleInitErr(output, 0);
+    setFileHandleInitErr(output, NONE_ERR_CODE);
     setFileHandleMember(output, openDepth, 1);
     return output;
 }
@@ -528,8 +531,9 @@ void launchApp(allocPointer_t fileHandle) {
     setRunningAppMember(runningApp, fileHandle, fileHandle);
     setRunningAppMember(runningApp, localFrame, NULL_ALLOC_POINTER);
     setRunningAppMember(runningApp, isWaiting, false);
+    setRunningAppMember(runningApp, killState, NONE_KILL_STATE);
     setFileHandleRunningApp(fileHandle, runningApp);
-    setFileHandleInitErr(fileHandle, 0);
+    setFileHandleInitErr(fileHandle, NONE_ERR_CODE);
     
     // Initialize global frame.
     for (heapMemoryOffset_t index = 0; index < globalFrameSize; index++) {
@@ -803,6 +807,12 @@ void runAppSystem() {
     int8_t runningAppIndex = 0;
     while (true) {
         
+        memoryManagementDelay += 1;
+        if (memoryManagementDelay >= MEMORY_MANAGEMENT_PERIOD) {
+            manageMemoryUsage();
+            memoryManagementDelay = 0;
+        }
+        
         // Find running app with index equal to runningAppIndex.
         allocPointer_t runningApp = NULL_ALLOC_POINTER;
         allocPointer_t firstRunningApp = NULL_ALLOC_POINTER;
@@ -877,6 +887,11 @@ void setFileHasAdminPerm(allocPointer_t fileHandle, int8_t hasAdminPerm) {
     int32_t address = getFileHandleMember(fileHandle, address);
     setFileHeaderMember(address, attributes, attributes);
     flushStorageSpace();
+}
+
+void manageMemoryUsage() {
+    // TODO: Implement.
+    
 }
 
 heapMemoryOffset_t getArgHeapMemoryAddress(
