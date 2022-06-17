@@ -3,11 +3,13 @@
 
 allocPointer_t firstAlloc = NULL_ALLOC_POINTER;
 heapMemoryOffset_t heapMemorySizeLeft = HEAP_MEMORY_SIZE;
+allocPointer_t firstThread = NULL_ALLOC_POINTER;
 int16_t killStatesDelay = 0;
 
 int8_t unhandledErrorCode = 0;
 
-allocPointer_t currentThreadApp;
+allocPointer_t nextThread;
+allocPointer_t currentThread;
 allocPointer_t currentLocalFrame;
 allocPointer_t currentImplementer;
 allocPointer_t currentImplementerFileHandle;

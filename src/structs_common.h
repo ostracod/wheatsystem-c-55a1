@@ -48,12 +48,24 @@ typedef struct fileHandle_t {
     int8_t openDepth;
 } fileHandle_t;
 
+// Represents a thread spawned from a running application.
+typedef struct thread_t {
+    // runningApp_t which implements the base function in the thread.
+    allocPointer_t runningApp;
+    // ID of the base function in the thread.
+    int8_t functionId;
+    // Currently active localFrame_t.
+    allocPointer_t localFrame;
+    // Previous thread_t in the linked list.
+    allocPointer_t previous;
+    // Next thread_t in the linked list.
+    allocPointer_t next;
+} thread_t;
+
 // Stored at the beginning of a running application allocation.
 typedef struct runningAppHeader_t {
     // fileHandle_t of an application.
     allocPointer_t fileHandle;
-    // Currently active localFrame_t.
-    allocPointer_t localFrame;
     // Whether the application is blocked by a "wait" instruction.
     int8_t isWaiting;
     // The last action performed when attempting to kill the app.

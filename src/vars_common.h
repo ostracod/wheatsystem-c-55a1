@@ -3,14 +3,18 @@
 allocPointer_t firstAlloc;
 // The amount of unused space remaining in heap memory.
 heapMemoryOffset_t heapMemorySizeLeft;
+// First thread_t in the linked list.
+allocPointer_t firstThread;
 // The amount of time since app kill states were last updated.
 int16_t killStatesDelay;
 
 // Stores the last thrown error code. The value of this variable must be checked after invoking certain functions.
 int8_t unhandledErrorCode;
 
-// Stores the runningApp_t of the currently scheduled thread.
-allocPointer_t currentThreadApp;
+// Stores the next thread_t to schedule.
+allocPointer_t nextThread;
+// Stores the currently scheduled thread_t.
+allocPointer_t currentThread;
 // Stores the active localFrame_t of the currently scheduled function invocation.
 allocPointer_t currentLocalFrame;
 // Stores the runningApp_t which implements the currently scheduled function invocation.

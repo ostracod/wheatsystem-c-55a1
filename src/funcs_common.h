@@ -190,6 +190,17 @@
 // Retrieves the type of a file from the given bit field.
 #define getTypeFromFileAttributes(fileAttributes) (fileAttributes & 0x03)
 
+// Retrieves a member of the given thread.
+// "thread" is an allocPointer_t to a thread_t.
+// "memberName" is the name of a member in thread_t.
+#define getThreadMember(thread, memberName) \
+    readAlloc(thread, getStructMemberOffset(thread_t, memberName), getStructMemberType(thread_t, memberName))
+// Modifies a member of the given thread.
+// "thread" is an allocPointer_t to a thread_t.
+// "memberName" is the name of a member in thread_t.
+#define setThreadMember(thread, memberName, value) \
+    writeAlloc(thread, getStructMemberOffset(thread_t, memberName), getStructMemberType(thread_t, memberName), value)
+
 // Retrieves a member of the running application header in the given running application.
 // "runningApp" is an allocPointer_t to a runningApp_t.
 // "memberName" is the name of a member in runningAppHeader_t.
@@ -579,21 +590,34 @@ void softKillApp(allocPointer_t runningApp);
 void hardKillApp(allocPointer_t runningApp, int8_t errorCode);
 
 // Invokes a function in the given thread.
-// "threadApp" and "implementer" are pointers to runningApp_t.
+// "thread" is a pointer to a thread_t.
+// "implementer" is a pointer to a runningApp_t.
 // "functionIndex" is the index of the function in "implementer".
 // "shouldCheckPerm" determines whether to check the permission of the current function implementer to invoke the given function.
 void callFunction(
-    allocPointer_t threadApp,
+    allocPointer_t thread,
     allocPointer_t implementer,
     int32_t functionIndex,
     int8_t shouldCheckPerm
 );
+void setCurrentLocalFrame(allocPointer_t localFrame);
 // Stops evaluation of the current function invocation, and returns control to the previous function invocation.
 void returnFromFunction();
 
-// Provides some time for the given app to perform work.
+// Invokes the given function in a new thread, if the function exists.
 // "runningApp" is a pointer to a runningApp_t.
-void scheduleAppThread(allocPointer_t runningApp);
+// "functionId" is the ID of a function which runningApp implements.
+// Returns whether the function exists in the running app.
+int8_t createThread(allocPointer_t runningApp, int32_t functionId);
+// Deletes the given thread.
+// "thread" is a pointer to a thread_t.
+void deleteThread(allocPointer_t thread);
+
+// Sets the next thread to be scheduled.
+// "previousThread" is a pointer to a thread_t.
+void advanceNextThread(allocPointer_t previousThread);
+// Provides some time for the current thread to perform work.
+void scheduleCurrentThread();
 // Enters a blocking loop to run all WheatSystem applications.
 void runAppSystem();
 
