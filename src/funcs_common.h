@@ -612,7 +612,13 @@ int8_t createThread(allocPointer_t runningApp, int32_t functionId);
 // Deletes the given thread.
 // "thread" is a pointer to a thread_t.
 void deleteThread(allocPointer_t thread);
+// Causes an error handler to be invoked within the current thread.
+void registerErrorInCurrentThread(int8_t error);
 
+// Sets the currently active thread.
+// "thread" is a pointer to a thread_t.
+// Returns whether the current local frame is null.
+int8_t setCurrentThread(allocPointer_t thread);
 // Sets the next thread to be scheduled.
 // "previousThread" is a pointer to a thread_t.
 void advanceNextThread(allocPointer_t previousThread);

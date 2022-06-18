@@ -788,15 +788,57 @@ void deleteThread(allocPointer_t thread) {
     deleteAlloc(thread);
 }
 
-void scheduleCurrentThread() {
-    
-    allocPointer_t tempFrame = getThreadMember(currentThread, localFrame);
-    if (tempFrame == NULL_ALLOC_POINTER) {
-        deleteThread(currentThread);
-        return;
+void registerErrorInCurrentThread(int8_t error) {
+    while (true) {
+        int8_t shouldHandleError;
+        if (currentImplementerFileType == BYTECODE_APP_FILE_TYPE) {
+            int32_t instructionOffset = getBytecodeLocalFrameMember(
+                currentLocalFrame,
+                errorHandler
+            );
+            if (instructionOffset >= 0) {
+                jumpToBytecodeInstruction(instructionOffset);
+                shouldHandleError = true;
+            } else {
+                shouldHandleError = false;
+            }
+        } else {
+            shouldHandleError = true;
+        }
+        if (shouldHandleError) {
+            setLocalFrameMember(currentLocalFrame, lastErrorCode, error);
+            break;
+        }
+        returnFromFunction();
+        if (currentLocalFrame == NULL_ALLOC_POINTER) {
+            if (getThreadMember(currentThread, functionId) == INIT_FUNC_ID) {
+                allocPointer_t runningApp = getThreadMember(currentThread, runningApp);
+                allocPointer_t fileHandle = getRunningAppMember(
+                    runningApp,
+                    fileHandle
+                );
+                setFileHandleInitErr(fileHandle, error);
+            }
+            break;
+        }
     }
-    setCurrentLocalFrame(tempFrame);
-    
+}
+
+int8_t setCurrentThread(allocPointer_t thread) {
+    currentThread = thread;
+    allocPointer_t localFrame = getThreadMember(currentThread, localFrame);
+    setCurrentLocalFrame(localFrame);
+    return (localFrame == NULL_ALLOC_POINTER);
+}
+
+void advanceNextThread(allocPointer_t previousThread) {
+    nextThread = getThreadMember(previousThread, next);
+    if (nextThread == NULL_ALLOC_POINTER) {
+        nextThread = firstThread;
+    }
+}
+
+void scheduleCurrentThread() {
     if (currentImplementerFileType == BYTECODE_APP_FILE_TYPE) {
         evaluateBytecodeInstruction();
     } else {
@@ -808,53 +850,10 @@ void scheduleCurrentThread() {
         );
         threadAction();
     }
-    // This happens if the app quits while running.
-    if (currentThread == NULL_ALLOC_POINTER) {
-        return;
-    }
-    
-    if (unhandledErrorCode != 0) {
-        while (true) {
-            int8_t shouldHandleError;
-            if (currentImplementerFileType == BYTECODE_APP_FILE_TYPE) {
-                int32_t instructionOffset = getBytecodeLocalFrameMember(
-                    currentLocalFrame,
-                    errorHandler
-                );
-                if (instructionOffset >= 0) {
-                    jumpToBytecodeInstruction(instructionOffset);
-                    shouldHandleError = true;
-                } else {
-                    shouldHandleError = false;
-                }
-            } else {
-                shouldHandleError = true;
-            }
-            if (shouldHandleError) {
-                setLocalFrameMember(currentLocalFrame, lastErrorCode, unhandledErrorCode);
-                break;
-            }
-            returnFromFunction();
-            if (currentLocalFrame == NULL_ALLOC_POINTER) {
-                if (getThreadMember(currentThread, functionId) == INIT_FUNC_ID) {
-                    allocPointer_t runningApp = getThreadMember(currentThread, runningApp);
-                    allocPointer_t fileHandle = getRunningAppMember(
-                        runningApp,
-                        fileHandle
-                    );
-                    setFileHandleInitErr(fileHandle, unhandledErrorCode);
-                }
-                break;
-            }
-        }
+    // currentThread will be null if the app quits while running.
+    if (unhandledErrorCode != 0 && currentThread != NULL_ALLOC_POINTER) {
+        registerErrorInCurrentThread(unhandledErrorCode);
         unhandledErrorCode = 0;
-    }
-}
-
-void advanceNextThread(allocPointer_t previousThread) {
-    nextThread = getThreadMember(previousThread, next);
-    if (nextThread == NULL_ALLOC_POINTER) {
-        nextThread = firstThread;
     }
 }
 
@@ -880,9 +879,13 @@ void runAppSystem() {
             updateKillStates();
             killStatesDelay = 0;
         }
-        currentThread = nextThread;
+        int8_t localFrameIsNull = setCurrentThread(nextThread);
         advanceNextThread(currentThread);
-        scheduleCurrentThread();
+        if (localFrameIsNull) {
+            deleteThread(currentThread);
+        } else {
+            scheduleCurrentThread();
+        }
         sleepMilliseconds(1);
     }
 }
@@ -931,8 +934,23 @@ int8_t performKillAction(allocPointer_t runningApp, int8_t killAction) {
         // TODO: Implement.
         
     } else if (killAction == THROTTLE_KILL_ACTION) {
-        // TODO: Implement.
-        
+        int16_t throttleCount = 0;
+        allocPointer_t thread = firstThread;
+        while (thread != NULL_ALLOC_POINTER) {
+            setCurrentThread(thread);
+            thread = getThreadMember(currentThread, next);
+            allocPointer_t localFrame = currentLocalFrame;
+            while (localFrame != NULL_ALLOC_POINTER) {
+                allocPointer_t implementer = getLocalFrameMember(localFrame, implementer);
+                if (implementer == runningApp) {
+                    registerErrorInCurrentThread(THROTTLE_ERR_CODE);
+                    throttleCount += 1;
+                    break;
+                }
+                localFrame = getLocalFrameMember(localFrame, previousLocalFrame);
+            }
+        }
+        return (throttleCount > 0);
     } else if (killAction == HARD_KILL_ACTION) {
         hardKillApp(runningApp, THROTTLE_ERR_CODE);
         return true;
