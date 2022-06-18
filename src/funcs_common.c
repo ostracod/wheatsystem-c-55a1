@@ -1727,6 +1727,30 @@ void evaluateBytecodeInstruction() {
         } else {
             throw(NO_IMPL_ERR_CODE);
         }
+    } else if (opcodeCategory == 0xB) {
+        // Resource instructions.
+        if (opcodeOffset == 0x0) {
+            // memSize.
+            writeArgInt(0, HEAP_MEMORY_SIZE);
+        } else if (opcodeOffset == 0x1) {
+            // appMemSize.
+            allocPointer_t runningApp = readArgRunningApp(1);
+            heapMemoryOffset_t memoryUsage = 0;
+            allocPointer_t pointer = firstAlloc;
+            while (pointer != NULL_ALLOC_POINTER) {
+                allocPointer_t owner = getAllocOwner(pointer);
+                if (owner == runningApp) {
+                    memoryUsage += getAllocSizeWithHeader(pointer);
+                }
+                pointer = getAllocNext(pointer);
+            }
+            writeArgInt(0, memoryUsage);
+        } else if (opcodeOffset == 0x2) {
+            // memSizeLeft.
+            writeArgInt(0, heapMemorySizeLeft);
+        } else {
+            throw(NO_IMPL_ERR_CODE);
+        }
     } else {
         throw(NO_IMPL_ERR_CODE);
     }
