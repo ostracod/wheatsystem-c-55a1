@@ -18,7 +18,7 @@
 #define SENTRY_ALLOC_ATTR 0x02
 
 // Size available to store files.
-#define STORAGE_SPACE_SIZE ((int32_t)128 * (int32_t)1024)
+#define STORAGE_SPACE_SIZE ((storageOffset_t)128 * (storageOffset_t)1024)
 
 #define MISSING_FILE_ADDRESS 0
 

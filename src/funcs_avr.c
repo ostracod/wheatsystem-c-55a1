@@ -164,13 +164,17 @@ void writeHeapMemoryRange(
     sramAddress += amount;
 }
 
-void sendAddressToEeprom(int32_t address) {
+void sendAddressToEeprom(storageOffset_t address) {
     sendSpiInt8((address & 0x00FF0000) >> 16);
     sendSpiInt8((address & 0x0000FF00) >> 8);
     sendSpiInt8(address & 0x000000FF);
 }
 
-void readStorageSpaceRange(void *destination, int32_t address, int32_t amount) {
+void readStorageSpaceRange(
+    void *destination,
+    storageOffset_t address,
+    storageOffset_t amount
+) {
     if (amount <= 0) {
         return;
     }
@@ -188,19 +192,19 @@ void readStorageSpaceRange(void *destination, int32_t address, int32_t amount) {
         sendSpiInt8(0x03);
         sendAddressToEeprom(eepromAddress);
     }
-    for (int32_t index = 0; index < amount; index++) {
+    for (storageOffset_t index = 0; index < amount; index++) {
         int8_t value = receiveSpiInt8();
         *(int8_t *)(destination + index) = value;
     }
     eepromAddress += amount;
 }
 
-void writeStorageSpaceRange(int32_t address, void *source, int32_t amount) {
+void writeStorageSpaceRange(storageOffset_t address, void *source, storageOffset_t amount) {
     if (amount <= 0) {
         return;
     }
-    int32_t targetAddress = address;
-    for (int32_t index = 0; index < amount; index++) {
+    storageOffset_t targetAddress = address;
+    for (storageOffset_t index = 0; index < amount; index++) {
         if (currentSpiMode != EEPROM_WRITE_SPI_MODE || eepromAddress != targetAddress) {
             eepromAddress = targetAddress;
             setSpiMode(EEPROM_SPI_DEVICE | COMMAND_SPI_ACTION);
@@ -326,7 +330,7 @@ void runTransferMode() {
             }
         }
         int8_t command = receiveUartInt8();
-        int32_t address = 0;
+        storageOffset_t address = 0;
         ((int8_t *)&address)[0] = receiveUartInt8();
         ((int8_t *)&address)[1] = receiveUartInt8();
         ((int8_t *)&address)[2] = receiveUartInt8();

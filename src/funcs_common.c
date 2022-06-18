@@ -129,7 +129,7 @@ void validateDynamicAlloc(allocPointer_t dynamicAlloc) {
 int8_t memoryNameEqualsStorageName(
     heapMemoryOffset_t memoryNameAddress,
     uint8_t memoryNameSize,
-    int32_t storageNameAddress,
+    storageOffset_t storageNameAddress,
     uint8_t storageNameSize
 ) {
     if (memoryNameSize != storageNameSize) {
@@ -146,7 +146,7 @@ int8_t memoryNameEqualsStorageName(
 }
 
 void copyStorageNameToMemory(
-    int32_t storageNameAddress,
+    storageOffset_t storageNameAddress,
     heapMemoryOffset_t memoryNameAddress,
     uint8_t nameSize
 ) {
@@ -156,7 +156,12 @@ void copyStorageNameToMemory(
     }
 }
 
-void createFile(allocPointer_t name, int8_t type, int8_t isGuarded, int32_t contentSize) {
+void createFile(
+    allocPointer_t name,
+    int8_t type,
+    int8_t isGuarded,
+    storageOffset_t contentSize
+) {
     
     // Verify argument values.
     heapMemoryOffset_t nameAllocAddress = getDynamicAllocDataAddress(name);
@@ -174,19 +179,19 @@ void createFile(allocPointer_t name, int8_t type, int8_t isGuarded, int32_t cont
     
     // Find a storage space gap which is large enough,
     // and ensure that there is no duplicate name.
-    int32_t previousFileAddress = MISSING_FILE_ADDRESS;
-    int32_t nextFileAddress = getFirstFileAddress();
-    int32_t newFileAddress = MISSING_FILE_ADDRESS;
+    storageOffset_t previousFileAddress = MISSING_FILE_ADDRESS;
+    storageOffset_t nextFileAddress = getFirstFileAddress();
+    storageOffset_t newFileAddress = MISSING_FILE_ADDRESS;
     while (true) {
         int8_t hasReachedEnd = (nextFileAddress == MISSING_FILE_ADDRESS);
         if (newFileAddress == MISSING_FILE_ADDRESS) {
-            int32_t startAddress;
+            storageOffset_t startAddress;
             if (previousFileAddress == MISSING_FILE_ADDRESS) {
                 startAddress = sizeof(storageSpaceHeader_t);
             } else {
                 startAddress = previousFileAddress + getFileStorageSize(previousFileAddress);
             }
-            int32_t endAddress = hasReachedEnd ? STORAGE_SPACE_SIZE : nextFileAddress;
+            storageOffset_t endAddress = hasReachedEnd ? STORAGE_SPACE_SIZE : nextFileAddress;
             if (endAddress - startAddress >= fileStorageSize) {
                 newFileAddress = startAddress;
             }
@@ -225,30 +230,30 @@ void createFile(allocPointer_t name, int8_t type, int8_t isGuarded, int32_t cont
     setFileHeaderMember(newFileAddress, nameSize, nameSize);
     setFileHeaderMember(newFileAddress, contentSize, contentSize);
     setFileHeaderMember(newFileAddress, next, nextFileAddress);
-    int32_t nameAddress = newFileAddress + sizeof(fileHeader_t);
+    storageOffset_t nameAddress = newFileAddress + sizeof(fileHeader_t);
     for (uint8_t offset = 0; offset < nameSize; offset++) {
         int8_t character = readDynamicAlloc(name, offset, int8_t);
         writeStorageSpace(nameAddress + offset, int8_t, character);
     }
-    int32_t contentAddress = nameAddress + nameSize;
-    for (int32_t offset = 0; offset < contentSize; offset++) {
+    storageOffset_t contentAddress = nameAddress + nameSize;
+    for (storageOffset_t offset = 0; offset < contentSize; offset++) {
         writeStorageSpace(contentAddress + offset, int8_t, 0);
     }
     flushStorageSpace();
 }
 
 void deleteFile(allocPointer_t fileHandle) {
-    int32_t fileAddress = getFileHandleMember(fileHandle, address);
+    storageOffset_t fileAddress = getFileHandleMember(fileHandle, address);
     
     // Find previous and next files.
-    int32_t previousFileAddress = MISSING_FILE_ADDRESS;
-    int32_t nextFileAddress = getFirstFileAddress();
+    storageOffset_t previousFileAddress = MISSING_FILE_ADDRESS;
+    storageOffset_t nextFileAddress = getFirstFileAddress();
     while (true) {
         if (nextFileAddress == MISSING_FILE_ADDRESS) {
             // This should not happen if invariants hold true.
             return;
         }
-        int32_t tempAddress = nextFileAddress;
+        storageOffset_t tempAddress = nextFileAddress;
         nextFileAddress = getFileHeaderMember(tempAddress, next);
         if (tempAddress == fileAddress) {
             break;
@@ -266,8 +271,11 @@ void deleteFile(allocPointer_t fileHandle) {
     deleteAlloc(fileHandle);
 }
 
-int32_t getFileAddressByName(heapMemoryOffset_t nameAddress, heapMemoryOffset_t nameSize) {
-    int32_t fileAddress = getFirstFileAddress();
+storageOffset_t getFileAddressByName(
+    heapMemoryOffset_t nameAddress,
+    heapMemoryOffset_t nameSize
+) {
+    storageOffset_t fileAddress = getFirstFileAddress();
     while (fileAddress != MISSING_FILE_ADDRESS) {
         if (memoryNameEqualsStorageName(
             nameAddress,
@@ -282,9 +290,9 @@ int32_t getFileAddressByName(heapMemoryOffset_t nameAddress, heapMemoryOffset_t 
     return MISSING_FILE_ADDRESS;
 }
 
-int32_t getFileStorageSize(int32_t fileAddress) {
+storageOffset_t getFileStorageSize(storageOffset_t fileAddress) {
     int8_t nameSize = getFileHeaderMember(fileAddress, nameSize);
-    int32_t contentSize = getFileHeaderMember(fileAddress, contentSize);
+    storageOffset_t contentSize = getFileHeaderMember(fileAddress, contentSize);
     return getFileStorageSizeHelper(nameSize, contentSize);
 }
 
@@ -312,14 +320,14 @@ allocPointer_t openFile(heapMemoryOffset_t nameAddress, heapMemoryOffset_t nameS
     }
     
     // Try to find file in storage.
-    int32_t fileAddress = getFileAddressByName(nameAddress, nameSize);
+    storageOffset_t fileAddress = getFileAddressByName(nameAddress, nameSize);
     if (fileAddress == MISSING_FILE_ADDRESS) {
         return NULL_ALLOC_POINTER;
     }
     
     // Read file header.
     uint8_t fileAttributes = getFileHeaderMember(fileAddress, attributes);
-    int32_t contentSize = getFileHeaderMember(fileAddress, contentSize);
+    storageOffset_t contentSize = getFileHeaderMember(fileAddress, contentSize);
     
     // Create file handle.
     allocPointer_t output = createDynamicAlloc(
@@ -350,10 +358,10 @@ void closeFile(allocPointer_t fileHandle) {
 void readFileRange(
     void *destination,
     allocPointer_t fileHandle,
-    int32_t pos,
-    int32_t amount
+    storageOffset_t pos,
+    storageOffset_t amount
 ) {
-    int32_t address = getFileHandleDataAddress(fileHandle) + pos;
+    storageOffset_t address = getFileHandleDataAddress(fileHandle) + pos;
     readStorageSpaceRange(destination, address, amount);
 }
 
@@ -361,7 +369,7 @@ allocPointer_t getAllFileNames() {
     
     // First find the number of files in the volume.
     int32_t fileCount = 0;
-    int32_t fileAddress = getFirstFileAddress();
+    storageOffset_t fileAddress = getFirstFileAddress();
     while (fileAddress != MISSING_FILE_ADDRESS) {
         fileCount += 1;
         fileAddress = getFileHeaderMember(fileAddress, next);
@@ -484,7 +492,7 @@ void launchApp(allocPointer_t fileHandle) {
         return;
     }
     int8_t fileType = getFileHandleType(fileHandle);
-    int32_t fileSize = getFileHandleSize(fileHandle);
+    storageOffset_t fileSize = getFileHandleSize(fileHandle);
     int32_t functionTableLength;
     int32_t appDataFilePos;
     int8_t systemAppId;
@@ -967,7 +975,7 @@ void setFileHasAdminPerm(allocPointer_t fileHandle, int8_t hasAdminPerm) {
         attributes &= ~ADMIN_FILE_ATTR;
     }
     setFileHandleMember(fileHandle, attributes, attributes);
-    int32_t address = getFileHandleMember(fileHandle, address);
+    storageOffset_t address = getFileHandleMember(fileHandle, address);
     setFileHeaderMember(address, attributes, attributes);
     flushStorageSpace();
 }
@@ -1635,8 +1643,8 @@ void evaluateBytecodeInstruction() {
             int32_t pos = readArgInt(2);
             int32_t size = readArgInt(3);
             validateFileRange(fileHandle, pos, size);
-            int32_t contentAddress = getFileHandleDataAddress(fileHandle) + pos;
-            for (int32_t offset = 0; offset < size; offset++) {
+            storageOffset_t contentAddress = getFileHandleDataAddress(fileHandle) + pos;
+            for (storageOffset_t offset = 0; offset < size; offset++) {
                 int8_t value = readStorageSpace(contentAddress + offset, int8_t);
                 writeArgIntHelper(destination, offset, SIGNED_INT_8_TYPE, value);
                 if (unhandledErrorCode != 0) {
@@ -1653,8 +1661,8 @@ void evaluateBytecodeInstruction() {
             instructionArg_t *source = instructionArgArray + 2;
             int32_t size = readArgInt(3);
             validateFileRange(fileHandle, pos, size);
-            int32_t contentAddress = getFileHandleDataAddress(fileHandle) + pos;
-            for (int32_t offset = 0; offset < size; offset++) {
+            storageOffset_t contentAddress = getFileHandleDataAddress(fileHandle) + pos;
+            for (storageOffset_t offset = 0; offset < size; offset++) {
                 int8_t value = readArgIntHelper(source, offset, SIGNED_INT_8_TYPE);
                 if (unhandledErrorCode != 0) {
                     return;
@@ -1675,7 +1683,7 @@ void evaluateBytecodeInstruction() {
             allocPointer_t fileName = readArgDynamicAlloc(1);
             heapMemoryOffset_t nameAddress = getDynamicAllocDataAddress(fileName);
             heapMemoryOffset_t nameSize = getDynamicAllocSize(fileName);
-            int32_t fileAddress = getFileAddressByName(nameAddress, nameSize);
+            storageOffset_t fileAddress = getFileAddressByName(nameAddress, nameSize);
             writeArgInt(0, (fileAddress != MISSING_FILE_ADDRESS));
         } else if (opcodeOffset == 0x2) {
             // fileName.
@@ -1686,7 +1694,7 @@ void evaluateBytecodeInstruction() {
                 GUARDED_ALLOC_ATTR,
                 currentImplementer
             );
-            int32_t fileAddress = getFileHandleMember(fileHandle, address);
+            storageOffset_t fileAddress = getFileHandleMember(fileHandle, address);
             copyStorageNameToMemory(
                 getFileNameAddress(fileAddress),
                 getDynamicAllocDataAddress(nameAlloc),
@@ -1707,7 +1715,7 @@ void evaluateBytecodeInstruction() {
         } else if (opcodeOffset == 0x5) {
             // fileSize.
             allocPointer_t fileHandle = readArgFileHandle(1);
-            int32_t size = getFileHandleSize(fileHandle);
+            storageOffset_t size = getFileHandleSize(fileHandle);
             writeArgInt(0, size);
         } else {
             throw(NO_IMPL_ERR_CODE);
@@ -1757,8 +1765,8 @@ void evaluateBytecodeInstruction() {
             writeArgInt(0, STORAGE_SPACE_SIZE);
         } else if (opcodeOffset == 0x4) {
             // volSizeLeft.
-            int32_t storageUsage = sizeof(storageSpaceHeader_t);
-            int32_t address = getFirstFileAddress();
+            storageOffset_t storageUsage = sizeof(storageSpaceHeader_t);
+            storageOffset_t address = getFirstFileAddress();
             while (address != MISSING_FILE_ADDRESS) {
                 storageUsage += getFileStorageSize(address);
                 address = getFileHeaderMember(address, next);

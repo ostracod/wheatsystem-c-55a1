@@ -107,10 +107,14 @@ void writeHeapMemoryRange(
 void sendAddressToEeprom();
 // Reads an interval of data from non-volatile storage.
 // "address" is the offset of first byte to read.
-void readStorageSpaceRange(void *destination, int32_t address, int32_t amount);
+void readStorageSpaceRange(
+    void *destination,
+    storageOffset_t address,
+    storageOffset_t amount
+);
 // Writes an interval of data to non-volatile storage. Changes might not be persisted until calling flushStorageSpace.
 // "address" is the offset of first byte to write.
-void writeStorageSpaceRange(int32_t address, void *source, int32_t amount);
+void writeStorageSpaceRange(storageOffset_t address, void *source, storageOffset_t amount);
 // Persists any pending changes to non-volatile storage.
 void flushStorageSpace();
 

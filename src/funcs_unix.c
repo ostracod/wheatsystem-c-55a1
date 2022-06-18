@@ -26,9 +26,9 @@ int8_t initializeStorageSpace() {
     return true;
 }
 
-void writeStorageSpaceRange(int32_t address, void *source, int32_t amount) {
+void writeStorageSpaceRange(storageOffset_t address, void *source, storageOffset_t amount) {
     storageSpaceIsDirty = true;
-    int32_t endAddress = address + amount;
+    storageOffset_t endAddress = address + amount;
     if (endAddress > volumeFileSize) {
         volumeFileSize = endAddress;
     }

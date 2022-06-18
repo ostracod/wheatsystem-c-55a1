@@ -174,7 +174,7 @@
 // "pos" is the offset of first byte in the range.
 // "size" is the number of bytes in the range.
 #define validateFileRange(fileHandle, pos, size) { \
-    int32_t contentSize = getFileHandleSize(fileHandle); \
+    storageOffset_t contentSize = getFileHandleSize(fileHandle); \
     if (pos < 0 || pos >= contentSize) { \
         throw(INDEX_ERR_CODE); \
     } \
@@ -537,26 +537,34 @@ void validateDynamicAlloc(allocPointer_t dynamicAlloc);
 int8_t memoryNameEqualsStorageName(
     heapMemoryOffset_t memoryNameAddress,
     uint8_t memoryNameSize,
-    int32_t storageNameAddress,
+    storageOffset_t storageNameAddress,
     uint8_t storageNameSize
 );
 // Copies a file name from storage to heap memory.
 void copyStorageNameToMemory(
-    int32_t storageNameAddress,
+    storageOffset_t storageNameAddress,
     heapMemoryOffset_t memoryNameAddress,
     uint8_t nameSize
 );
 
 // Creates a file with the given name and attributes.
 // "name" is a pointer to a dynamicAlloc_t.
-void createFile(allocPointer_t name, int8_t type, int8_t isGuarded, int32_t contentSize);
+void createFile(
+    allocPointer_t name,
+    int8_t type,
+    int8_t isGuarded,
+    storageOffset_t contentSize
+);
 // Deletes the given file.
 // "fileHandle" is a pointer to a dynamicAlloc_t.
 void deleteFile(allocPointer_t fileHandle);
 // Finds the address of the file with the given name. Returns MISSING_FILE_ADDRESS if the file cannot be found.
-int32_t getFileAddressByName(heapMemoryOffset_t nameAddress, heapMemoryOffset_t nameSize);
+storageOffset_t getFileAddressByName(
+    heapMemoryOffset_t nameAddress,
+    heapMemoryOffset_t nameSize
+);
 // Determines the total amount of storage space which the given file occupies.
-int32_t getFileStorageSize(int32_t fileAddress);
+storageOffset_t getFileStorageSize(storageOffset_t fileAddress);
 // Opens the file with the given name, returning a file handle. If the file has already been opened, this function returns the existing file handle and increments its open depth. If the file is missing, this function returns NULL_ALLOC_POINTER.
 allocPointer_t openFile(heapMemoryOffset_t nameAddress, heapMemoryOffset_t nameSize);
 // Closes the given file, decrementing the open depth of the file handle. If the open depth reaches zero, the file handle is deleted.
@@ -567,8 +575,8 @@ void readFileRange(
     // Pointer to a dynamicAlloc_t.
     allocPointer_t fileHandle,
     // Offset of first byte to read.
-    int32_t pos,
-    int32_t amount
+    storageOffset_t pos,
+    storageOffset_t amount
 );
 // Retrieves a list of all file names in the system volume. The output stores an array of pointers to dynamic allocations.
 allocPointer_t getAllFileNames();

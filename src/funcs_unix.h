@@ -26,7 +26,7 @@ int32_t getNativeFileSize(FILE *fileHandle);
 int8_t initializeStorageSpace();
 // Writes an interval of data to non-volatile storage. Changes might not be persisted until calling flushStorageSpace.
 // "address" is the offset of first byte to write.
-void writeStorageSpaceRange(int32_t address, void *source, int32_t amount);
+void writeStorageSpaceRange(storageOffset_t address, void *source, storageOffset_t amount);
 // Persists any pending changes to non-volatile storage.
 void flushStorageSpace();
 
