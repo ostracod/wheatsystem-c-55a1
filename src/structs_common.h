@@ -12,7 +12,7 @@ typedef struct allocHeader_t {
 typedef struct dynamicAllocHeader_t {
     // Guard and sentry flags.
     int8_t attributes;
-    // fileHandle_t of app which created the allocation.
+    // runningApp_t which created the allocation.
     allocPointer_t creator;
 } dynamicAllocHeader_t;
 
@@ -72,6 +72,13 @@ typedef struct runningAppHeader_t {
     int8_t killAction;
     // The amount of time since the last kill action.
     int8_t killActionDelay;
+    // Note that this member variable is only used by updateKillStates.
+    // It is not updated regularly.
+    heapMemoryOffset_t memoryUsage;
+    // Previous runningApp_t in the linked list.
+    allocPointer_t previous;
+    // Next runningApp_t in the linked list.
+    allocPointer_t next;
 } runningAppHeader_t;
 
 // Contains the state of a running application. This struct is stored in the data region of a heap allocation.
@@ -83,6 +90,8 @@ typedef struct runningApp_t {
 
 // Stored at the beginning of a local frame.
 typedef struct localFrameHeader_t {
+    // thread_t in which the function is running.
+    allocPointer_t thread;
     // runningApp_t which implements the function.
     allocPointer_t implementer;
     int32_t functionIndex;
@@ -100,8 +109,15 @@ typedef struct localFrame_t {
     int8_t data[0];
 } localFrame_t;
 
+// Stored at the beginning of an argument frame.
+typedef struct argFrameHeader_t {
+    // thread_t to which the argument frame belongs.
+    allocPointer_t thread;
+} argFrameHeader_t;
+
 // Contains variables passed from one function invocation to another. This struct is stored in the data region of a heap allocation.
 typedef struct argFrame_t {
+    argFrameHeader_t header;
     int8_t data[0];
 } argFrame_t;
 

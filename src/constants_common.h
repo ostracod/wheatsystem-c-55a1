@@ -46,7 +46,10 @@
 #define CAPACITY_ERR_CODE 0x0D
 #define THROTTLE_ERR_CODE 0x0E
 
+// Amount of time to wait before updating kill states.
 #define KILL_STATES_PERIOD 50
+// Amount of free memory remaining before the resource system kills apps.
+#define KILL_PANIC_THRESHOLD (HEAP_MEMORY_SIZE / 4)
 
 #define NONE_KILL_ACTION 0
 #define WARN_KILL_ACTION 1

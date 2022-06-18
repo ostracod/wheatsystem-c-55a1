@@ -14,7 +14,7 @@ allocPointer_t createAlloc(int8_t type, heapMemoryOffset_t size) {
         if (endAddress - startAddress >= sizeWithHeader) {
             break;
         }
-        startAddress = endAddress + sizeof(allocHeader_t) + getAllocSize(nextPointer);
+        startAddress = endAddress + getAllocSizeWithHeader(nextPointer);
         previousPointer = nextPointer;
         nextPointer = getAllocNext(nextPointer);
     }
@@ -63,7 +63,7 @@ int8_t deleteAlloc(allocPointer_t pointer) {
     
     // Update previous allocation or firstAlloc to
     // point to the next allocation.
-    heapMemorySizeLeft += sizeof(allocHeader_t) + getAllocSize(pointer);
+    heapMemorySizeLeft += getAllocSizeWithHeader(pointer);
     if (previousPointer == NULL_ALLOC_POINTER) {
         firstAlloc = nextPointer;
     } else {
@@ -365,7 +365,7 @@ allocPointer_t getAllFileNames() {
     allocPointer_t output = createDynamicAlloc(
         fileCount * 4,
         GUARDED_ALLOC_ATTR,
-        currentImplementerFileHandle
+        currentImplementer
     );
     
     // Then create an allocation for each file name.
@@ -376,7 +376,7 @@ allocPointer_t getAllFileNames() {
         allocPointer_t nameAlloc = createDynamicAlloc(
             nameSize,
             GUARDED_ALLOC_ATTR,
-            currentImplementerFileHandle
+            currentImplementer
         );
         copyStorageNameToMemory(
             getFileNameAddress(fileAddress),
@@ -456,7 +456,11 @@ allocPointer_t getCurrentCaller() {
 
 allocPointer_t createNextArgFrame(heapMemoryOffset_t size) {
     cleanUpNextArgFrame();
-    allocPointer_t output = createAlloc(ARG_FRAME_ALLOC_TYPE, size);
+    allocPointer_t output = createAlloc(
+        ARG_FRAME_ALLOC_TYPE,
+        sizeof(argFrameHeader_t) + size
+    );
+    setArgFrameMember(output, thread, currentThread);
     setLocalFrameMember(currentLocalFrame, nextArgFrame, output);
     return output;
 }
@@ -531,6 +535,12 @@ void launchApp(allocPointer_t fileHandle) {
     setRunningAppMember(runningApp, fileHandle, fileHandle);
     setRunningAppMember(runningApp, isWaiting, false);
     setRunningAppMember(runningApp, killAction, NONE_KILL_ACTION);
+    setRunningAppMember(runningApp, previous, NULL_ALLOC_POINTER);
+    setRunningAppMember(runningApp, next, firstRunningApp);
+    if (firstRunningApp != NULL_ALLOC_POINTER) {
+        setRunningAppMember(firstRunningApp, previous, runningApp);
+    }
+    firstRunningApp = runningApp;
     setFileHandleRunningApp(fileHandle, runningApp);
     setFileHandleInitErr(fileHandle, NONE_ERR_CODE);
     
@@ -582,14 +592,13 @@ void hardKillApp(allocPointer_t runningApp, int8_t errorCode) {
     // TODO: Return from frames in other running app threads.
     
     // Delete dynamic allocations.
-    allocPointer_t fileHandle = getRunningAppMember(runningApp, fileHandle);
     allocPointer_t tempAlloc = firstAlloc;
     while (tempAlloc != NULL_ALLOC_POINTER) {
         allocPointer_t nextAlloc = getAllocNext(tempAlloc);
         int8_t tempType = getAllocType(tempAlloc);
         if (tempType == DYNAMIC_ALLOC_TYPE) {
             allocPointer_t tempCreator = getDynamicAllocMember(tempAlloc, creator);
-            if (tempCreator == fileHandle) {
+            if (tempCreator == runningApp) {
                 deleteAlloc(tempAlloc);
             }
         }
@@ -597,9 +606,20 @@ void hardKillApp(allocPointer_t runningApp, int8_t errorCode) {
     }
     
     // Update file handle and delete running app.
+    allocPointer_t fileHandle = getRunningAppMember(runningApp, fileHandle);
     setFileHandleRunningApp(fileHandle, NULL_ALLOC_POINTER);
     setFileHandleInitErr(fileHandle, errorCode);
     closeFile(fileHandle);
+    allocPointer_t previousRunningApp = getRunningAppMember(runningApp, previous);
+    allocPointer_t nextRunningApp = getRunningAppMember(runningApp, next);
+    if (previousRunningApp == NULL_ALLOC_POINTER) {
+        firstRunningApp = nextRunningApp;
+    } else {
+        setRunningAppMember(previousRunningApp, next, nextRunningApp);
+    }
+    if (nextRunningApp != NULL_ALLOC_POINTER) {
+        setRunningAppMember(nextRunningApp, previous, previousRunningApp);
+    }
     deleteAlloc(runningApp);
 }
 
@@ -684,6 +704,7 @@ void callFunction(
     
     // Create allocation for the local frame.
     allocPointer_t localFrame = createAlloc(LOCAL_FRAME_ALLOC_TYPE, localFrameSize);
+    setLocalFrameMember(localFrame, thread, thread);
     setLocalFrameMember(localFrame, implementer, implementer);
     setLocalFrameMember(localFrame, functionIndex, functionIndex);
     setLocalFrameMember(localFrame, previousLocalFrame, previousLocalFrame);
@@ -890,6 +911,12 @@ void runAppSystem() {
     }
 }
 
+int8_t runningAppHasAdminPerm(allocPointer_t runningApp) {
+    allocPointer_t fileHandle = getRunningAppMember(runningApp, fileHandle);
+    int8_t attributes = getFileHandleMember(fileHandle, attributes);
+    return getHasAdminPermFromFileAttributes(attributes);
+}
+
 int8_t currentImplementerHasAdminPerm() {
     int8_t attributes = getFileHandleMember(currentImplementerFileHandle, attributes);
     return getHasAdminPermFromFileAttributes(attributes);
@@ -901,8 +928,7 @@ int8_t currentImplementerMayAccessAlloc(allocPointer_t dynamicAlloc) {
         return true;
     }
     allocPointer_t creator = getDynamicAllocMember(dynamicAlloc, creator);
-    return (creator == currentImplementerFileHandle
-        || currentImplementerHasAdminPerm());
+    return (creator == currentImplementer || currentImplementerHasAdminPerm());
 }
 
 int8_t currentImplementerMayAccessFile(allocPointer_t fileHandle) {
@@ -958,9 +984,86 @@ int8_t performKillAction(allocPointer_t runningApp, int8_t killAction) {
     return false;
 }
 
+allocPointer_t getAllocOwner(allocPointer_t pointer) {
+    int8_t type = getAllocType(pointer);
+    if (type == RUNNING_APP_ALLOC_TYPE) {
+        return pointer;
+    } else if (type == THREAD_ALLOC_TYPE) {
+        return getThreadMember(pointer, runningApp);
+    } else if (type == LOCAL_FRAME_ALLOC_TYPE) {
+        allocPointer_t thread = getLocalFrameMember(pointer, thread);
+        return getThreadMember(thread, runningApp);
+    } else if (type == ARG_FRAME_ALLOC_TYPE) {
+        allocPointer_t thread = getArgFrameMember(pointer, thread);
+        return getThreadMember(thread, runningApp);
+    } else if (type == DYNAMIC_ALLOC_TYPE) {
+        return getDynamicAllocMember(pointer, creator);
+    }
+    return NULL_ALLOC_POINTER;
+}
+
 void updateKillStates() {
-    // TODO: Implement.
     
+    // Advance states of apps which are currently being killed.
+    int16_t killActionCount = 0;
+    allocPointer_t runningApp;
+    allocPointer_t nextRunningApp = firstRunningApp;
+    while (nextRunningApp != NULL_ALLOC_POINTER) {
+        runningApp = nextRunningApp;
+        nextRunningApp = getRunningAppMember(runningApp, next);
+        int8_t killAction = getRunningAppMember(runningApp, killAction);
+        if (killAction == NONE_KILL_ACTION) {
+            continue;
+        }
+        killActionCount += 1;
+        // TODO: Advance kill state.
+        
+    }
+    
+    // If we are already killing an app, or we have enough
+    // memory, don't kill more apps to free memory.
+    if (killActionCount > 0 || heapMemorySizeLeft > KILL_PANIC_THRESHOLD) {
+        return;
+    }
+    
+    // Calculate memory usage for all running apps.
+    runningApp = firstRunningApp;
+    while (runningApp != NULL_ALLOC_POINTER) {
+        setRunningAppMember(runningApp, memoryUsage, 0);
+        runningApp = getRunningAppMember(runningApp, next);
+    }
+    allocPointer_t pointer = firstAlloc;
+    while (pointer != NULL_ALLOC_POINTER) {
+        allocPointer_t owner = getAllocOwner(pointer);
+        if (owner != NULL_ALLOC_POINTER) {
+            heapMemoryOffset_t memoryUsage = getRunningAppMember(owner, memoryUsage);
+            memoryUsage += getAllocSizeWithHeader(pointer);
+            setRunningAppMember(owner, memoryUsage, memoryUsage);
+        }
+        pointer = getAllocNext(pointer);
+    }
+    
+    // Determine the best app to kill.
+    allocPointer_t victimRunningApp = NULL_ALLOC_POINTER;
+    allocPointer_t victimMemoryUsage = 0;
+    allocPointer_t victimHasAdminPerm = true;
+    runningApp = firstRunningApp;
+    while (runningApp != NULL_ALLOC_POINTER) {
+        heapMemoryOffset_t memoryUsage = getRunningAppMember(runningApp, memoryUsage);
+        int8_t hasAdminPerm = runningAppHasAdminPerm(runningApp);
+        if ((hasAdminPerm == victimHasAdminPerm && memoryUsage > victimMemoryUsage)
+                || (!hasAdminPerm && victimHasAdminPerm)) {
+            victimRunningApp = runningApp;
+            victimMemoryUsage = memoryUsage;
+            victimHasAdminPerm = hasAdminPerm;
+        }
+        runningApp = getRunningAppMember(runningApp, next);
+    }
+    
+    // Start killing the app to free memory.
+    if (victimRunningApp != NULL_ALLOC_POINTER) {
+        softKillApp(victimRunningApp);
+    }
 }
 
 heapMemoryOffset_t getArgHeapMemoryAddress(
@@ -1258,7 +1361,7 @@ void evaluateBytecodeInstruction() {
             allocPointer_t tempAlloc = createDynamicAlloc(
                 tempSize,
                 tempAttributes,
-                currentImplementerFileHandle
+                currentImplementer
             );
             writeArgInt(0, tempAlloc);
         } else if (opcodeOffset == 0x4) {
@@ -1282,7 +1385,8 @@ void evaluateBytecodeInstruction() {
             // allocCreator.
             allocPointer_t tempAlloc = readArgDynamicAlloc(1);
             allocPointer_t tempCreator = getDynamicAllocMember(tempAlloc, creator);
-            writeArgInt(0, tempCreator);
+            allocPointer_t fileHandle = getRunningAppMember(tempCreator, fileHandle);
+            writeArgInt(0, fileHandle);
         } else {
             throw(NO_IMPL_ERR_CODE);
         }
@@ -1552,7 +1656,7 @@ void evaluateBytecodeInstruction() {
             allocPointer_t nameAlloc = createDynamicAlloc(
                 nameSize,
                 GUARDED_ALLOC_ATTR,
-                currentImplementerFileHandle
+                currentImplementer
             );
             int32_t fileAddress = getFileHandleMember(fileHandle, address);
             copyStorageNameToMemory(

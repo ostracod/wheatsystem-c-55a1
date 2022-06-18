@@ -57,6 +57,8 @@
 #define getAllocType(pointer) getAllocMember(pointer, type)
 // Retrieves the size of the data region in the given allocation.
 #define getAllocSize(pointer) getAllocMember(pointer, size)
+// Retrieves the size of the given allocation including its header.
+#define getAllocSizeWithHeader(pointer) (getAllocSize(pointer) + sizeof(allocHeader_t))
 // Retrieves the allocation after the given allocation in the linked list.
 #define getAllocNext(pointer) getAllocMember(pointer, next)
 
@@ -263,23 +265,36 @@
 #define writeLocalFrame(localFrame, index, type, value) \
     writeHeapMemory(getLocalFrameDataAddress(localFrame) + index, type, value)
 
+// Retrieves a member of the argument frame header in the given argument frame.
+// "argFrame" is an allocPointer_t to an argFrame_t.
+// "memberName" is the name of a member in argFrameHeader_t.
+#define getArgFrameMember(argFrame, memberName) \
+    readAlloc(argFrame, getStructMemberOffset(argFrameHeader_t, memberName), getStructMemberType(argFrameHeader_t, memberName))
+// Modifies a member of the argument frame header in the given argument frame.
+// "argFrame" is an allocPointer_t to an argFrame_t.
+// "memberName" is the name of a member in argFrameHeader_t.
+#define setArgFrameMember(argFrame, memberName, value) \
+    writeAlloc(argFrame, getStructMemberOffset(argFrameHeader_t, memberName), getStructMemberType(argFrameHeader_t, memberName), value)
+
 // Retrieves the address of the data region in the given argument frame.
 // "argFrame" is an allocPointer_t to an argFrame_t.
-#define getArgFrameDataAddress(argFrame) getAllocDataAddress(argFrame)
+#define getArgFrameDataAddress(argFrame) \
+    (getAllocDataAddress(argFrame) + sizeof(argFrameHeader_t))
 // Retrieves the size of the data region in the given argument frame.
 // "argFrame" is an allocPointer_t to an argFrame_t.
-#define getArgFrameSize(argFrame) getAllocSize(argFrame)
+#define getArgFrameSize(argFrame) \
+    (getAllocSize(argFrame) - sizeof(argFrameHeader_t))
 
 // Reads a value from the data region in the given argument frame.
 // "argFrame" is an allocPointer_t to an argFrame_t.
 // "index" is the offset of first byte to read.
 #define readArgFrame(argFrame, index, type) \
-    readAlloc(argFrame, index, type)
+    readHeapMemory(getArgFrameDataAddress(argFrame) + index, type)
 // Writes a value to the data region in the given argument frame.
 // "argFrame" is an allocPointer_t to an argFrame_t.
 // "index" is the offset of first byte to write.
 #define writeArgFrame(argFrame, index, type, value) \
-    writeAlloc(argFrame, index, type, value)
+    writeHeapMemory(getArgFrameDataAddress(argFrame) + index, type, value)
 
 // Retrieves the argument frame which has been passed to the current function invocation.
 #define getPreviousArgFrame() ({ \
@@ -505,7 +520,7 @@ allocPointer_t createDynamicAlloc(
     // Number of bytes in the data region of the new dynamic allocation.
     heapMemoryOffset_t size,
     int8_t attributes,
-    // Pointer to fileHandle_t of an app.
+    // Pointer to runningApp_t.
     allocPointer_t creator
 );
 // Returns an allocPointer_t to a dynamicAlloc_t.
@@ -627,6 +642,9 @@ void scheduleCurrentThread();
 // Enters a blocking loop to run all WheatSystem applications.
 void runAppSystem();
 
+// Returns whether the given running application has admin permission.
+// "runningApp" is a pointer to a runningApp_t.
+int8_t runningAppHasAdminPerm(allocPointer_t runningApp);
 // Returns whether the implementer of the current function has admin permission.
 int8_t currentImplementerHasAdminPerm();
 // Returns whether the implementer of the current function has permission to read or modify the data region of the given dynamic allocation.

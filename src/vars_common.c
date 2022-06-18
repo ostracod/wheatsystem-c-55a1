@@ -4,6 +4,7 @@
 allocPointer_t firstAlloc = NULL_ALLOC_POINTER;
 heapMemoryOffset_t heapMemorySizeLeft = HEAP_MEMORY_SIZE;
 allocPointer_t firstThread = NULL_ALLOC_POINTER;
+allocPointer_t firstRunningApp = NULL_ALLOC_POINTER;
 int16_t killStatesDelay = 0;
 
 int8_t unhandledErrorCode = 0;

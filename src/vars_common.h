@@ -5,6 +5,8 @@ allocPointer_t firstAlloc;
 heapMemoryOffset_t heapMemorySizeLeft;
 // First thread_t in the linked list.
 allocPointer_t firstThread;
+// First runningApp_t in the linked list.
+allocPointer_t firstRunningApp;
 // The amount of time since app kill states were last updated.
 int16_t killStatesDelay;
 
