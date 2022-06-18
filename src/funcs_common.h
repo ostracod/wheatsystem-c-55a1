@@ -1,7 +1,11 @@
 
-#define throw(errorCode) \
+#define throw(errorCode, ...) \
     unhandledErrorCode = errorCode; \
-    return;
+    return __VA_ARGS__;
+#define checkUnhandledError(...) \
+    if (unhandledErrorCode != NONE_ERR_CODE) { \
+        return __VA_ARGS__; \
+    }
 
 // Retrieves the number of elements in the given array.
 #define getArrayLength(name) (int32_t)(sizeof(name) / sizeof(*name))
@@ -382,24 +386,18 @@
 // Reads an integer from a bytecode argument.
 #define readArgInt(index) ({ \
     int32_t tempResult = readArgIntHelper(instructionArgArray + index, 0, -1); \
-    if (unhandledErrorCode != 0) { \
-        return; \
-    } \
+    checkUnhandledError(); \
     tempResult; \
 })
 // Writes an integer to a bytecode argument.
 #define writeArgInt(index, value) \
     writeArgIntHelper(instructionArgArray + index, 0, -1, value); \
-    if (unhandledErrorCode != 0) { \
-        return; \
-    }
+    checkUnhandledError();
 
 // Reads an integer from a bytecode argument, and enforces that the integer is constant.
 #define readArgConstantInt(index) ({ \
     int32_t tempResult = readArgConstantIntHelper(index); \
-    if (unhandledErrorCode != 0) { \
-        return; \
-    } \
+    checkUnhandledError(); \
     tempResult; \
 });
 // Reads a pointer to a dynamic allocation from a bytecode argument.

@@ -7,7 +7,7 @@ allocPointer_t firstThread = NULL_ALLOC_POINTER;
 allocPointer_t firstRunningApp = NULL_ALLOC_POINTER;
 int16_t killStatesDelay = 0;
 
-int8_t unhandledErrorCode = 0;
+int8_t unhandledErrorCode = NONE_ERR_CODE;
 
 allocPointer_t nextThread;
 allocPointer_t currentThread;

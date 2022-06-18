@@ -19,9 +19,10 @@ allocPointer_t createAlloc(int8_t type, heapMemoryOffset_t size) {
         nextPointer = getAllocNext(nextPointer);
     }
     
-    // Return null if there is not enough free memory.
+    // Throw an error if there is not enough free memory.
     heapMemoryOffset_t endAddress = startAddress + sizeWithHeader;
     if (endAddress > HEAP_MEMORY_SIZE || endAddress < 0) {
+        unhandledErrorCode = CAPACITY_ERR_CODE;
         return NULL_ALLOC_POINTER;
     }
     
@@ -96,6 +97,7 @@ allocPointer_t createDynamicAlloc(
         DYNAMIC_ALLOC_TYPE,
         sizeof(dynamicAllocHeader_t) + size
     );
+    checkUnhandledError(NULL_ALLOC_POINTER);
     setDynamicAllocMember(output, attributes, attributes);
     setDynamicAllocMember(output, creator, creator);
     for (heapMemoryOffset_t index = 0; index < size; index++) {
@@ -109,6 +111,7 @@ allocPointer_t createStringAllocFromFixedArrayHelper(
     heapMemoryOffset_t size
 ) {
     allocPointer_t output = createDynamicAlloc(size, GUARDED_ALLOC_ATTR, NULL_ALLOC_POINTER);
+    checkUnhandledError(NULL_ALLOC_POINTER);
     for (heapMemoryOffset_t index = 0; index < size; index++) {
         int8_t character = readFixedArrayElement(fixedArray, index);
         writeDynamicAlloc(output, index, int8_t, character);
@@ -118,9 +121,7 @@ allocPointer_t createStringAllocFromFixedArrayHelper(
 
 void validateDynamicAlloc(allocPointer_t dynamicAlloc) {
     validateAllocPointer(dynamicAlloc);
-    if (unhandledErrorCode != 0) {
-        return;
-    }
+    checkUnhandledError();
     if (getAllocType(dynamicAlloc) != DYNAMIC_ALLOC_TYPE) {
         throw(TYPE_ERR_CODE);
     }
@@ -335,6 +336,7 @@ allocPointer_t openFile(heapMemoryOffset_t nameAddress, heapMemoryOffset_t nameS
         GUARDED_ALLOC_ATTR | SENTRY_ALLOC_ATTR,
         NULL_ALLOC_POINTER
     );
+    checkUnhandledError(NULL_ALLOC_POINTER);
     setFileHandleMember(output, address, fileAddress);
     setFileHandleMember(output, attributes, fileAttributes);
     setFileHandleMember(output, nameSize, nameSize);
@@ -379,6 +381,7 @@ allocPointer_t getAllFileNames() {
         GUARDED_ALLOC_ATTR,
         currentImplementer
     );
+    checkUnhandledError(NULL_ALLOC_POINTER);
     
     // Then create an allocation for each file name.
     fileAddress = getFirstFileAddress();
@@ -390,6 +393,8 @@ allocPointer_t getAllFileNames() {
             GUARDED_ALLOC_ATTR,
             currentImplementer
         );
+        // TODO: Clean up garbage allocations if we have an error.
+        checkUnhandledError(NULL_ALLOC_POINTER);
         copyStorageNameToMemory(
             getFileNameAddress(fileAddress),
             getDynamicAllocDataAddress(nameAlloc),
@@ -416,9 +421,7 @@ int8_t allocIsFileHandle(allocPointer_t pointer) {
 
 void validateFileHandle(allocPointer_t fileHandle) {
     validateDynamicAlloc(fileHandle);
-    if (unhandledErrorCode != 0) {
-        return;
-    }
+    checkUnhandledError();
     if (getDynamicAllocMember(fileHandle, creator) != NULL_ALLOC_POINTER) {
         throw(TYPE_ERR_CODE);
     }
@@ -472,6 +475,7 @@ allocPointer_t createNextArgFrame(heapMemoryOffset_t size) {
         ARG_FRAME_ALLOC_TYPE,
         sizeof(argFrameHeader_t) + size
     );
+    checkUnhandledError(NULL_ALLOC_POINTER);
     setArgFrameMember(output, thread, currentThread);
     setLocalFrameMember(currentLocalFrame, nextArgFrame, output);
     return output;
@@ -544,6 +548,7 @@ void launchApp(allocPointer_t fileHandle) {
         RUNNING_APP_ALLOC_TYPE,
         sizeof(runningAppHeader_t) + globalFrameSize
     );
+    checkUnhandledError();
     setRunningAppMember(runningApp, fileHandle, fileHandle);
     setRunningAppMember(runningApp, isWaiting, false);
     setRunningAppMember(runningApp, killAction, NONE_KILL_ACTION);
@@ -729,6 +734,7 @@ void callFunction(
     
     // Create allocation for the local frame.
     allocPointer_t localFrame = createAlloc(LOCAL_FRAME_ALLOC_TYPE, localFrameSize);
+    checkUnhandledError();
     setLocalFrameMember(localFrame, thread, thread);
     setLocalFrameMember(localFrame, implementer, implementer);
     setLocalFrameMember(localFrame, functionIndex, functionIndex);
@@ -796,6 +802,7 @@ int8_t createThread(allocPointer_t runningApp, int32_t functionId) {
         return false;
     }
     allocPointer_t thread = createAlloc(THREAD_ALLOC_TYPE, sizeof(thread_t));
+    checkUnhandledError(true);
     setThreadMember(thread, runningApp, runningApp);
     setThreadMember(thread, functionId, functionId);
     setThreadMember(thread, localFrame, NULL_ALLOC_POINTER);
@@ -897,9 +904,9 @@ void scheduleCurrentThread() {
         threadAction();
     }
     // currentThread will be null if the app quits while running.
-    if (unhandledErrorCode != 0 && currentThread != NULL_ALLOC_POINTER) {
+    if (unhandledErrorCode != NONE_ERR_CODE && currentThread != NULL_ALLOC_POINTER) {
         registerErrorInCurrentThread(unhandledErrorCode);
-        unhandledErrorCode = 0;
+        unhandledErrorCode = NONE_ERR_CODE;
     }
 }
 
@@ -907,15 +914,15 @@ void runAppSystem() {
     
     // Launch boot application.
     allocPointer_t bootFileName = createStringAllocFromFixedArray(bootStringConstant);
+    checkUnhandledError();
     allocPointer_t bootFileHandle = openFileByStringAlloc(bootFileName);
     deleteAlloc(bootFileName);
+    checkUnhandledError();
     if (bootFileHandle == NULL_ALLOC_POINTER) {
         return;
     }
     launchApp(bootFileHandle);
-    if (unhandledErrorCode != 0) {
-        return;
-    }
+    checkUnhandledError();
     nextThread = firstThread;
     
     // Enter loop scheduling app threads.
@@ -984,6 +991,7 @@ int8_t performKillAction(allocPointer_t runningApp, int8_t killAction) {
     int8_t hasStarted = false;
     if (killAction == WARN_KILL_ACTION) {
         hasStarted = createThread(runningApp, KILL_FUNC_ID);
+        checkUnhandledError(false);
     } else if (killAction == THROTTLE_KILL_ACTION) {
         int16_t throttleCount = 0;
         allocPointer_t thread = firstThread;
@@ -1153,9 +1161,7 @@ int32_t readArgIntHelper(instructionArg_t *arg, int32_t offset, int8_t dataType)
         }
     } else {
         heapMemoryOffset_t tempAddress = getArgHeapMemoryAddress(arg, offset, dataTypeSize);
-        if (unhandledErrorCode != 0) {
-            return 0;
-        }
+        checkUnhandledError(0);
         if (dataType == SIGNED_INT_8_TYPE) {
             return readHeapMemory(tempAddress, int8_t);
         } else {
@@ -1178,9 +1184,7 @@ void writeArgIntHelper(
     int8_t dataTypeSize = getArgDataTypeSize(dataType);
     if (referenceType == HEAP_MEM_REF_TYPE) {
         heapMemoryOffset_t tempAddress = getArgHeapMemoryAddress(arg, offset, dataTypeSize);
-        if (unhandledErrorCode != 0) {
-            return;
-        }
+        checkUnhandledError();
         if (dataType == SIGNED_INT_8_TYPE) {
             writeHeapMemory(tempAddress, int8_t, (int8_t)value);
         } else {
@@ -1242,13 +1246,9 @@ void parseInstructionArg(instructionArg_t *destination) {
     } else {
         instructionArg_t tempArg1;
         parseInstructionArg(&tempArg1);
-        if (unhandledErrorCode != 0) {
-            return;
-        }
+        checkUnhandledError();
         int32_t argValue1 = readArgIntHelper(&tempArg1, 0, -1);
-        if (unhandledErrorCode != 0) {
-            return;
-        }
+        checkUnhandledError();
         if (referenceType == APP_DATA_REF_TYPE) {
             destination->prefix = argPrefix;
             destination->appDataIndex = argValue1;
@@ -1258,22 +1258,16 @@ void parseInstructionArg(instructionArg_t *destination) {
             heapMemoryOffset_t index;
             if (referenceType == DYNAMIC_ALLOC_REF_TYPE) {
                 validateDynamicAlloc(argValue1);
-                if (unhandledErrorCode != 0) {
-                    return;
-                }
+                checkUnhandledError();
                 if (!currentImplementerMayAccessAlloc(argValue1)) {
                     throw(PERM_ERR_CODE);
                 }
                 startAddress = getDynamicAllocDataAddress(argValue1);
                 instructionArg_t tempArg2;
                 parseInstructionArg(&tempArg2);
-                if (unhandledErrorCode != 0) {
-                    return;
-                }
+                checkUnhandledError();
                 index = (heapMemoryOffset_t)readArgIntHelper(&tempArg2, 0, -1);
-                if (unhandledErrorCode != 0) {
-                    return;
-                }
+                checkUnhandledError();
                 tempSize = getDynamicAllocSize(argValue1);
             } else {
                 index = (heapMemoryOffset_t)argValue1;
@@ -1344,9 +1338,7 @@ void evaluateBytecodeInstruction() {
     );
     for (int8_t index = 0; index < argumentAmount; index++) {
         parseInstructionArg(instructionArgArray + index);
-        if (unhandledErrorCode != 0) {
-            return;
-        }
+        checkUnhandledError();
     }
     setBytecodeLocalFrameMember(
         currentLocalFrame,
@@ -1371,13 +1363,9 @@ void evaluateBytecodeInstruction() {
             }
             for (int32_t offset = 0; offset < size; offset++) {
                 int8_t tempValue = readArgIntHelper(source, offset, SIGNED_INT_8_TYPE);
-                if (unhandledErrorCode != 0) {
-                    return;
-                }
+                checkUnhandledError();
                 writeArgIntHelper(destination, offset, SIGNED_INT_8_TYPE, tempValue);
-                if (unhandledErrorCode != 0) {
-                    return;
-                }
+                checkUnhandledError();
             }
         } else if (opcodeOffset == 0x2) {
             // newArgFrame.
@@ -1399,6 +1387,7 @@ void evaluateBytecodeInstruction() {
                 tempAttributes,
                 currentImplementer
             );
+            checkUnhandledError();
             writeArgInt(0, tempAlloc);
         } else if (opcodeOffset == 0x4) {
             // delAlloc.
@@ -1625,6 +1614,7 @@ void evaluateBytecodeInstruction() {
             // openFile.
             allocPointer_t fileName = readArgDynamicAlloc(1);
             allocPointer_t fileHandle = openFileByStringAlloc(fileName);
+            checkUnhandledError();
             if (fileHandle == NULL_ALLOC_POINTER) {
                 throw(MISSING_ERR_CODE);
             }
@@ -1647,9 +1637,7 @@ void evaluateBytecodeInstruction() {
             for (storageOffset_t offset = 0; offset < size; offset++) {
                 int8_t value = readStorageSpace(contentAddress + offset, int8_t);
                 writeArgIntHelper(destination, offset, SIGNED_INT_8_TYPE, value);
-                if (unhandledErrorCode != 0) {
-                    return;
-                }
+                checkUnhandledError();
             }
         } else if (opcodeOffset == 0x5) {
             // wrtFile.
@@ -1664,9 +1652,7 @@ void evaluateBytecodeInstruction() {
             storageOffset_t contentAddress = getFileHandleDataAddress(fileHandle) + pos;
             for (storageOffset_t offset = 0; offset < size; offset++) {
                 int8_t value = readArgIntHelper(source, offset, SIGNED_INT_8_TYPE);
-                if (unhandledErrorCode != 0) {
-                    return;
-                }
+                checkUnhandledError();
                 writeStorageSpace(contentAddress + offset, int8_t, value);
             }
         } else {
@@ -1677,6 +1663,7 @@ void evaluateBytecodeInstruction() {
         if (opcodeOffset == 0x0) {
             // allFileNames.
             allocPointer_t nameArray = getAllFileNames();
+            checkUnhandledError();
             writeArgInt(0, nameArray);
         } else if (opcodeOffset == 0x1) {
             // fileExists.
@@ -1694,6 +1681,7 @@ void evaluateBytecodeInstruction() {
                 GUARDED_ALLOC_ATTR,
                 currentImplementer
             );
+            checkUnhandledError();
             storageOffset_t fileAddress = getFileHandleMember(fileHandle, address);
             copyStorageNameToMemory(
                 getFileNameAddress(fileAddress),

@@ -86,6 +86,7 @@ void initializeTermApp() {
         }
     }
     allocPointer_t nextArgFrame = createNextArgFrame(1);
+    checkUnhandledError();
     writeArgFrame(nextArgFrame, 0, int8_t, (int8_t)tempKey);
     int32_t termInputIndex = readTermAppGlobalVariable(termInputIndex);
     callFunction(currentThread, tempObserver, termInputIndex, true);
