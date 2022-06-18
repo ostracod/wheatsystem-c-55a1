@@ -597,6 +597,9 @@ void cleanUpNextArgFrameHelper(allocPointer_t localFrame);
 // Launches a running application from the given file handle.
 // "fileHandle" is a pointer to a fileHandle_t.
 void launchApp(allocPointer_t fileHandle);
+// Performs the next possible kill action in the given running app.
+// "runningApp" is a pointer to a runningApp_t.
+void advanceKillAction(allocPointer_t runningApp);
 // Requests the given application to clean up resources and quit.
 // "runningApp" is a pointer to a runningApp_t.
 void softKillApp(allocPointer_t runningApp);
@@ -660,7 +663,7 @@ void setFileHasAdminPerm(allocPointer_t fileHandle, int8_t hasAdminPerm);
 
 // Attempts to kill an application with the given action.
 // "runningApp" is a pointer to a runningApp_t.
-// Returns whether the action is possible to perform.
+// Returns whether the action started successfully.
 int8_t performKillAction(allocPointer_t runningApp, int8_t killAction);
 // Controls how apps are throttled and killed.
 void updateKillStates();

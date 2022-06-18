@@ -560,9 +560,22 @@ void launchApp(allocPointer_t fileHandle) {
     createThread(runningApp, INIT_FUNC_ID);
 }
 
+void advanceKillAction(allocPointer_t runningApp) {
+    int8_t killAction = getRunningAppMember(runningApp, killAction) + 1;
+    while (killAction <= HARD_KILL_ACTION) {
+        int8_t hasStarted = performKillAction(runningApp, killAction);
+        if (hasStarted) {
+            break;
+        }
+        killAction += 1;
+    }
+}
+
 void softKillApp(allocPointer_t runningApp) {
-    // TODO: Implement.
-    
+    int8_t killAction = getRunningAppMember(runningApp, killAction);
+    if (killAction == NONE_KILL_ACTION) {
+        advanceKillAction(runningApp);
+    }
 }
 
 void hardKillApp(allocPointer_t runningApp, int8_t errorCode) {
@@ -956,9 +969,9 @@ void setFileHasAdminPerm(allocPointer_t fileHandle, int8_t hasAdminPerm) {
 }
 
 int8_t performKillAction(allocPointer_t runningApp, int8_t killAction) {
+    int8_t hasStarted = false;
     if (killAction == WARN_KILL_ACTION) {
-        // TODO: Implement.
-        
+        hasStarted = createThread(runningApp, KILL_FUNC_ID);
     } else if (killAction == THROTTLE_KILL_ACTION) {
         int16_t throttleCount = 0;
         allocPointer_t thread = firstThread;
@@ -976,12 +989,18 @@ int8_t performKillAction(allocPointer_t runningApp, int8_t killAction) {
                 localFrame = getLocalFrameMember(localFrame, previousLocalFrame);
             }
         }
-        return (throttleCount > 0);
+        hasStarted = (throttleCount > 0);
     } else if (killAction == HARD_KILL_ACTION) {
         hardKillApp(runningApp, THROTTLE_ERR_CODE);
+        // hardKillApp deletes runningApp, so we don't want to update
+        // members of runningApp after calling hardKillApp.
         return true;
     }
-    return false;
+    if (hasStarted) {
+        setRunningAppMember(runningApp, killAction, killAction);
+        setRunningAppMember(runningApp, killActionDelay, 0);
+    }
+    return hasStarted;
 }
 
 allocPointer_t getAllocOwner(allocPointer_t pointer) {
@@ -1016,8 +1035,13 @@ void updateKillStates() {
             continue;
         }
         killActionCount += 1;
-        // TODO: Advance kill state.
-        
+        int8_t delay = getRunningAppMember(runningApp, killActionDelay);
+        delay += 1;
+        if (delay > 5) {
+            advanceKillAction(runningApp);
+        } else {
+            setRunningAppMember(runningApp, killActionDelay, delay);
+        }
     }
     
     // If we are already killing an app, or we have enough
