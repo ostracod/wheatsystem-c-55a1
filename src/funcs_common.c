@@ -170,7 +170,7 @@ void createFile(allocPointer_t name, int8_t type, int8_t isGuarded, int32_t cont
     if (contentSize < 0) {
         throw(NUM_RANGE_ERR_CODE);
     }
-    int fileStorageSize = getFileStorageSize(nameSize, contentSize);
+    int fileStorageSize = getFileStorageSizeHelper(nameSize, contentSize);
     
     // Find a storage space gap which is large enough,
     // and ensure that there is no duplicate name.
@@ -184,9 +184,7 @@ void createFile(allocPointer_t name, int8_t type, int8_t isGuarded, int32_t cont
             if (previousFileAddress == MISSING_FILE_ADDRESS) {
                 startAddress = sizeof(storageSpaceHeader_t);
             } else {
-                int8_t tempNameSize = getFileHeaderMember(previousFileAddress, nameSize);
-                int32_t tempContentSize = getFileHeaderMember(previousFileAddress, contentSize);
-                startAddress = previousFileAddress + getFileStorageSize(tempNameSize, tempContentSize);
+                startAddress = previousFileAddress + getFileStorageSize(previousFileAddress);
             }
             int32_t endAddress = hasReachedEnd ? STORAGE_SPACE_SIZE : nextFileAddress;
             if (endAddress - startAddress >= fileStorageSize) {
@@ -282,6 +280,12 @@ int32_t getFileAddressByName(heapMemoryOffset_t nameAddress, heapMemoryOffset_t 
         fileAddress = getFileHeaderMember(fileAddress, next);
     }
     return MISSING_FILE_ADDRESS;
+}
+
+int32_t getFileStorageSize(int32_t fileAddress) {
+    int8_t nameSize = getFileHeaderMember(fileAddress, nameSize);
+    int32_t contentSize = getFileHeaderMember(fileAddress, contentSize);
+    return getFileStorageSizeHelper(nameSize, contentSize);
 }
 
 allocPointer_t openFile(heapMemoryOffset_t nameAddress, heapMemoryOffset_t nameSize) {
@@ -1748,6 +1752,18 @@ void evaluateBytecodeInstruction() {
         } else if (opcodeOffset == 0x2) {
             // memSizeLeft.
             writeArgInt(0, heapMemorySizeLeft);
+        } else if (opcodeOffset == 0x3) {
+            // volSize.
+            writeArgInt(0, STORAGE_SPACE_SIZE);
+        } else if (opcodeOffset == 0x4) {
+            // volSizeLeft.
+            int32_t storageUsage = sizeof(storageSpaceHeader_t);
+            int32_t address = getFirstFileAddress();
+            while (address != MISSING_FILE_ADDRESS) {
+                storageUsage += getFileStorageSize(address);
+                address = getFileHeaderMember(address, next);
+            }
+            writeArgInt(0, STORAGE_SPACE_SIZE - storageUsage);
         } else {
             throw(NO_IMPL_ERR_CODE);
         }

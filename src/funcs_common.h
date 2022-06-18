@@ -132,7 +132,7 @@
 #define getFileDataAddress(fileAddress, nameSize) \
     (getFileNameAddress(fileAddress) + nameSize)
 // Retrieves the total amount of storage space which a file occupies.
-#define getFileStorageSize(nameSize, contentSize) \
+#define getFileStorageSizeHelper(nameSize, contentSize) \
     (sizeof(fileHeader_t) + nameSize + contentSize)
 
 // Retrieves a member of the given file handle.
@@ -555,6 +555,8 @@ void createFile(allocPointer_t name, int8_t type, int8_t isGuarded, int32_t cont
 void deleteFile(allocPointer_t fileHandle);
 // Finds the address of the file with the given name. Returns MISSING_FILE_ADDRESS if the file cannot be found.
 int32_t getFileAddressByName(heapMemoryOffset_t nameAddress, heapMemoryOffset_t nameSize);
+// Determines the total amount of storage space which the given file occupies.
+int32_t getFileStorageSize(int32_t fileAddress);
 // Opens the file with the given name, returning a file handle. If the file has already been opened, this function returns the existing file handle and increments its open depth. If the file is missing, this function returns NULL_ALLOC_POINTER.
 allocPointer_t openFile(heapMemoryOffset_t nameAddress, heapMemoryOffset_t nameSize);
 // Closes the given file, decrementing the open depth of the file handle. If the open depth reaches zero, the file handle is deleted.
