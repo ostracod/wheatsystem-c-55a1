@@ -1,15 +1,15 @@
 
 #include "./headers.h"
 
-const int8_t bootStringConstant[] PROGMEM = "boot";
+const int8_t bootStringConstant[] PROGMEM = "wsBoot";
 
 const int8_t argumentAmountOffsetArray[] PROGMEM = {
-    0, 8, 13, 17, 22, 28, 32, 37, 43, 49, 55, 58
+    0, 9, 14, 18, 23, 29, 33, 38, 44, 50, 56, 59
 };
 
 const int8_t argumentAmountArray[] PROGMEM = {
     // Memory instructions.
-    2, 3, 1, 3, 1, 2, 2, 2,
+    2, 3, 1, 3, 1, 2, 2, 2, 2,
     // Control flow instructions.
     1, 2, 2, 0, 0,
     // Error instructions.

@@ -17,6 +17,8 @@
 #define GUARDED_ALLOC_ATTR 0x01
 #define SENTRY_ALLOC_ATTR 0x02
 
+#define ALLOC_ATTR_MASK (GUARDED_ALLOC_ATTR | SENTRY_ALLOC_ATTR)
+
 // Size available to store files.
 #define STORAGE_SPACE_SIZE ((storageOffset_t)128 * (storageOffset_t)1024)
 
@@ -89,12 +91,12 @@
 #define TERM_APP_GLOBAL_FRAME_SIZE sizeof(termAppGlobalFrame_t)
 
 // Fixed array of characters.
-const int8_t bootStringConstant[5];
+const int8_t bootStringConstant[7];
 
 // Mapping from more significant opcode nybble to offset in argumentAmountArray. Fixed array of values.
 const int8_t argumentAmountOffsetArray[12];
 // Expected number of arguments for each bytecode instruction. Fixed array of values.
-const int8_t argumentAmountArray[63];
+const int8_t argumentAmountArray[64];
 
 // List of functions which the term driver implements. Fixed array of values.
 const systemAppFunction_t termAppFunctionArray[4];

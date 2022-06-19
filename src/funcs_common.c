@@ -1376,8 +1376,7 @@ void evaluateBytecodeInstruction() {
             createNextArgFrame(argFrameSize);
         } else if (opcodeOffset == 0x3) {
             // newAlloc.
-            int8_t tempAttributes = (int8_t)readArgInt(1)
-                & (GUARDED_ALLOC_ATTR | SENTRY_ALLOC_ATTR);
+            int8_t tempAttributes = (int8_t)readArgInt(1) & ALLOC_ATTR_MASK;
             heapMemoryOffset_t tempSize = (heapMemoryOffset_t)readArgInt(2);
             if (tempSize < 0) {
                 throw(NUM_RANGE_ERR_CODE);
@@ -1412,6 +1411,14 @@ void evaluateBytecodeInstruction() {
             allocPointer_t tempCreator = getDynamicAllocMember(tempAlloc, creator);
             allocPointer_t fileHandle = getRunningAppMember(tempCreator, fileHandle);
             writeArgInt(0, fileHandle);
+        } else if (opcodeOffset == 0x8) {
+            // setAllocAttrs.
+            allocPointer_t alloc = readArgDynamicAlloc(0);
+            if (!currentImplementerMayAccessAlloc(alloc)) {
+                throw(PERM_ERR_CODE);
+            }
+            int8_t attributes = readArgInt(1) & ALLOC_ATTR_MASK;
+            setDynamicAllocMember(alloc, attributes, attributes);
         } else {
             throw(NO_IMPL_ERR_CODE);
         }

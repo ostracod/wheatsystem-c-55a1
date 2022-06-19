@@ -1,13 +1,13 @@
 {
     "files": [
         {
-            "name": "boot",
+            "name": "wsBoot",
             "type": "bytecodeApp",
             "hasAdminPerm": true,
             "isGuarded": false
         },
         {
-            "name": "term",
+            "name": "wsTerm",
             "type": "systemApp",
             "hasAdminPerm": true,
             "isGuarded": false

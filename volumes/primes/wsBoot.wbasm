@@ -86,7 +86,7 @@ END
 
 APP_DATA
     LBL termNameStart
-    DATA "term"
+    DATA "wsTerm"
     LBL termNameEnd
 END
 

@@ -1,7 +1,7 @@
 {
     "files": [
         {
-            "name": "boot",
+            "name": "wsBoot",
             "type": "bytecodeApp",
             "hasAdminPerm": true,
             "isGuarded": false
