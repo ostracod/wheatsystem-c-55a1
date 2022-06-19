@@ -565,6 +565,9 @@ storageOffset_t getFileAddressByName(
 storageOffset_t getFileStorageSize(storageOffset_t fileAddress);
 // Opens the file with the given name, returning a file handle. If the file has already been opened, this function returns the existing file handle and increments its open depth. If the file is missing, this function returns NULL_ALLOC_POINTER.
 allocPointer_t openFile(heapMemoryOffset_t nameAddress, heapMemoryOffset_t nameSize);
+// Deletes the given file handle, and kills any running app launched from the file.
+// "fileHandle" is a pointer to a dynamicAlloc_t.
+void deleteFileHandle(allocPointer_t fileHandle);
 // Closes the given file, decrementing the open depth of the file handle. If the open depth reaches zero, the file handle is deleted.
 // "fileHandle" is a pointer to a dynamicAlloc_t.
 void closeFile(allocPointer_t fileHandle);
@@ -601,6 +604,11 @@ allocPointer_t getCurrentCaller();
 allocPointer_t createNextArgFrame(heapMemoryOffset_t size);
 // "localFrame" is a pointer to a localFrame_t.
 void cleanUpNextArgFrameHelper(allocPointer_t localFrame);
+// Finds the lowest local frame in the given thread whose function is implemented by runningApp.
+// "thread" is a pointer to a thread_t.
+// "runningApp" is a pointer to a runningApp_t.
+// Returns a pointer to a localFrame_t
+allocPointer_t getBottomLocalFrame(allocPointer_t thread, allocPointer_t runningApp);
 
 // Launches a running application from the given file handle.
 // "fileHandle" is a pointer to a fileHandle_t.
@@ -643,8 +651,7 @@ void registerErrorInCurrentThread(int8_t error);
 
 // Sets the currently active thread.
 // "thread" is a pointer to a thread_t.
-// Returns whether the current local frame is null.
-int8_t setCurrentThread(allocPointer_t thread);
+void setCurrentThread(allocPointer_t thread);
 // Sets the next thread to be scheduled.
 // "previousThread" is a pointer to a thread_t.
 void advanceNextThread(allocPointer_t previousThread);

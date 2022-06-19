@@ -269,7 +269,7 @@ void deleteFile(allocPointer_t fileHandle) {
         setFileHeaderMember(previousFileAddress, next, nextFileAddress);
     }
     flushStorageSpace();
-    deleteAlloc(fileHandle);
+    deleteFileHandle(fileHandle);
 }
 
 storageOffset_t getFileAddressByName(
@@ -347,14 +347,25 @@ allocPointer_t openFile(heapMemoryOffset_t nameAddress, heapMemoryOffset_t nameS
     return output;
 }
 
+void deleteFileHandle(allocPointer_t fileHandle) {
+    allocPointer_t runningApp = getFileHandleRunningApp(fileHandle);
+    if (runningApp != NULL_ALLOC_POINTER) {
+        hardKillApp(runningApp, MISSING_ERR_CODE);
+    }
+    deleteAlloc(fileHandle);
+}
+
 void closeFile(allocPointer_t fileHandle) {
     flushStorageSpace();
     int8_t openDepth = getFileHandleMember(fileHandle, openDepth);
-    if (openDepth > 1) {
-        setFileHandleMember(fileHandle, openDepth, openDepth - 1);
+    if (openDepth <= 0) {
         return;
     }
-    deleteAlloc(fileHandle);
+    openDepth -= 1;
+    setFileHandleMember(fileHandle, openDepth, openDepth - 1);
+    if (openDepth <= 0) {
+        deleteFileHandle(fileHandle);
+    }
 }
 
 void readFileRange(
@@ -488,6 +499,19 @@ void cleanUpNextArgFrameHelper(allocPointer_t localFrame) {
     }
 }
 
+allocPointer_t getBottomLocalFrame(allocPointer_t thread, allocPointer_t runningApp) {
+    allocPointer_t output = NULL_ALLOC_POINTER;
+    allocPointer_t localFrame = getThreadMember(thread, localFrame);
+    while (localFrame != NULL_ALLOC_POINTER) {
+        allocPointer_t implementer = getLocalFrameMember(localFrame, implementer);
+        if (implementer == runningApp) {
+            output = localFrame;
+        }
+        localFrame = getLocalFrameMember(localFrame, previousLocalFrame);
+    }
+    return output;
+}
+
 void launchApp(allocPointer_t fileHandle) {
     
     // Do not launch app again if it is already running.
@@ -598,10 +622,10 @@ void softKillApp(allocPointer_t runningApp) {
 void hardKillApp(allocPointer_t runningApp, int8_t errorCode) {
     
     // Delete all threads of the running app.
-    allocPointer_t nextThread = firstThread;
-    while (nextThread != NULL_ALLOC_POINTER) {
-        allocPointer_t tempThread = nextThread;
-        nextThread = getThreadMember(tempThread, next);
+    allocPointer_t thread = firstThread;
+    while (thread != NULL_ALLOC_POINTER) {
+        allocPointer_t tempThread = thread;
+        thread = getThreadMember(tempThread, next);
         if (getThreadMember(tempThread, runningApp) != runningApp) {
             continue;
         }
@@ -619,7 +643,27 @@ void hardKillApp(allocPointer_t runningApp, int8_t errorCode) {
         deleteThread(tempThread);
     }
     
-    // TODO: Return from frames in other running app threads.
+    // Throw errors in threads which belong to other apps.
+    allocPointer_t lastThread = currentThread;
+    thread = firstThread;
+    while (thread != NULL_ALLOC_POINTER) {
+        allocPointer_t tempThread = thread;
+        thread = getThreadMember(tempThread, next);
+        allocPointer_t bottomFrame = getBottomLocalFrame(tempThread, runningApp);
+        if (bottomFrame == NULL_ALLOC_POINTER) {
+            continue;
+        }
+        setCurrentThread(tempThread);
+        while (currentLocalFrame != NULL_ALLOC_POINTER) {
+            allocPointer_t localFrame = currentLocalFrame;
+            returnFromFunction();
+            if (localFrame == bottomFrame) {
+                break;
+            }
+        }
+        registerErrorInCurrentThread(STATE_ERR_CODE);
+    }
+    setCurrentThread(lastThread);
     
     // Delete dynamic allocations.
     allocPointer_t tempAlloc = firstAlloc;
@@ -891,11 +935,10 @@ void registerErrorInCurrentThread(int8_t error) {
     }
 }
 
-int8_t setCurrentThread(allocPointer_t thread) {
+void setCurrentThread(allocPointer_t thread) {
     currentThread = thread;
     allocPointer_t localFrame = getThreadMember(currentThread, localFrame);
     setCurrentLocalFrame(localFrame);
-    return (localFrame == NULL_ALLOC_POINTER);
 }
 
 void advanceNextThread(allocPointer_t previousThread) {
@@ -946,9 +989,9 @@ void runAppSystem() {
             updateKillStates();
             killStatesDelay = 0;
         }
-        int8_t localFrameIsNull = setCurrentThread(nextThread);
+        setCurrentThread(nextThread);
         advanceNextThread(currentThread);
-        if (localFrameIsNull) {
+        if (currentLocalFrame == NULL_ALLOC_POINTER) {
             deleteThread(currentThread);
         } else {
             scheduleCurrentThread();
@@ -1002,26 +1045,14 @@ void setFileHasAdminPerm(allocPointer_t fileHandle, int8_t hasAdminPerm) {
 }
 
 int8_t throttleAppInCurrentThread(allocPointer_t runningApp) {
-    
-    // Search for the lowest function invocation implemented by runningApp.
-    allocPointer_t bottomFrameToThrottle = NULL_ALLOC_POINTER;
-    allocPointer_t localFrame = currentLocalFrame;
-    while (localFrame != NULL_ALLOC_POINTER) {
-        allocPointer_t implementer = getLocalFrameMember(localFrame, implementer);
-        if (implementer == runningApp) {
-            bottomFrameToThrottle = localFrame;
-        }
-        localFrame = getLocalFrameMember(localFrame, previousLocalFrame);
-    }
-    if (bottomFrameToThrottle == NULL_ALLOC_POINTER) {
+    allocPointer_t bottomFrame = getBottomLocalFrame(currentThread, runningApp);
+    if (bottomFrame == NULL_ALLOC_POINTER) {
         return false;
     }
-    
-    // Mark local frames to be throttled, and throw throttleErr.
-    localFrame = currentLocalFrame;
+    allocPointer_t localFrame = currentLocalFrame;
     while (localFrame != NULL_ALLOC_POINTER) {
         setLocalFrameMember(localFrame, shouldThrottle, true);
-        if (localFrame == bottomFrameToThrottle) {
+        if (localFrame == bottomFrame) {
             break;
         }
         localFrame = getLocalFrameMember(localFrame, previousLocalFrame);
@@ -1037,6 +1068,7 @@ int8_t performKillAction(allocPointer_t runningApp, int8_t killAction) {
         checkUnhandledError(false);
     } else if (killAction == THROTTLE_KILL_ACTION) {
         int16_t throttleCount = 0;
+        allocPointer_t lastThread = currentThread;
         allocPointer_t thread = firstThread;
         while (thread != NULL_ALLOC_POINTER) {
             setCurrentThread(thread);
@@ -1046,6 +1078,7 @@ int8_t performKillAction(allocPointer_t runningApp, int8_t killAction) {
                 throttleCount += 1;
             }
         }
+        setCurrentThread(lastThread);
         hasStarted = (throttleCount > 0);
     } else if (killAction == HARD_KILL_ACTION) {
         hardKillApp(runningApp, THROTTLE_ERR_CODE);
