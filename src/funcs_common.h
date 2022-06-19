@@ -669,6 +669,10 @@ int8_t currentImplementerMayAccessFile(allocPointer_t fileHandle);
 // Will set unhandledErrorCode to PERM_ERR_CODE if the implementer of the current function does not have admin permission.
 void setFileHasAdminPerm(allocPointer_t fileHandle, int8_t hasAdminPerm);
 
+// Throws throttleErr in the current thread if any function invocation is implemented by the given running app.
+// "runningApp" is a pointer to a runningApp_t.
+// Returns whether throttleErr was thrown.
+int8_t throttleAppInCurrentThread(allocPointer_t runningApp);
 // Attempts to kill an application with the given action.
 // "runningApp" is a pointer to a runningApp_t.
 // Returns whether the action started successfully.

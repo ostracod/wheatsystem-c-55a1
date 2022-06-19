@@ -101,6 +101,8 @@ typedef struct localFrameHeader_t {
     allocPointer_t nextArgFrame;
     // Last error code caught by an error handler.
     int8_t lastErrorCode;
+    // Whether this local frame should receive throttleErr. If false, throttleErr will be changed to stateErr.
+    int8_t shouldThrottle;
 } localFrameHeader_t;
 
 // Contains variables used by a single function invocation. This struct is stored in the data region of a heap allocation.

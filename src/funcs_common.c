@@ -731,6 +731,12 @@ void callFunction(
             localFrameSize
         );
     }
+    int8_t shouldThrottle;
+    if (previousLocalFrame == NULL_ALLOC_POINTER) {
+        shouldThrottle = false;
+    } else {
+        shouldThrottle = getLocalFrameMember(previousLocalFrame, shouldThrottle);
+    }
     
     // Create allocation for the local frame.
     allocPointer_t localFrame = createAlloc(LOCAL_FRAME_ALLOC_TYPE, localFrameSize);
@@ -740,6 +746,8 @@ void callFunction(
     setLocalFrameMember(localFrame, functionIndex, functionIndex);
     setLocalFrameMember(localFrame, previousLocalFrame, previousLocalFrame);
     setLocalFrameMember(localFrame, nextArgFrame, NULL_ALLOC_POINTER);
+    setLocalFrameMember(localFrame, lastErrorCode, NONE_ERR_CODE);
+    setLocalFrameMember(localFrame, shouldThrottle, shouldThrottle);
     
     if (fileType == BYTECODE_APP_FILE_TYPE) {
         // Initialize members specific to bytecode functions.
@@ -843,6 +851,12 @@ void deleteThread(allocPointer_t thread) {
 
 void registerErrorInCurrentThread(int8_t error) {
     while (true) {
+        if (error == THROTTLE_ERR_CODE) {
+            int8_t shouldThrottle = getLocalFrameMember(currentLocalFrame, shouldThrottle);
+            if (!shouldThrottle) {
+                error = STATE_ERR_CODE;
+            }
+        }
         int8_t shouldHandleError;
         if (currentImplementerFileType == BYTECODE_APP_FILE_TYPE) {
             int32_t instructionOffset = getBytecodeLocalFrameMember(
@@ -987,6 +1001,35 @@ void setFileHasAdminPerm(allocPointer_t fileHandle, int8_t hasAdminPerm) {
     flushStorageSpace();
 }
 
+int8_t throttleAppInCurrentThread(allocPointer_t runningApp) {
+    
+    // Search for the lowest function invocation implemented by runningApp.
+    allocPointer_t bottomFrameToThrottle = NULL_ALLOC_POINTER;
+    allocPointer_t localFrame = currentLocalFrame;
+    while (localFrame != NULL_ALLOC_POINTER) {
+        allocPointer_t implementer = getLocalFrameMember(localFrame, implementer);
+        if (implementer == runningApp) {
+            bottomFrameToThrottle = localFrame;
+        }
+        localFrame = getLocalFrameMember(localFrame, previousLocalFrame);
+    }
+    if (bottomFrameToThrottle == NULL_ALLOC_POINTER) {
+        return false;
+    }
+    
+    // Mark local frames to be throttled, and throw throttleErr.
+    localFrame = currentLocalFrame;
+    while (localFrame != NULL_ALLOC_POINTER) {
+        setLocalFrameMember(localFrame, shouldThrottle, true);
+        if (localFrame == bottomFrameToThrottle) {
+            break;
+        }
+        localFrame = getLocalFrameMember(localFrame, previousLocalFrame);
+    }
+    registerErrorInCurrentThread(THROTTLE_ERR_CODE);
+    return true;
+}
+
 int8_t performKillAction(allocPointer_t runningApp, int8_t killAction) {
     int8_t hasStarted = false;
     if (killAction == WARN_KILL_ACTION) {
@@ -998,15 +1041,9 @@ int8_t performKillAction(allocPointer_t runningApp, int8_t killAction) {
         while (thread != NULL_ALLOC_POINTER) {
             setCurrentThread(thread);
             thread = getThreadMember(currentThread, next);
-            allocPointer_t localFrame = currentLocalFrame;
-            while (localFrame != NULL_ALLOC_POINTER) {
-                allocPointer_t implementer = getLocalFrameMember(localFrame, implementer);
-                if (implementer == runningApp) {
-                    registerErrorInCurrentThread(THROTTLE_ERR_CODE);
-                    throttleCount += 1;
-                    break;
-                }
-                localFrame = getLocalFrameMember(localFrame, previousLocalFrame);
+            int8_t hasThrottled = throttleAppInCurrentThread(runningApp);
+            if (hasThrottled) {
+                throttleCount += 1;
             }
         }
         hasStarted = (throttleCount > 0);
