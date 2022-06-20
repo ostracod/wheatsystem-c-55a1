@@ -6,9 +6,9 @@ const serialPortPath = "/dev/tty.usbserial-AB0JTOQV";
 const transferModeBufferSize = 128;
 
 let hasReceivedResponseAck = false;
-let responseBuffer = null;
+let responseBuffer: Buffer = null;
 
-const receiveResponseAck = () => new Promise((resolve, reject) => {
+const receiveResponseAck = (): Promise<void> => new Promise((resolve, reject) => {
     const checkResponse = () => {
         if (!hasReceivedResponseAck) {
             setTimeout(checkResponse, 10);
@@ -20,7 +20,7 @@ const receiveResponseAck = () => new Promise((resolve, reject) => {
     checkResponse();
 });
 
-const receiveResponseBuffer = () => new Promise((resolve, reject) => {
+const receiveResponseBuffer = (): Promise<Buffer> => new Promise((resolve, reject) => {
     const checkResponse = () => {
         if (!hasReceivedResponseAck || responseBuffer.length !== transferModeBufferSize) {
             setTimeout(checkResponse, 10);
@@ -34,7 +34,7 @@ const receiveResponseBuffer = () => new Promise((resolve, reject) => {
     checkResponse();
 });
 
-const createAddressBuffer = (address) => {
+const createAddressBuffer = (address: number): Buffer => {
     const output = Buffer.alloc(3);
     output.writeUInt8(address & 0x0000FF, 0);
     output.writeUInt8((address & 0x00FF00) >> 8, 1);
@@ -42,7 +42,7 @@ const createAddressBuffer = (address) => {
     return output;
 }
 
-const sendReadCommand = (address) => {
+const sendReadCommand = (address: number): Promise<Buffer> => {
     serialPort.write(Buffer.concat([
         Buffer.from([33, 82]),
         createAddressBuffer(address),
@@ -50,7 +50,7 @@ const sendReadCommand = (address) => {
     return receiveResponseBuffer();
 };
 
-const sendWriteCommand = async (address, data) => {
+const sendWriteCommand = async (address: number, data: Buffer): Promise<void> => {
     serialPort.write(Buffer.concat([
         Buffer.from([33, 87]),
         createAddressBuffer(address),
@@ -59,7 +59,7 @@ const sendWriteCommand = async (address, data) => {
     await receiveResponseAck();
 };
 
-const writeAndVerifyVolume = async (volumePath) => {
+const writeAndVerifyVolume = async (volumePath: string): Promise<void> => {
     const volumeData = fs.readFileSync(volumePath);
     for (
         let startAddress = 0;
@@ -118,7 +118,7 @@ serialPort.on("open", async () => {
     serialPort.close();
 });
 
-serialPort.on("data", (data) => {
+serialPort.on("data", (data: Buffer) => {
     if (hasReceivedResponseAck) {
         responseBuffer = Buffer.concat([responseBuffer, data]);
     } else if (data[0] === 33) {

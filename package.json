@@ -1,9 +1,13 @@
 {
-    "name": "writeEeprom",
+    "name": "wheatsystem-c-55a1",
     "version": "1.0.0",
     "type": "module",
-    "main": "writeEeprom.js",
+    "scripts": {
+        "build": "tsc"
+    },
     "dependencies": {
-        "serialport": "^10.4.0"
-    }
+        "serialport": "^10.4.0",
+        "wheatbytecode-asm": "github:ostracod/wheatbytecode-asm#master"
+    },
+    "devDependencies": {}
 }

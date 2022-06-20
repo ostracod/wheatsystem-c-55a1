@@ -1,12 +1,23 @@
 
 import * as fs from "fs";
 import * as pathUtils from "path";
-import * as childProcess from "child_process";
-import * as url from "url";
+import { fileURLToPath } from "url";
+import { Assembler } from "wheatbytecode-asm";
 
-const __dirname = url.fileURLToPath(new URL(".", import.meta.url));
-const volumesDirectoryPath = pathUtils.join(__dirname, "volumes");
-const assemblerDirectoryPath = pathUtils.join(__dirname, "../wheatbytecode-asm");
+interface FileConfig {
+    name: string;
+    type: string;
+    hasAdminPerm: boolean;
+    isGuarded: boolean;
+}
+
+interface VolumeConfig {
+    files: FileConfig[];
+}
+
+const currentDirectoryPath = pathUtils.dirname(fileURLToPath(import.meta.url));
+const projectDirectoryPath = pathUtils.dirname(currentDirectoryPath);
+const volumesDirectoryPath = pathUtils.join(projectDirectoryPath, "volumes");
 const fileTypeSet = {
     generic: 0,
     bytecodeApp: 1,
@@ -16,16 +27,20 @@ const fileTypeSet = {
 let logIndentationLevel = 0;
 
 class AssemblerError extends Error {
+    assemblerMessages: string;
     
-    constructor(assemblerMessages) {
+    constructor(assemblerMessages: string) {
         super();
         this.assemblerMessages = assemblerMessages;
     }
 }
 
 class WheatSystemFile {
+    name: string;
+    attributes: number;
+    content: Buffer;
     
-    constructor(name, attributes, content) {
+    constructor(name: string, attributes: number, content: Buffer) {
         this.name = name;
         this.attributes = attributes;
         this.content = content;
@@ -33,6 +48,8 @@ class WheatSystemFile {
 }
 
 class WheatSystemVolume {
+    buffers: Buffer[];
+    address: number;
     
     constructor() {
         const buffer = Buffer.alloc(4);
@@ -41,7 +58,7 @@ class WheatSystemVolume {
         this.address = buffer.length;
     }
     
-    addFile(file) {
+    addFile(file: WheatSystemFile): void {
         const lastBuffer = this.buffers[this.buffers.length - 1];
         const offset = (this.buffers.length > 1) ? 6 : 0;
         lastBuffer.writeUInt32LE(this.address, offset);
@@ -55,12 +72,12 @@ class WheatSystemVolume {
         this.address += buffer.length;
     }
     
-    createBuffer() {
+    createBuffer(): Buffer {
         return Buffer.concat(this.buffers);
     }
 }
 
-const getLogIndentation = () => {
+const getLogIndentation = (): string => {
     let output = "";
     for (let count = 0; count < logIndentationLevel; count++) {
         output += "    ";
@@ -68,21 +85,21 @@ const getLogIndentation = () => {
     return output;
 };
 
-const logMessage = (message) => {
+const logMessage = (message: string): void => {
     console.log(getLogIndentation() + message);
 };
 
-const logPush = (message) => {
+const logPush = (message: string): void => {
     logMessage(message);
     logIndentationLevel += 1;
 };
 
-const logPop = (message) => {
+const logPop = (message: string): void => {
     logIndentationLevel -= 1;
     logMessage(message);
 };
 
-const createFileAttributes = (fileConfig) => {
+const createFileAttributes = (fileConfig: FileConfig): number => {
     const fileType = fileTypeSet[fileConfig.type];
     if (typeof fileType === "undefined") {
         throw new Error("Invalid file type. Possible file types include: " + Object.keys(fileTypeSet).join(", "));
@@ -97,26 +114,28 @@ const createFileAttributes = (fileConfig) => {
     return output;
 };
 
-const assembleBytecodeFile = (sourcePath, destinationPath) => {
+const assembleBytecodeFile = (sourcePath: string, destinationPath: string): void => {
     const sourceName = pathUtils.basename(sourcePath);
     logPush(`Assembling file "${sourceName}"...`);
     if (fs.existsSync(destinationPath)) {
         fs.unlinkSync(destinationPath);
     }
-    const assemblerMessages = childProcess.execFileSync("node", [
-        pathUtils.join(assemblerDirectoryPath, "/dist/assemble.js"),
-        sourcePath,
-    ]).toString();
+    const assembler = new Assembler({ shouldPrintLog: false });
+    assembler.catchAssemblyError(() => {
+        assembler.assembleCodeFile(sourcePath, destinationPath);
+    });
     if (!fs.existsSync(destinationPath)) {
+        const assemblerMessages = assembler.logMessages.join("\n");
         throw new AssemblerError(assemblerMessages);
     }
     logPop(`Finished assembling file "${sourceName}".`);
 };
 
-const assembleVolume = (volumeDirectoryPath) => {
+const assembleVolume = (volumeDirectoryPath: string): string => {
     const volume = new WheatSystemVolume();
     const volumeConfigPath = pathUtils.join(volumeDirectoryPath, "volumeConfig.json");
-    const volumeConfig = JSON.parse(fs.readFileSync(volumeConfigPath, "utf8"));
+    const volumeConfigText = fs.readFileSync(volumeConfigPath, "utf8");
+    const volumeConfig = JSON.parse(volumeConfigText) as VolumeConfig;
     volumeConfig.files.forEach((fileConfig) => {
         const fileName = fileConfig.name;
         const filePath = pathUtils.join(volumeDirectoryPath, fileName);

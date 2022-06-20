@@ -3,8 +3,9 @@
 *.o_unix
 *.su
 build
-boot
+wsBoot
 *.dat
 node_modules
+dist
 
 
