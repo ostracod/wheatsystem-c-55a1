@@ -574,7 +574,6 @@ void launchApp(allocPointer_t fileHandle) {
     );
     checkUnhandledError();
     setRunningAppMember(runningApp, fileHandle, fileHandle);
-    setRunningAppMember(runningApp, isWaiting, false);
     setRunningAppMember(runningApp, killAction, NONE_KILL_ACTION);
     setRunningAppMember(runningApp, previous, NULL_ALLOC_POINTER);
     setRunningAppMember(runningApp, next, firstRunningApp);
@@ -858,6 +857,7 @@ int8_t createThread(allocPointer_t runningApp, int32_t functionId) {
     setThreadMember(thread, runningApp, runningApp);
     setThreadMember(thread, functionId, functionId);
     setThreadMember(thread, localFrame, NULL_ALLOC_POINTER);
+    setThreadMember(thread, isWaiting, false);
     setThreadMember(thread, previous, NULL_ALLOC_POINTER);
     setThreadMember(thread, next, firstThread);
     if (firstThread != NULL_ALLOC_POINTER) {
@@ -989,12 +989,16 @@ void runAppSystem() {
             updateKillStates();
             killStatesDelay = 0;
         }
-        setCurrentThread(nextThread);
-        advanceNextThread(currentThread);
-        if (currentLocalFrame == NULL_ALLOC_POINTER) {
-            deleteThread(currentThread);
-        } else {
-            scheduleCurrentThread();
+        allocPointer_t thread = nextThread;
+        advanceNextThread(thread);
+        int8_t isWaiting = getThreadMember(thread, isWaiting);
+        if (!isWaiting) {
+            setCurrentThread(thread);
+            if (currentLocalFrame == NULL_ALLOC_POINTER) {
+                deleteThread(currentThread);
+            } else {
+                scheduleCurrentThread();
+            }
         }
         sleepMilliseconds(1);
     }
@@ -1511,6 +1515,20 @@ void evaluateBytecodeInstruction() {
             if (condition != 0) {
                 int32_t instructionOffset = readArgConstantInt(0);
                 jumpToBytecodeInstruction(instructionOffset);
+            }
+        } else if (opcodeOffset == 0x3) {
+            // wait.
+            setThreadMember(currentThread, isWaiting, true);
+        } else if (opcodeOffset == 0x4) {
+            // resume.
+            allocPointer_t thread = firstThread;
+            while (thread != NULL_ALLOC_POINTER) {
+                allocPointer_t localFrame = getThreadMember(thread, localFrame);
+                allocPointer_t implementer = getLocalFrameMember(localFrame, implementer);
+                if (implementer == currentImplementer) {
+                    setThreadMember(thread, isWaiting, false);
+                }
+                thread = getThreadMember(thread, next);
             }
         } else {
             throw(NO_IMPL_ERR_CODE);

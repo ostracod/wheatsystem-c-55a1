@@ -56,6 +56,8 @@ typedef struct thread_t {
     int8_t functionId;
     // Currently active localFrame_t.
     allocPointer_t localFrame;
+    // Whether the thread is blocked by a "wait" instruction.
+    int8_t isWaiting;
     // Previous thread_t in the linked list.
     allocPointer_t previous;
     // Next thread_t in the linked list.
@@ -66,8 +68,6 @@ typedef struct thread_t {
 typedef struct runningAppHeader_t {
     // fileHandle_t of an application.
     allocPointer_t fileHandle;
-    // Whether the application is blocked by a "wait" instruction.
-    int8_t isWaiting;
     // The last action performed when attempting to kill the app.
     int8_t killAction;
     // The amount of time since the last kill action.
