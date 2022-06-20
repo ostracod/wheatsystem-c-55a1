@@ -1658,6 +1658,22 @@ void evaluateBytecodeInstruction() {
             // launch.
             allocPointer_t appHandle = readArgFileHandle(0);
             launchApp(appHandle);
+        } else if (opcodeOffset == 0x1) {
+            // thisApp.
+            writeArgInt(0, currentImplementerFileHandle);
+        } else if (opcodeOffset == 0x2) {
+            // quitApp.
+            hardKillApp(currentImplementer, NONE_ERR_CODE);
+        } else if (opcodeOffset == 0x3) {
+            // appIsRunning.
+            allocPointer_t appHandle = readArgFileHandle(1);
+            allocPointer_t runningApp = getFileHandleRunningApp(appHandle);
+            writeArgInt(0, (runningApp != NULL_ALLOC_POINTER));
+        } else if (opcodeOffset == 0x4) {
+            // appInitErr.
+            allocPointer_t appHandle = readArgFileHandle(1);
+            int8_t initError = getFileHandleInitErr(appHandle);
+            writeArgInt(0, initError);
         } else if (opcodeOffset == 0x5) {
             // killApp.
             if (!currentImplementerHasAdminPerm()) {
