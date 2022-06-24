@@ -10,4 +10,7 @@ storageOffset_t volumeFileSize;
 
 WINDOW *window;
 
+int8_t isIntegrationTest;
+int32_t testSocketHandle;
+
 

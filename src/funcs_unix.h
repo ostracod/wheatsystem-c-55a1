@@ -34,4 +34,10 @@ void handleWindowResize();
 
 void sleepMilliseconds(int32_t milliseconds);
 
+void printUnixUsage();
+int8_t connectToTestSocket(int8_t *path);
+void writeToTestSocket(int8_t *data, int32_t length);
+int8_t *readFromTestSocket(int32_t *lengthDestination);
+int8_t runIntegrationTests(int8_t *socketPath);
+
 

@@ -5,6 +5,10 @@
 #include <string.h>
 #include <time.h>
 #include <curses.h>
+#include <string.h>
+#include <sys/socket.h>
+#include <sys/un.h>
+#include <unistd.h>
 
 int32_t getNativeFileSize(FILE *fileHandle) {
     fseek(fileHandle, 0, SEEK_END);
@@ -138,6 +142,60 @@ void sleepMilliseconds(int32_t milliseconds) {
     ts.tv_sec = milliseconds / 1000;
     ts.tv_nsec = (milliseconds % 1000) * 1000000;
     nanosleep(&ts, NULL);
+}
+
+void printUnixUsage() {
+    printf("Usage:\n./main_unix [volume path]\n./main_unix --integration-test [socket path]\n");
+}
+
+int8_t connectToTestSocket(int8_t *path) {
+    testSocketHandle = socket(AF_UNIX, SOCK_STREAM, 0);
+    struct sockaddr_un sockAddr;
+    memset(&sockAddr, 0, sizeof(sockAddr));
+    sockAddr.sun_family = AF_UNIX;
+    strncpy(sockAddr.sun_path, (char *)path, sizeof(sockAddr.sun_path) - 1);
+    int32_t result = connect(
+        testSocketHandle,
+        (struct sockaddr *)&sockAddr,
+        sizeof(sockAddr)
+    );
+    return (result == 0);
+}
+
+void writeToTestSocket(int8_t *data, int32_t length) {
+    write(testSocketHandle, &length, sizeof(length));
+    write(testSocketHandle, data, length);
+}
+
+int8_t *readFromTestSocket(int32_t *lengthDestination) {
+    int32_t length;
+    read(testSocketHandle, &length, sizeof(length));
+    if (lengthDestination != NULL) {
+        *lengthDestination = length;
+    }
+    int8_t *output = malloc(length);
+    read(testSocketHandle, output, length);
+    return output;
+}
+
+int8_t runIntegrationTests(int8_t *socketPath) {
+    isIntegrationTest = true;
+    int8_t result = connectToTestSocket(socketPath);
+    if (!result) {
+        printf("Unable to connect to test socket.\n");
+        return false;
+    }
+    while (true) {
+        int32_t length;
+        int8_t *data = readFromTestSocket(&length);
+        int32_t value = *(int32_t *)data;
+        printf("Received socket data!\nLength: %d; Value: %d\n", length, value);
+        free(data);
+        value *= 2;
+        printf("Sending socket data...\n");
+        writeToTestSocket((int8_t *)&value, 4);
+    }
+    return true;
 }
 
 
