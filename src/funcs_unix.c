@@ -162,19 +162,24 @@ int8_t connectToTestSocket(int8_t *path) {
     return (result == 0);
 }
 
-void writeToTestSocket(int8_t *data, int32_t length) {
-    write(testSocketHandle, &length, sizeof(length));
-    write(testSocketHandle, data, length);
+void writeToTestSocket(testPacket_t packet) {
+    write(testSocketHandle, &(packet.type), sizeof(packet.type));
+    write(testSocketHandle, &(packet.dataLength), sizeof(packet.dataLength));
+    if (packet.data != NULL && packet.dataLength > 0) {
+        write(testSocketHandle, packet.data, packet.dataLength);
+    }
 }
 
-int8_t *readFromTestSocket(int32_t *lengthDestination) {
-    int32_t length;
-    read(testSocketHandle, &length, sizeof(length));
-    if (lengthDestination != NULL) {
-        *lengthDestination = length;
+testPacket_t readFromTestSocket() {
+    testPacket_t output;
+    read(testSocketHandle, &(output.type), sizeof(output.type));
+    read(testSocketHandle, &(output.dataLength), sizeof(output.dataLength));
+    if (output.dataLength > 0) {
+        output.data = malloc(output.dataLength);
+        read(testSocketHandle, output.data, output.dataLength);
+    } else {
+        output.data = NULL;
     }
-    int8_t *output = malloc(length);
-    read(testSocketHandle, output, length);
     return output;
 }
 
@@ -185,15 +190,20 @@ int8_t runIntegrationTests(int8_t *socketPath) {
         printf("Unable to connect to test socket.\n");
         return false;
     }
+    int32_t testValue = 0;
     while (true) {
-        int32_t length;
-        int8_t *data = readFromTestSocket(&length);
-        int32_t value = *(int32_t *)data;
-        printf("Received socket data!\nLength: %d; Value: %d\n", length, value);
-        free(data);
-        value *= 2;
+        testPacket_t inputPacket = readFromTestSocket();
+        printf(
+            "Received socket data!\nType: %d; Length: %d\n",
+            inputPacket.type, inputPacket.dataLength
+        );
+        if (inputPacket.data != NULL) {
+            free(inputPacket.data);
+        }
         printf("Sending socket data...\n");
-        writeToTestSocket((int8_t *)&value, 4);
+        testPacket_t outputPacket = {LOGGED_TEST_PACKET_TYPE, 4, (int8_t *)&testValue};
+        writeToTestSocket(outputPacket);
+        testValue += 1;
     }
     return true;
 }

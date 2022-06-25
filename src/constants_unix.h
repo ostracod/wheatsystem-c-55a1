@@ -2,4 +2,12 @@
 // This statement provides NULL.
 #include <stdlib.h>
 
+#define LAUNCHED_TEST_PACKET_TYPE 1
+#define LOGGED_TEST_PACKET_TYPE 2
+#define HALTED_TEST_PACKET_TYPE 3
+#define RESET_TEST_PACKET_TYPE 4
+#define CREATE_TEST_PACKET_TYPE 5
+#define START_TEST_PACKET_TYPE 6
+#define QUIT_TEST_PACKET_TYPE 7
+
 
