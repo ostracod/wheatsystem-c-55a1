@@ -2,6 +2,7 @@
 #include "./headers.h"
 
 int main(void) {
+    resetSystemState();
     initializePinModes();
     initializeSpi();
     initializeUart();

@@ -9,7 +9,6 @@ allocPointer_t firstThread;
 allocPointer_t firstRunningApp;
 // The amount of time since app kill states were last updated.
 int16_t killStatesDelay;
-
 // Stores the last thrown error code. The value of this variable must be checked after invoking certain functions.
 int8_t unhandledErrorCode;
 

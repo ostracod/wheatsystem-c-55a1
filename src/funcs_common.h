@@ -547,7 +547,8 @@ void copyStorageNameToMemory(
 
 // Creates a file with the given name and attributes.
 // "name" is a pointer to a dynamicAlloc_t.
-void createFile(
+// Returns the address of the new file.
+storageOffset_t createFile(
     allocPointer_t name,
     int8_t type,
     int8_t isGuarded,
@@ -722,5 +723,8 @@ void setTermObserver();
 void getTermSize();
 // Implements the "wrtTerm" WheatSystem function.
 void writeTermText();
+
+// Resets global variables in the system.
+void resetSystemState();
 
 

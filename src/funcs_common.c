@@ -157,7 +157,7 @@ void copyStorageNameToMemory(
     }
 }
 
-void createFile(
+storageOffset_t createFile(
     allocPointer_t name,
     int8_t type,
     int8_t isGuarded,
@@ -168,13 +168,13 @@ void createFile(
     heapMemoryOffset_t nameAllocAddress = getDynamicAllocDataAddress(name);
     heapMemoryOffset_t nameSize = getDynamicAllocSize(name);
     if (nameSize > 127) {
-        throw(DATA_ERR_CODE);
+        throw(DATA_ERR_CODE, MISSING_FILE_ADDRESS);
     }
     if (type < GENERIC_FILE_TYPE || type > SYSTEM_APP_FILE_TYPE) {
-        throw(TYPE_ERR_CODE);
+        throw(TYPE_ERR_CODE, MISSING_FILE_ADDRESS);
     }
     if (contentSize < 0) {
-        throw(NUM_RANGE_ERR_CODE);
+        throw(NUM_RANGE_ERR_CODE, MISSING_FILE_ADDRESS);
     }
     int fileStorageSize = getFileStorageSizeHelper(nameSize, contentSize);
     
@@ -206,13 +206,13 @@ void createFile(
             getFileNameAddress(nextFileAddress),
             getFileHeaderMember(nextFileAddress, nameSize)
         )) {
-            throw(DATA_ERR_CODE);
+            throw(DATA_ERR_CODE, MISSING_FILE_ADDRESS);
         }
         previousFileAddress = nextFileAddress;
         nextFileAddress = getFileHeaderMember(previousFileAddress, next);
     }
     if (newFileAddress == MISSING_FILE_ADDRESS) {
-        throw(CAPACITY_ERR_CODE);
+        throw(CAPACITY_ERR_CODE, MISSING_FILE_ADDRESS);
     }
     
     // Update file linked list.
@@ -241,6 +241,7 @@ void createFile(
         writeStorageSpace(contentAddress + offset, int8_t, 0);
     }
     flushStorageSpace();
+    return newFileAddress;
 }
 
 void deleteFile(allocPointer_t fileHandle) {
@@ -872,15 +873,15 @@ int8_t createThread(allocPointer_t runningApp, int32_t functionId) {
 }
 
 void deleteThread(allocPointer_t thread) {
-    allocPointer_t previousThread = getThreadMember(thread, previous);
-    allocPointer_t nextThread = getThreadMember(thread, next);
-    if (previousThread == NULL_ALLOC_POINTER) {
-        firstThread = nextThread;
+    allocPointer_t tempPreviousThread = getThreadMember(thread, previous);
+    allocPointer_t tempNextThread = getThreadMember(thread, next);
+    if (tempPreviousThread == NULL_ALLOC_POINTER) {
+        firstThread = tempNextThread;
     } else {
-        setThreadMember(previousThread, next, nextThread);
+        setThreadMember(tempPreviousThread, next, tempNextThread);
     }
-    if (nextThread != NULL_ALLOC_POINTER) {
-        setThreadMember(nextThread, previous, previousThread);
+    if (tempNextThread != NULL_ALLOC_POINTER) {
+        setThreadMember(tempNextThread, previous, tempPreviousThread);
     }
     if (thread == nextThread) {
         advanceNextThread(nextThread);
@@ -1000,7 +1001,6 @@ void runAppSystem() {
                 scheduleCurrentThread();
             }
         }
-        sleepMilliseconds(1);
     }
 }
 
@@ -1877,6 +1877,15 @@ void evaluateBytecodeInstruction() {
     } else {
         throw(NO_IMPL_ERR_CODE);
     }
+}
+
+void resetSystemState() {
+    firstAlloc = NULL_ALLOC_POINTER;
+    heapMemorySizeLeft = HEAP_MEMORY_SIZE;
+    firstThread = NULL_ALLOC_POINTER;
+    firstRunningApp = NULL_ALLOC_POINTER;
+    killStatesDelay = 0;
+    unhandledErrorCode = NONE_ERR_CODE;
 }
 
 

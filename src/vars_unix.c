@@ -5,8 +5,8 @@ int8_t heapMemory[HEAP_MEMORY_SIZE];
 
 int8_t *unixVolumePath;
 
-int8_t *storageSpace;
-int8_t storageSpaceIsDirty = false;
+int8_t storageSpace[STORAGE_SPACE_SIZE];
+int8_t storageSpaceIsDirty;
 storageOffset_t volumeFileSize;
 
 WINDOW *window = NULL;

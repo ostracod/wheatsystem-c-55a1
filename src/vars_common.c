@@ -1,13 +1,12 @@
 
 #include "./headers.h"
 
-allocPointer_t firstAlloc = NULL_ALLOC_POINTER;
-heapMemoryOffset_t heapMemorySizeLeft = HEAP_MEMORY_SIZE;
-allocPointer_t firstThread = NULL_ALLOC_POINTER;
-allocPointer_t firstRunningApp = NULL_ALLOC_POINTER;
-int16_t killStatesDelay = 0;
-
-int8_t unhandledErrorCode = NONE_ERR_CODE;
+allocPointer_t firstAlloc;
+heapMemoryOffset_t heapMemorySizeLeft;
+allocPointer_t firstThread;
+allocPointer_t firstRunningApp;
+int16_t killStatesDelay;
+int8_t unhandledErrorCode;
 
 allocPointer_t nextThread;
 allocPointer_t currentThread;
