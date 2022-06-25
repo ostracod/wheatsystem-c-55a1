@@ -12,5 +12,6 @@ WINDOW *window;
 
 int8_t isIntegrationTest;
 int32_t testSocketHandle;
+int8_t systemShouldHalt;
 
 

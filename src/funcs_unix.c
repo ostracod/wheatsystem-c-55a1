@@ -226,6 +226,20 @@ void createFileByTestPacket(testPacket_t packet) {
     flushStorageSpace();
 }
 
+void handleTestInstructionHelper(int8_t opcodeOffset) {
+    if (opcodeOffset == 0x0) {
+        // logTestData.
+        int32_t value = readArgInt(0);
+        testPacket_t packet = {LOGGED_TEST_PACKET_TYPE, sizeof(value), (int8_t *)&value};
+        sendTestPacket(packet);
+    } else if (opcodeOffset == 0x1) {
+        // haltTest.
+        systemShouldHalt = true;
+    } else {
+        throw(NO_IMPL_ERR_CODE);
+    }
+}
+
 int8_t runIntegrationTests(int8_t *socketPath) {
     isIntegrationTest = true;
     printf("Running integration test mode...\n");
@@ -234,8 +248,8 @@ int8_t runIntegrationTests(int8_t *socketPath) {
         printf("Unable to connect to test socket.\n");
         return false;
     }
-    testPacket_t outputPacket = {LAUNCHED_TEST_PACKET_TYPE, 0, NULL};
-    sendTestPacket(outputPacket);
+    testPacket_t launchedPacket = {LAUNCHED_TEST_PACKET_TYPE, 0, NULL};
+    sendTestPacket(launchedPacket);
     int8_t hasFinished = false;
     int8_t hasError = false;
     while (!hasFinished && !hasError) {
@@ -253,6 +267,8 @@ int8_t runIntegrationTests(int8_t *socketPath) {
             }
             case START_TEST_PACKET_TYPE: {
                 runAppSystem();
+                testPacket_t haltedPacket = {HALTED_TEST_PACKET_TYPE, 0, NULL};
+                sendTestPacket(haltedPacket);
                 break;
             }
             case QUIT_TEST_PACKET_TYPE: {

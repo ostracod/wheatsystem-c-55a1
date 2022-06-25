@@ -19,6 +19,17 @@
 #define readStorageSpaceRange(destination, address, amount) \
     memcpy(destination, storageSpace + address, amount);
 
+#define resetHaltFlag() (systemShouldHalt = false)
+#define checkHaltFlag() if (systemShouldHalt) { \
+    break; \
+}
+
+#define handleTestInstruction() \
+    if (opcodeCategory == 0xC) { \
+        handleTestInstructionHelper(opcodeOffset); \
+        return; \
+    }
+
 // Retrieves the number of bytes in the given file.
 int32_t getNativeFileSize(FILE *fileHandle);
 
@@ -42,6 +53,7 @@ testPacket_t receiveTestPacket();
 void clearHeapMemory();
 void clearStorageSpace();
 void createFileByTestPacket(testPacket_t packet);
+void handleTestInstructionHelper(int8_t opcodeOffset);
 int8_t runIntegrationTests(int8_t *socketPath);
 
 

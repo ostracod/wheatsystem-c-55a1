@@ -4,7 +4,7 @@
 const int8_t bootStringConstant[] PROGMEM = "wsBoot";
 
 const int8_t argumentAmountOffsetArray[] PROGMEM = {
-    0, 9, 14, 18, 23, 29, 33, 38, 44, 50, 56, 59
+    0, 9, 14, 18, 23, 29, 33, 38, 44, 50, 56, 59, 64
 };
 
 const int8_t argumentAmountArray[] PROGMEM = {
@@ -31,7 +31,9 @@ const int8_t argumentAmountArray[] PROGMEM = {
     // Permission instructions.
     2, 1, 1,
     // Resource instructions.
-    1, 2, 1, 1, 1
+    1, 2, 1, 1, 1,
+    // Test instructions.
+    1, 0
 };
 
 const systemAppFunction_t termAppFunctionArray[] PROGMEM = {

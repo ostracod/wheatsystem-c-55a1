@@ -67,6 +67,12 @@
 // External EEPROM does not require any initialization beyond setting pin modes.
 #define initializeStorageSpace() true
 
+// We do not support integration tests on the AVR platform yet.
+#define handleTestInstruction()
+#define resetHaltFlag()
+#define checkHaltFlag()
+
+
 // Sets the initial mode of each AVR GPIO pin.
 void initializePinModes();
 

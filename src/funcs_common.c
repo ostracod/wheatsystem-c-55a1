@@ -971,6 +971,7 @@ void scheduleCurrentThread() {
 void runAppSystem() {
     
     // Launch boot application.
+    resetHaltFlag();
     allocPointer_t bootFileName = createStringAllocFromFixedArray(bootStringConstant);
     checkUnhandledError();
     allocPointer_t bootFileHandle = openFileByStringAlloc(bootFileName);
@@ -985,6 +986,7 @@ void runAppSystem() {
     
     // Enter loop scheduling app threads.
     while (nextThread != NULL_ALLOC_POINTER) {
+        checkHaltFlag();
         killStatesDelay += 1;
         if (killStatesDelay >= KILL_STATES_PERIOD) {
             updateKillStates();
@@ -1419,6 +1421,7 @@ void evaluateBytecodeInstruction() {
         instructionFilePos,
         currentInstructionFilePos
     );
+    handleTestInstruction();
     if (opcodeCategory == 0x0) {
         // Memory instructions.
         if (opcodeOffset == 0x0) {
