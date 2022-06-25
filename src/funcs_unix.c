@@ -202,7 +202,7 @@ void clearStorageSpace() {
 }
 
 void createFileByTestPacket(testPacket_t packet) {
-    createFilePacketHeader_t *packetHeader = (createFilePacketHeader_t *)&packet;
+    createFilePacketHeader_t *packetHeader = (createFilePacketHeader_t *)packet.data;
     int8_t nameSize = packetHeader->nameSize;
     int32_t nameStartIndex = sizeof(createFilePacketHeader_t);
     int32_t contentStartIndex = nameStartIndex + nameSize;
@@ -228,6 +228,7 @@ void createFileByTestPacket(testPacket_t packet) {
 
 int8_t runIntegrationTests(int8_t *socketPath) {
     isIntegrationTest = true;
+    printf("Running integration test mode...\n");
     int8_t result = connectToTestSocket(socketPath);
     if (!result) {
         printf("Unable to connect to test socket.\n");
