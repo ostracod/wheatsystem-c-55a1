@@ -712,6 +712,7 @@ void readArgRunningAppHelper(allocPointer_t *destination, int8_t index);
 // "instructionOffset" is the offset from the beginning of the current function body.
 void jumpToBytecodeInstruction(int32_t instructionOffset);
 void parseInstructionArg(instructionArg_t *destination);
+void evaluateWrtBuffInstruction();
 // Interprets one bytecode instruction of the currently scheduled bytecode application.
 void evaluateBytecodeInstruction();
 

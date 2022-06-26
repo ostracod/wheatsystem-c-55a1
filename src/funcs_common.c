@@ -489,6 +489,9 @@ allocPointer_t createNextArgFrame(heapMemoryOffset_t size) {
     );
     checkUnhandledError(NULL_ALLOC_POINTER);
     setArgFrameMember(output, thread, currentThread);
+    for (heapMemoryOffset_t index = 0; index < size; index++) {
+        writeArgFrame(output, index, int8_t, 0);
+    }
     setLocalFrameMember(currentLocalFrame, nextArgFrame, output);
     return output;
 }
@@ -765,11 +768,14 @@ void callFunction(
     }
     
     // Determine local frame size.
-    heapMemoryOffset_t localFrameSize = sizeof(localFrameHeader_t);
+    heapMemoryOffset_t localVarsStartIndex;
+    heapMemoryOffset_t localVarsSize;
     if (fileType == BYTECODE_APP_FILE_TYPE) {
-        localFrameSize += sizeof(bytecodeLocalFrameHeader_t) + (heapMemoryOffset_t)getBytecodeFunctionMember(fileHandle, functionIndex, localFrameSize);
+        localVarsStartIndex = sizeof(bytecodeLocalFrameHeader_t);
+        localVarsSize = (heapMemoryOffset_t)getBytecodeFunctionMember(fileHandle, functionIndex, localFrameSize);
     } else {
-        localFrameSize += getSystemAppFunctionListMember(
+        localVarsStartIndex = 0;
+        localVarsSize = getSystemAppFunctionListMember(
             systemAppFunctionList,
             functionIndex,
             localFrameSize
@@ -783,7 +789,10 @@ void callFunction(
     }
     
     // Create allocation for the local frame.
-    allocPointer_t localFrame = createAlloc(LOCAL_FRAME_ALLOC_TYPE, localFrameSize);
+    allocPointer_t localFrame = createAlloc(
+        LOCAL_FRAME_ALLOC_TYPE,
+        sizeof(localFrameHeader_t) + localVarsStartIndex + localVarsSize
+    );
     checkUnhandledError();
     setLocalFrameMember(localFrame, thread, thread);
     setLocalFrameMember(localFrame, implementer, implementer);
@@ -817,6 +826,10 @@ void callFunction(
         );
         setBytecodeLocalFrameMember(localFrame, instructionFilePos, instructionBodyFilePos);
         setBytecodeLocalFrameMember(localFrame, errorHandler, -1);
+    }
+    // Clear local variables data.
+    for (heapMemoryOffset_t offset = 0; offset < localVarsSize; offset++) {
+        writeLocalFrame(localFrame, localVarsStartIndex + offset, int8_t, 0);
     }
     
     // Update thread local frame.
@@ -1387,6 +1400,45 @@ void parseInstructionArg(instructionArg_t *destination) {
     }
 }
 
+void evaluateWrtBuffInstruction() {
+    instructionArg_t *destination = instructionArgArray;
+    instructionArg_t *source = instructionArgArray + 1;
+    int32_t size = readArgInt(2);
+    int32_t destinationBufferSize = getArgBufferSize(destination);
+    int32_t sourceBufferSize = getArgBufferSize(source);
+    if (size < 0 || size > destinationBufferSize || size > sourceBufferSize) {
+        throw(NUM_RANGE_ERR_CODE);
+    }
+    int8_t shouldCopyBackward;
+    uint8_t destRefType = getArgPrefixReferenceType(destination->prefix);
+    uint8_t sourceRefType = getArgPrefixReferenceType(source->prefix);
+    if (destRefType == HEAP_MEM_REF_TYPE && sourceRefType == HEAP_MEM_REF_TYPE) {
+        heapMemoryOffset_t destStartAddress = destination->startAddress + destination->index;
+        heapMemoryOffset_t sourceStartAddress = source->startAddress + source->index;
+        shouldCopyBackward = (destStartAddress > sourceStartAddress);
+    } else {
+        shouldCopyBackward = false;
+    }
+    int8_t direction;
+    int32_t startOffset;
+    int32_t endOffset;
+    if (shouldCopyBackward) {
+        direction = -1;
+        startOffset = size - 1;
+        endOffset = -1;
+    } else {
+        direction = 1;
+        startOffset = 0;
+        endOffset = size;
+    }
+    for (int32_t offset = startOffset; offset != endOffset; offset += direction) {
+        int8_t tempValue = readArgIntHelper(source, offset, SIGNED_INT_8_TYPE);
+        checkUnhandledError();
+        writeArgIntHelper(destination, offset, SIGNED_INT_8_TYPE, tempValue);
+        checkUnhandledError();
+    }
+}
+
 void evaluateBytecodeInstruction() {
     instructionBodyStartFilePos = getBytecodeLocalFrameMember(
         currentLocalFrame,
@@ -1430,20 +1482,7 @@ void evaluateBytecodeInstruction() {
             writeArgInt(0, tempValue);
         } else if (opcodeOffset == 0x1) {
             // wrtBuff.
-            instructionArg_t *destination = instructionArgArray;
-            instructionArg_t *source = instructionArgArray + 1;
-            int32_t size = readArgInt(2);
-            int32_t destinationBufferSize = getArgBufferSize(destination);
-            int32_t sourceBufferSize = getArgBufferSize(source);
-            if (size < 0 || size > destinationBufferSize || size > sourceBufferSize) {
-                throw(NUM_RANGE_ERR_CODE);
-            }
-            for (int32_t offset = 0; offset < size; offset++) {
-                int8_t tempValue = readArgIntHelper(source, offset, SIGNED_INT_8_TYPE);
-                checkUnhandledError();
-                writeArgIntHelper(destination, offset, SIGNED_INT_8_TYPE, tempValue);
-                checkUnhandledError();
-            }
+            evaluateWrtBuffInstruction();
         } else if (opcodeOffset == 0x2) {
             // newArgFrame.
             heapMemoryOffset_t argFrameSize = (heapMemoryOffset_t)readArgInt(0);
