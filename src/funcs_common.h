@@ -404,6 +404,7 @@
 #define readArgDynamicAlloc(index) ({ \
     allocPointer_t pointer = readArgInt(index); \
     validateDynamicAlloc(pointer); \
+    checkUnhandledError(); \
     pointer; \
 })
 
