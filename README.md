@@ -42,6 +42,12 @@ To run the emulator:
 ./build/main_unix (volumeFilePath)
 ```
 
+The emulator also supports an integration test mode which communicates over a domain socket. Please see [wheatsystem-tests](https://github.com/ostracod/wheatsystem-tests) for tests to run:
+
+```
+./build/main_unix --integration-test (socketPath)
+```
+
 To flash the firmware:
 
 ```

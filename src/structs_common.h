@@ -56,8 +56,11 @@ typedef struct thread_t {
     int8_t functionId;
     // Currently active localFrame_t.
     allocPointer_t localFrame;
-    // Whether the thread is blocked by a "wait" instruction.
-    int8_t isWaiting;
+    // May have one of the following values:
+    // 1 = Blocked by wait instruction
+    // 0 = Not blocked by wait instruction
+    // -1 = Next wait instruction will not block
+    int8_t waitDepth;
     // Previous thread_t in the linked list.
     allocPointer_t previous;
     // Next thread_t in the linked list.
