@@ -578,6 +578,7 @@ void launchApp(allocPointer_t fileHandle) {
     );
     checkUnhandledError();
     setRunningAppMember(runningApp, fileHandle, fileHandle);
+    setRunningAppMember(runningApp, shouldSkipWait, false);
     setRunningAppMember(runningApp, killAction, NONE_KILL_ACTION);
     setRunningAppMember(runningApp, previous, NULL_ALLOC_POINTER);
     setRunningAppMember(runningApp, next, firstRunningApp);
@@ -871,7 +872,7 @@ int8_t createThread(allocPointer_t runningApp, int32_t functionId) {
     setThreadMember(thread, runningApp, runningApp);
     setThreadMember(thread, functionId, functionId);
     setThreadMember(thread, localFrame, NULL_ALLOC_POINTER);
-    setThreadMember(thread, waitDepth, 0);
+    setThreadMember(thread, isWaiting, false);
     setThreadMember(thread, previous, NULL_ALLOC_POINTER);
     setThreadMember(thread, next, firstThread);
     if (firstThread != NULL_ALLOC_POINTER) {
@@ -1007,8 +1008,8 @@ void runAppSystem() {
         }
         allocPointer_t thread = nextThread;
         advanceNextThread(thread);
-        int8_t waitDepth = getThreadMember(thread, waitDepth);
-        if (waitDepth <= 0) {
+        int8_t isWaiting = getThreadMember(thread, isWaiting);
+        if (!isWaiting) {
             setCurrentThread(thread);
             if (currentLocalFrame == NULL_ALLOC_POINTER) {
                 deleteThread(currentThread);
@@ -1560,25 +1561,30 @@ void evaluateBytecodeInstruction() {
             }
         } else if (opcodeOffset == 0x3) {
             // wait.
-            int8_t waitDepth = getThreadMember(currentThread, waitDepth);
-            if (waitDepth < 1) {
-                waitDepth += 1;
-                setThreadMember(currentThread, waitDepth, waitDepth);
+            int8_t shouldSkipWait = getRunningAppMember(currentImplementer, shouldSkipWait);
+            if (shouldSkipWait) {
+                setRunningAppMember(currentImplementer, shouldSkipWait, false);
+            } else {
+                setThreadMember(currentThread, isWaiting, true);
             }
         } else if (opcodeOffset == 0x4) {
             // resume.
+            int8_t hasResumed = false;
             allocPointer_t thread = firstThread;
             while (thread != NULL_ALLOC_POINTER) {
                 allocPointer_t localFrame = getThreadMember(thread, localFrame);
                 allocPointer_t implementer = getLocalFrameMember(localFrame, implementer);
                 if (implementer == currentImplementer) {
-                    int8_t waitDepth = getThreadMember(thread, waitDepth);
-                    if (waitDepth > -1) {
-                        waitDepth -= 1;
-                        setThreadMember(thread, waitDepth, waitDepth);
+                    int8_t isWaiting = getThreadMember(thread, isWaiting);
+                    if (isWaiting) {
+                        setThreadMember(thread, isWaiting, false);
+                        hasResumed = true;
                     }
                 }
                 thread = getThreadMember(thread, next);
+            }
+            if (!hasResumed) {
+                setRunningAppMember(currentImplementer, shouldSkipWait, true);
             }
         } else {
             throw(NO_IMPL_ERR_CODE);
