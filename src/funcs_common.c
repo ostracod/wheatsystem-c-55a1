@@ -529,6 +529,10 @@ void launchApp(allocPointer_t fileHandle) {
     int32_t appDataFilePos;
     int8_t systemAppId;
     
+    // Increment file open depth.
+    int8_t depth = getFileHandleMember(fileHandle, openDepth);
+    setFileHandleMember(fileHandle, openDepth, depth + 1);
+    
     // Determine global frame size.
     heapMemoryOffset_t globalFrameSize;
     if (fileType == BYTECODE_APP_FILE_TYPE) {
@@ -996,6 +1000,7 @@ void runAppSystem() {
     }
     launchApp(bootFileHandle);
     checkUnhandledError();
+    closeFile(bootFileHandle);
     nextThread = firstThread;
     
     // Enter loop scheduling app threads.

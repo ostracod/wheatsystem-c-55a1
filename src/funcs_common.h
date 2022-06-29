@@ -412,12 +412,14 @@
 #define readArgFileHandle(index) ({ \
     allocPointer_t fileHandle = readArgInt(index); \
     validateFileHandle(fileHandle); \
+    checkUnhandledError(); \
     fileHandle; \
 });
 // Reads a pointer to a running app from a bytecode argument.
 #define readArgRunningApp(index) ({ \
     allocPointer_t runningApp; \
     readArgRunningAppHelper(&runningApp, index); \
+    checkUnhandledError(); \
     runningApp; \
 });
 
