@@ -550,8 +550,7 @@ void copyStorageNameToMemory(
 
 // Creates a file with the given name and attributes.
 // "name" is a pointer to a dynamicAlloc_t.
-// Returns the address of the new file.
-storageOffset_t createFile(
+void createFile(
     allocPointer_t name,
     int8_t type,
     int8_t isGuarded,
@@ -677,7 +676,6 @@ int8_t currentImplementerMayAccessAlloc(allocPointer_t dynamicAlloc);
 int8_t currentImplementerMayAccessFile(allocPointer_t fileHandle);
 // Changes whether the given file holds admin permission.
 // "fileHandle" is an allocPointer_t to a fileHandle_t.
-// Will set unhandledErrorCode to PERM_ERR_CODE if the implementer of the current function does not have admin permission.
 void setFileHasAdminPerm(allocPointer_t fileHandle, int8_t hasAdminPerm);
 
 // Throws throttleErr in the current thread if any function invocation is implemented by the given running app.

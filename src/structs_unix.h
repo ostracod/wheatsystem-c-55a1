@@ -21,6 +21,7 @@ typedef struct createFilePacketHeader_t {
     int8_t nameSize;
     int8_t type;
     int8_t isGuarded;
+    int8_t hasAdminPerm;
 } createFilePacketHeader_t;
 
 #pragma pack(pop)

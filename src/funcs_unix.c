@@ -211,19 +211,16 @@ void createFileByTestPacket(testPacket_t packet) {
         packet.data + nameStartIndex,
         nameSize
     );
-    storageOffset_t fileAddress = createFile(
-        nameAlloc,
-        packetHeader->type,
-        packetHeader->isGuarded,
-        contentSize
-    );
+    createFile(nameAlloc, packetHeader->type, packetHeader->isGuarded, contentSize);
+    allocPointer_t fileHandle = openFileByStringAlloc(nameAlloc);
     deleteAlloc(nameAlloc);
-    storageOffset_t contentAddress = getFileDataAddress(fileAddress, nameSize);
+    setFileHasAdminPerm(fileHandle, packetHeader->hasAdminPerm);
+    storageOffset_t contentAddress = getFileHandleDataAddress(fileHandle);
     for (storageOffset_t offset = 0; offset < contentSize; offset++) {
         int8_t value = packet.data[contentStartIndex + offset];
         writeStorageSpace(contentAddress + offset, int8_t, value);
     }
-    flushStorageSpace();
+    closeFile(fileHandle);
 }
 
 void handleTestInstructionHelper(int8_t opcodeOffset) {

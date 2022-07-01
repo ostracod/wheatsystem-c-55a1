@@ -157,7 +157,7 @@ void copyStorageNameToMemory(
     }
 }
 
-storageOffset_t createFile(
+void createFile(
     allocPointer_t name,
     int8_t type,
     int8_t isGuarded,
@@ -168,13 +168,13 @@ storageOffset_t createFile(
     heapMemoryOffset_t nameAllocAddress = getDynamicAllocDataAddress(name);
     heapMemoryOffset_t nameSize = getDynamicAllocSize(name);
     if (nameSize > 127) {
-        throw(DATA_ERR_CODE, MISSING_FILE_ADDRESS);
+        throw(DATA_ERR_CODE);
     }
     if (type < GENERIC_FILE_TYPE || type > SYSTEM_APP_FILE_TYPE) {
-        throw(TYPE_ERR_CODE, MISSING_FILE_ADDRESS);
+        throw(TYPE_ERR_CODE);
     }
     if (contentSize < 0) {
-        throw(NUM_RANGE_ERR_CODE, MISSING_FILE_ADDRESS);
+        throw(NUM_RANGE_ERR_CODE);
     }
     int fileStorageSize = getFileStorageSizeHelper(nameSize, contentSize);
     
@@ -206,13 +206,13 @@ storageOffset_t createFile(
             getFileNameAddress(nextFileAddress),
             getFileHeaderMember(nextFileAddress, nameSize)
         )) {
-            throw(DATA_ERR_CODE, MISSING_FILE_ADDRESS);
+            throw(DATA_ERR_CODE);
         }
         previousFileAddress = nextFileAddress;
         nextFileAddress = getFileHeaderMember(previousFileAddress, next);
     }
     if (newFileAddress == MISSING_FILE_ADDRESS) {
-        throw(CAPACITY_ERR_CODE, MISSING_FILE_ADDRESS);
+        throw(CAPACITY_ERR_CODE);
     }
     
     // Update file linked list.
@@ -241,7 +241,6 @@ storageOffset_t createFile(
         writeStorageSpace(contentAddress + offset, int8_t, 0);
     }
     flushStorageSpace();
-    return newFileAddress;
 }
 
 void deleteFile(allocPointer_t fileHandle) {
@@ -363,7 +362,7 @@ void closeFile(allocPointer_t fileHandle) {
         return;
     }
     openDepth -= 1;
-    setFileHandleMember(fileHandle, openDepth, openDepth - 1);
+    setFileHandleMember(fileHandle, openDepth, openDepth);
     if (openDepth <= 0) {
         deleteFileHandle(fileHandle);
     }
@@ -690,7 +689,6 @@ void hardKillApp(allocPointer_t runningApp, int8_t errorCode) {
     // Update file handle and delete running app.
     allocPointer_t fileHandle = getRunningAppMember(runningApp, fileHandle);
     setFileHandleRunningApp(fileHandle, NULL_ALLOC_POINTER);
-    setFileHandleInitErr(fileHandle, errorCode);
     closeFile(fileHandle);
     allocPointer_t previousRunningApp = getRunningAppMember(runningApp, previous);
     allocPointer_t nextRunningApp = getRunningAppMember(runningApp, next);
@@ -937,6 +935,7 @@ void registerErrorInCurrentThread(int8_t error) {
         }
         if (shouldHandleError) {
             setLocalFrameMember(currentLocalFrame, lastErrorCode, error);
+            setThreadMember(currentThread, isWaiting, false);
             break;
         }
         returnFromFunction();
@@ -1054,9 +1053,6 @@ int8_t currentImplementerMayAccessFile(allocPointer_t fileHandle) {
 }
 
 void setFileHasAdminPerm(allocPointer_t fileHandle, int8_t hasAdminPerm) {
-    if (!currentImplementerHasAdminPerm()) {
-        throw(PERM_ERR_CODE);
-    }
     uint8_t attributes = getFileHandleMember(fileHandle, attributes);
     if (hasAdminPerm) {
         attributes |= ADMIN_FILE_ATTR;
@@ -1890,10 +1886,16 @@ void evaluateBytecodeInstruction() {
             writeArgInt(0, hasAdminPerm);
         } else if (opcodeOffset == 0x1) {
             // giveAdminPerm.
+            if (!currentImplementerHasAdminPerm()) {
+                throw(PERM_ERR_CODE);
+            }
             allocPointer_t fileHandle = readArgFileHandle(0);
             setFileHasAdminPerm(fileHandle, true);
         } else if (opcodeOffset == 0x2) {
             // delAdminPerm.
+            if (!currentImplementerHasAdminPerm()) {
+                throw(PERM_ERR_CODE);
+            }
             allocPointer_t fileHandle = readArgFileHandle(0);
             setFileHasAdminPerm(fileHandle, false);
         } else {
