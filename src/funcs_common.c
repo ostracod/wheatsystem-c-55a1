@@ -22,8 +22,7 @@ allocPointer_t createAlloc(int8_t type, heapMemoryOffset_t size) {
     // Throw an error if there is not enough free memory.
     heapMemoryOffset_t endAddress = startAddress + sizeWithHeader;
     if (endAddress > HEAP_MEMORY_SIZE || endAddress < 0) {
-        unhandledErrorCode = CAPACITY_ERR_CODE;
-        return NULL_ALLOC_POINTER;
+        throw(CAPACITY_ERR_CODE, NULL_ALLOC_POINTER);
     }
     
     // Set up output allocation.
@@ -1201,96 +1200,93 @@ void updateKillStates() {
     }
 }
 
-heapMemoryOffset_t getArgHeapMemoryAddress(
-    instructionArg_t *arg,
-    int32_t offset,
-    int8_t dataTypeSize
-) {
-    heapMemoryOffset_t index = arg->index + offset;
-    if (index < 0 || index + dataTypeSize > arg->size) {
-        unhandledErrorCode = INDEX_ERR_CODE;
-    }
-    return arg->startAddress + index;
-}
-
-int32_t getArgBufferSize(instructionArg_t *arg) {
+void validateArgBounds(instructionArg_t *arg, int32_t size) {
     uint8_t referenceType = getArgPrefixReferenceType(arg->prefix);
+    int32_t index;
+    int32_t regionSize;
     if (referenceType == CONSTANT_REF_TYPE) {
-        return -1;
+        return;
     } else if (referenceType == APP_DATA_REF_TYPE) {
-        int32_t appDataSize = getBytecodeGlobalFrameMember(currentImplementer, appDataSize);
-        return appDataSize - arg->appDataIndex;
+        index = arg->appDataIndex;
+        regionSize = getBytecodeGlobalFrameMember(currentImplementer, appDataSize);
     } else {
-        return arg->size - arg->index;
+        index = arg->index;
+        regionSize = arg->size;
+    }
+    if (index < 0 || index >= regionSize) {
+        throw(INDEX_ERR_CODE);
+    }
+    if (size < 0 || index + size > regionSize) {
+        throw(LEN_ERR_CODE);
     }
 }
 
-int32_t readArgIntHelper(instructionArg_t *arg, int32_t offset, int8_t dataType) {
-    uint8_t tempPrefix = arg->prefix;
-    uint8_t referenceType = getArgPrefixReferenceType(tempPrefix);
-    if (dataType < 0) {
-        dataType = getArgPrefixDataType(tempPrefix);
-    }
-    int8_t dataTypeSize = getArgDataTypeSize(dataType);
+int32_t readArgIntHelper2(instructionArg_t *arg, int32_t offset, int8_t dataType) {
+    uint8_t referenceType = getArgPrefixReferenceType(arg->prefix);
     if (referenceType == CONSTANT_REF_TYPE) {
         return arg->constantValue;
     } else if (referenceType == APP_DATA_REF_TYPE) {
-        int32_t index = arg->appDataIndex + offset;
-        int32_t appDataSize = getBytecodeGlobalFrameMember(currentImplementer, appDataSize);
-        if (index < 0 || index + dataTypeSize > appDataSize) {
-            unhandledErrorCode = INDEX_ERR_CODE;
-            return 0;
-        }
-        int32_t tempFilePos = getBytecodeGlobalFrameMember(
+        int32_t filePos = getBytecodeGlobalFrameMember(
             currentImplementer,
             appDataFilePos
-        ) + index;
+        ) + arg->appDataIndex + offset;
         if (dataType == SIGNED_INT_8_TYPE) {
-            return readFile(currentImplementerFileHandle, tempFilePos, int8_t);
+            return readFile(currentImplementerFileHandle, filePos, int8_t);
         } else {
-            return readFile(currentImplementerFileHandle, tempFilePos, int32_t);
+            return readFile(currentImplementerFileHandle, filePos, int32_t);
         }
     } else {
-        heapMemoryOffset_t tempAddress = getArgHeapMemoryAddress(arg, offset, dataTypeSize);
-        checkUnhandledError(0);
+        heapMemoryOffset_t address = arg->startAddress + arg->index + offset;
         if (dataType == SIGNED_INT_8_TYPE) {
-            return readHeapMemory(tempAddress, int8_t);
+            return readHeapMemory(address, int8_t);
         } else {
-            return readHeapMemory(tempAddress, int32_t);
+            return readHeapMemory(address, int32_t);
         }
     }
 }
 
-void writeArgIntHelper(
+void writeArgIntHelper2(
     instructionArg_t *arg,
     int32_t offset,
     int8_t dataType,
     int32_t value
 ) {
-    uint8_t tempPrefix = arg->prefix;
-    uint8_t referenceType = getArgPrefixReferenceType(tempPrefix);
-    if (dataType < 0) {
-        dataType = getArgPrefixDataType(tempPrefix);
-    }
-    int8_t dataTypeSize = getArgDataTypeSize(dataType);
+    uint8_t referenceType = getArgPrefixReferenceType(arg->prefix);
     if (referenceType == HEAP_MEM_REF_TYPE) {
-        heapMemoryOffset_t tempAddress = getArgHeapMemoryAddress(arg, offset, dataTypeSize);
-        checkUnhandledError();
+        heapMemoryOffset_t address = arg->startAddress + arg->index + offset;
         if (dataType == SIGNED_INT_8_TYPE) {
-            writeHeapMemory(tempAddress, int8_t, (int8_t)value);
+            writeHeapMemory(address, int8_t, (int8_t)value);
         } else {
-            writeHeapMemory(tempAddress, int32_t, value);
+            writeHeapMemory(address, int32_t, value);
         }
     } else {
         throw(TYPE_ERR_CODE);
     }
 }
 
+int32_t readArgIntHelper1(instructionArg_t *arg) {
+    uint8_t prefix = arg->prefix;
+    uint8_t dataType = getArgPrefixDataType(prefix);
+    int8_t dataTypeSize = getArgDataTypeSize(dataType);
+    validateArgBounds(arg, dataTypeSize);
+    checkUnhandledError(0);
+    return readArgIntHelper2(arg, 0, dataType);
+}
+
+void writeArgIntHelper1(instructionArg_t *arg, int32_t value) {
+    uint8_t prefix = arg->prefix;
+    uint8_t dataType = getArgPrefixDataType(prefix);
+    int8_t dataTypeSize = getArgDataTypeSize(dataType);
+    validateArgBounds(arg, dataTypeSize);
+    checkUnhandledError();
+    writeArgIntHelper2(arg, 0, dataType, value);
+}
+
 int32_t readArgConstantIntHelper(int8_t index) {
     instructionArg_t *tempArg = instructionArgArray + index;
     uint8_t referenceType = getArgPrefixReferenceType(tempArg->prefix);
     if (referenceType != CONSTANT_REF_TYPE) {
-        unhandledErrorCode = TYPE_ERR_CODE;
+        throw(TYPE_ERR_CODE, 0);
     }
     return tempArg->constantValue;
 }
@@ -1338,7 +1334,7 @@ void parseInstructionArg(instructionArg_t *destination) {
         instructionArg_t tempArg1;
         parseInstructionArg(&tempArg1);
         checkUnhandledError();
-        int32_t argValue1 = readArgIntHelper(&tempArg1, 0, -1);
+        int32_t argValue1 = readArgIntHelper1(&tempArg1);
         checkUnhandledError();
         if (referenceType == APP_DATA_REF_TYPE) {
             destination->prefix = argPrefix;
@@ -1357,7 +1353,7 @@ void parseInstructionArg(instructionArg_t *destination) {
                 instructionArg_t tempArg2;
                 parseInstructionArg(&tempArg2);
                 checkUnhandledError();
-                index = (heapMemoryOffset_t)readArgIntHelper(&tempArg2, 0, -1);
+                index = (heapMemoryOffset_t)readArgIntHelper1(&tempArg2);
                 checkUnhandledError();
                 tempSize = getDynamicAllocSize(argValue1);
             } else {
@@ -1406,11 +1402,10 @@ void evaluateWrtBuffInstruction() {
     instructionArg_t *destination = instructionArgArray;
     instructionArg_t *source = instructionArgArray + 1;
     int32_t size = readArgInt(2);
-    int32_t destinationBufferSize = getArgBufferSize(destination);
-    int32_t sourceBufferSize = getArgBufferSize(source);
-    if (size < 0 || size > destinationBufferSize || size > sourceBufferSize) {
-        throw(LEN_ERR_CODE);
-    }
+    validateArgBounds(destination, size);
+    checkUnhandledError();
+    validateArgBounds(source, size);
+    checkUnhandledError();
     int8_t shouldCopyBackward;
     uint8_t destRefType = getArgPrefixReferenceType(destination->prefix);
     uint8_t sourceRefType = getArgPrefixReferenceType(source->prefix);
@@ -1434,9 +1429,9 @@ void evaluateWrtBuffInstruction() {
         endOffset = size;
     }
     for (int32_t offset = startOffset; offset != endOffset; offset += direction) {
-        int8_t tempValue = readArgIntHelper(source, offset, SIGNED_INT_8_TYPE);
+        int8_t tempValue = readArgIntHelper2(source, offset, SIGNED_INT_8_TYPE);
         checkUnhandledError();
-        writeArgIntHelper(destination, offset, SIGNED_INT_8_TYPE, tempValue);
+        writeArgIntHelper2(destination, offset, SIGNED_INT_8_TYPE, tempValue);
         checkUnhandledError();
     }
 }
@@ -1800,11 +1795,13 @@ void evaluateBytecodeInstruction() {
             }
             int32_t pos = readArgInt(2);
             int32_t size = readArgInt(3);
+            validateArgBounds(destination, size);
+            checkUnhandledError();
             validateFileRange(fileHandle, pos, size);
             storageOffset_t contentAddress = getFileHandleDataAddress(fileHandle) + pos;
             for (storageOffset_t offset = 0; offset < size; offset++) {
                 int8_t value = readStorageSpace(contentAddress + offset, int8_t);
-                writeArgIntHelper(destination, offset, SIGNED_INT_8_TYPE, value);
+                writeArgIntHelper2(destination, offset, SIGNED_INT_8_TYPE, value);
                 checkUnhandledError();
             }
         } else if (opcodeOffset == 0x5) {
@@ -1816,10 +1813,12 @@ void evaluateBytecodeInstruction() {
             int32_t pos = readArgInt(1);
             instructionArg_t *source = instructionArgArray + 2;
             int32_t size = readArgInt(3);
+            validateArgBounds(source, size);
+            checkUnhandledError();
             validateFileRange(fileHandle, pos, size);
             storageOffset_t contentAddress = getFileHandleDataAddress(fileHandle) + pos;
             for (storageOffset_t offset = 0; offset < size; offset++) {
-                int8_t value = readArgIntHelper(source, offset, SIGNED_INT_8_TYPE);
+                int8_t value = readArgIntHelper2(source, offset, SIGNED_INT_8_TYPE);
                 checkUnhandledError();
                 writeStorageSpace(contentAddress + offset, int8_t, value);
             }

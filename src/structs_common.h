@@ -171,8 +171,11 @@ typedef struct instructionArg_t {
         // For CONSTANT_REF_TYPE, the union contains constantValue.
         // For APP_DATA_REF_TYPE, the union contains appDataIndex.
         struct {
+            // Start address of the data region which contains the argument.
             heapMemoryOffset_t startAddress;
+            // Start index of the argument within the parent data region.
             heapMemoryOffset_t index;
+            // Size of the parent data region.
             heapMemoryOffset_t size;
         };
         int32_t constantValue;

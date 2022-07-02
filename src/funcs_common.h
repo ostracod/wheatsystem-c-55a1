@@ -385,13 +385,13 @@
 
 // Reads an integer from a bytecode argument.
 #define readArgInt(index) ({ \
-    int32_t tempResult = readArgIntHelper(instructionArgArray + index, 0, -1); \
+    int32_t result = readArgIntHelper1(instructionArgArray + index); \
     checkUnhandledError(); \
-    tempResult; \
+    result; \
 })
 // Writes an integer to a bytecode argument.
 #define writeArgInt(index, value) \
-    writeArgIntHelper(instructionArgArray + index, 0, -1, value); \
+    writeArgIntHelper1(instructionArgArray + index, value); \
     checkUnhandledError();
 
 // Reads an integer from a bytecode argument, and enforces that the integer is constant.
@@ -689,23 +689,22 @@ int8_t performKillAction(allocPointer_t runningApp, int8_t killAction);
 // Controls how apps are throttled and killed.
 void updateKillStates();
 
-// Determines the address of a bytecode argument which references a heap allocation.
-heapMemoryOffset_t getArgHeapMemoryAddress(
-    instructionArg_t *arg,
-    int32_t offset,
-    int8_t dataTypeSize
-);
-// Determines the size of the data interval which is referenced by the given bytecode argument.
-int32_t getArgBufferSize(instructionArg_t *arg);
+// Validates whether the given argument fits within its parent region. May set unhandledErrorCode to INDEX_ERR_CODE or LEN_ERR_CODE.
+// "size" is the number of bytes to check from the beginning of the argument.
+void validateArgBounds(instructionArg_t *arg, int32_t size);
 
-// Helper functions for corresponding macros.
-int32_t readArgIntHelper(instructionArg_t *arg, int32_t offset, int8_t dataType);
-void writeArgIntHelper(
+// Reads an argument value without verifying bounds.
+int32_t readArgIntHelper2(instructionArg_t *arg, int32_t offset, int8_t dataType);
+// Writes an argument value without verifying bounds.
+void writeArgIntHelper2(
     instructionArg_t *arg,
     int32_t offset,
     int8_t dataType,
     int32_t value
 );
+// Helper functions for corresponding macros.
+int32_t readArgIntHelper1(instructionArg_t *arg);
+void writeArgIntHelper1(instructionArg_t *arg, int32_t value);
 int32_t readArgConstantIntHelper(int8_t index);
 void readArgRunningAppHelper(allocPointer_t *destination, int8_t index);
 
