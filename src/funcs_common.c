@@ -174,7 +174,7 @@ void createFile(
         throw(TYPE_ERR_CODE);
     }
     if (contentSize < 0) {
-        throw(NUM_RANGE_ERR_CODE);
+        throw(LEN_ERR_CODE);
     }
     int fileStorageSize = getFileStorageSizeHelper(nameSize, contentSize);
     
@@ -1409,7 +1409,7 @@ void evaluateWrtBuffInstruction() {
     int32_t destinationBufferSize = getArgBufferSize(destination);
     int32_t sourceBufferSize = getArgBufferSize(source);
     if (size < 0 || size > destinationBufferSize || size > sourceBufferSize) {
-        throw(NUM_RANGE_ERR_CODE);
+        throw(LEN_ERR_CODE);
     }
     int8_t shouldCopyBackward;
     uint8_t destRefType = getArgPrefixReferenceType(destination->prefix);
@@ -1489,7 +1489,7 @@ void evaluateBytecodeInstruction() {
             // newArgFrame.
             heapMemoryOffset_t argFrameSize = (heapMemoryOffset_t)readArgInt(0);
             if (argFrameSize < 0) {
-                throw(NUM_RANGE_ERR_CODE);
+                throw(LEN_ERR_CODE);
             }
             createNextArgFrame(argFrameSize);
         } else if (opcodeOffset == 0x3) {
@@ -1497,7 +1497,7 @@ void evaluateBytecodeInstruction() {
             int8_t tempAttributes = (int8_t)readArgInt(1) & ALLOC_ATTR_MASK;
             heapMemoryOffset_t tempSize = (heapMemoryOffset_t)readArgInt(2);
             if (tempSize < 0) {
-                throw(NUM_RANGE_ERR_CODE);
+                throw(LEN_ERR_CODE);
             }
             allocPointer_t tempAlloc = createDynamicAlloc(
                 tempSize,

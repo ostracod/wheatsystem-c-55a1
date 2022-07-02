@@ -38,15 +38,16 @@
 #define TYPE_ERR_CODE 0x03
 #define NUM_RANGE_ERR_CODE 0x04
 #define INDEX_ERR_CODE 0x05
-#define PTR_ERR_CODE 0x06
-#define NULL_ERR_CODE 0x07
-#define DATA_ERR_CODE 0x08
-#define ARG_FRAME_ERR_CODE 0x09
-#define MISSING_ERR_CODE 0x0A
-#define STATE_ERR_CODE 0x0B
-#define PERM_ERR_CODE 0x0C
-#define CAPACITY_ERR_CODE 0x0D
-#define THROTTLE_ERR_CODE 0x0E
+#define LEN_ERR_CODE 0x06
+#define PTR_ERR_CODE 0x07
+#define NULL_ERR_CODE 0x08
+#define DATA_ERR_CODE 0x09
+#define ARG_FRAME_ERR_CODE 0x0A
+#define MISSING_ERR_CODE 0x0B
+#define STATE_ERR_CODE 0x0C
+#define PERM_ERR_CODE 0x0D
+#define CAPACITY_ERR_CODE 0x0E
+#define THROTTLE_ERR_CODE 0x0F
 
 // Amount of time to wait before updating kill states.
 #define KILL_STATES_PERIOD 50

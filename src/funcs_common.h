@@ -183,7 +183,7 @@
         throw(INDEX_ERR_CODE); \
     } \
     if (size < 0 || pos + size > contentSize) { \
-        throw(NUM_RANGE_ERR_CODE); \
+        throw(LEN_ERR_CODE); \
     } \
 }
 
