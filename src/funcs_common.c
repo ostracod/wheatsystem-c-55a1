@@ -536,9 +536,15 @@ void launchApp(allocPointer_t fileHandle) {
     if (fileType == BYTECODE_APP_FILE_TYPE) {
         
         // Validate bytecode app file.
+        if (fileSize < sizeof(bytecodeAppHeader_t)) {
+            throw(DATA_ERR_CODE);
+        }
         functionTableLength = getBytecodeAppMember(fileHandle, functionTableLength);
         appDataFilePos = getBytecodeAppMember(fileHandle, appDataFilePos);
         int32_t expectedFilePos = sizeof(bytecodeAppHeader_t) + functionTableLength * sizeof(bytecodeFunction_t);
+        if (expectedFilePos > fileSize) {
+            throw(DATA_ERR_CODE);
+        }
         for (int32_t index = 0; index < functionTableLength; index++) {
             int32_t instructionBodyFilePos = getBytecodeFunctionMember(
                 fileHandle,
@@ -1320,7 +1326,7 @@ void parseInstructionArg(instructionArg_t *destination) {
     uint8_t argPrefix = readInstructionData(uint8_t);
     uint8_t referenceType = getArgPrefixReferenceType(argPrefix);
     uint8_t dataType = getArgPrefixDataType(argPrefix);
-    if (dataType > SIGNED_INT_32_TYPE) {
+    if (dataType > SIGNED_INT_32_TYPE || referenceType > DYNAMIC_ALLOC_REF_TYPE) {
         throw(TYPE_ERR_CODE);
     }
     if (referenceType == CONSTANT_REF_TYPE) {
@@ -1374,10 +1380,9 @@ void parseInstructionArg(instructionArg_t *destination) {
                         if (tempLocalFrame == NULL_ALLOC_POINTER) {
                             throw(ARG_FRAME_ERR_CODE);
                         }
-                    } else if (referenceType == NEXT_ARG_FRAME_REF_TYPE) {
-                        tempLocalFrame = currentLocalFrame;
                     } else {
-                        throw(TYPE_ERR_CODE);
+                        // referenceType must equal NEXT_ARG_FRAME_REF_TYPE.
+                        tempLocalFrame = currentLocalFrame;
                     }
                     allocPointer_t argFrame = getLocalFrameMember(
                         tempLocalFrame,
