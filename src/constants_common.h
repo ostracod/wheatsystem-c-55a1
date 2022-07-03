@@ -95,7 +95,7 @@
 const int8_t bootStringConstant[7];
 
 // Mapping from more significant opcode nybble to offset in argumentAmountArray. Fixed array of values.
-const int8_t argumentAmountOffsetArray[13];
+const int8_t argumentAmountOffsetArray[14];
 // Expected number of arguments for each bytecode instruction. Fixed array of values.
 const int8_t argumentAmountArray[66];
 

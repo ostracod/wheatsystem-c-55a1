@@ -4,7 +4,7 @@
 const int8_t bootStringConstant[] PROGMEM = "wsBoot";
 
 const int8_t argumentAmountOffsetArray[] PROGMEM = {
-    0, 9, 14, 18, 23, 29, 33, 38, 44, 50, 56, 59, 64
+    0, 9, 14, 18, 23, 29, 33, 38, 44, 50, 56, 59, 64, 66
 };
 
 const int8_t argumentAmountArray[] PROGMEM = {

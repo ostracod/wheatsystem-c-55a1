@@ -1455,11 +1455,18 @@ void evaluateBytecodeInstruction() {
     }
     uint8_t opcode = readInstructionData(uint8_t);
     uint8_t opcodeCategory = opcode >> 4;
+    if (opcodeCategory >= getArrayLength(argumentAmountOffsetArray) - 1) {
+        throw(NO_IMPL_ERR_CODE);
+    }
     uint8_t opcodeOffset = opcode & 0x0F;
-    int8_t tempOffset = readFixedArrayElement(argumentAmountOffsetArray, opcodeCategory);
+    int8_t tempOffset1 = readFixedArrayElement(argumentAmountOffsetArray, opcodeCategory);
+    int8_t tempOffset2 = readFixedArrayElement(argumentAmountOffsetArray, opcodeCategory + 1);
+    if (opcodeOffset >= tempOffset2 - tempOffset1) {
+        throw(NO_IMPL_ERR_CODE);
+    }
     int8_t argumentAmount = readFixedArrayElement(
         argumentAmountArray,
-        tempOffset + opcodeOffset
+        tempOffset1 + opcodeOffset
     );
     for (int8_t index = 0; index < argumentAmount; index++) {
         parseInstructionArg(instructionArgArray + index);
@@ -1532,8 +1539,6 @@ void evaluateBytecodeInstruction() {
             }
             int8_t attributes = readArgInt(1) & ALLOC_ATTR_MASK;
             setDynamicAllocMember(alloc, attributes, attributes);
-        } else {
-            throw(NO_IMPL_ERR_CODE);
         }
     } else if (opcodeCategory == 0x1) {
         // Control flow instructions.
@@ -1582,8 +1587,6 @@ void evaluateBytecodeInstruction() {
             if (!hasResumed) {
                 setRunningAppMember(currentImplementer, shouldSkipWait, true);
             }
-        } else {
-            throw(NO_IMPL_ERR_CODE);
         }
     } else if (opcodeCategory == 0x2) {
         // Error instructions.
@@ -1605,8 +1608,6 @@ void evaluateBytecodeInstruction() {
             // err.
             int8_t tempCode = getLocalFrameMember(currentLocalFrame, lastErrorCode);
             writeArgInt(0, tempCode);
-        } else {
-            throw(NO_IMPL_ERR_CODE);
         }
     } else if (opcodeCategory == 0x3) {
         // Function instructions.
@@ -1638,8 +1639,6 @@ void evaluateBytecodeInstruction() {
                 fileHandle = getRunningAppMember(tempCaller, fileHandle);
             }
             writeArgInt(0, fileHandle);
-        } else {
-            throw(NO_IMPL_ERR_CODE);
         }
     } else if (opcodeCategory == 0x4) {
         // Bitwise instructions.
@@ -1666,8 +1665,6 @@ void evaluateBytecodeInstruction() {
             } else if (opcodeOffset == 0x5) {
                 // bRight.
                 result = (operand1 >> operand2);
-            } else {
-                throw(NO_IMPL_ERR_CODE);
             }
         }
         writeArgInt(0, result);
@@ -1688,8 +1685,6 @@ void evaluateBytecodeInstruction() {
         } else if (opcodeOffset == 0x3) {
             // nGre.
             result = (operand1 <= operand2);
-        } else {
-            throw(NO_IMPL_ERR_CODE);
         }
         writeArgInt(0, result);
     } else if (opcodeCategory == 0x6) {
@@ -1718,8 +1713,6 @@ void evaluateBytecodeInstruction() {
                 throw(NUM_RANGE_ERR_CODE);
             }
             result = operand1 % operand2;
-        } else {
-            throw(NO_IMPL_ERR_CODE);
         }
         writeArgInt(0, result);
     } else if (opcodeCategory == 0x7) {
@@ -1754,8 +1747,6 @@ void evaluateBytecodeInstruction() {
             if (runningApp != NULL_ALLOC_POINTER) {
                 softKillApp(runningApp);
             }
-        } else {
-            throw(NO_IMPL_ERR_CODE);
         }
     } else if (opcodeCategory == 0x8) {
         // File instructions.
@@ -1822,8 +1813,6 @@ void evaluateBytecodeInstruction() {
                 checkUnhandledError();
                 writeStorageSpace(contentAddress + offset, int8_t, value);
             }
-        } else {
-            throw(NO_IMPL_ERR_CODE);
         }
     } else if (opcodeCategory == 0x9) {
         // File metadata instructions.
@@ -1872,8 +1861,6 @@ void evaluateBytecodeInstruction() {
             allocPointer_t fileHandle = readArgFileHandle(1);
             storageOffset_t size = getFileHandleSize(fileHandle);
             writeArgInt(0, size);
-        } else {
-            throw(NO_IMPL_ERR_CODE);
         }
     } else if (opcodeCategory == 0xA) {
         // Permission instructions.
@@ -1897,8 +1884,6 @@ void evaluateBytecodeInstruction() {
             }
             allocPointer_t fileHandle = readArgFileHandle(0);
             setFileHasAdminPerm(fileHandle, false);
-        } else {
-            throw(NO_IMPL_ERR_CODE);
         }
     } else if (opcodeCategory == 0xB) {
         // Resource instructions.
@@ -1933,11 +1918,7 @@ void evaluateBytecodeInstruction() {
                 address = getFileHeaderMember(address, next);
             }
             writeArgInt(0, STORAGE_SPACE_SIZE - storageUsage);
-        } else {
-            throw(NO_IMPL_ERR_CODE);
         }
-    } else {
-        throw(NO_IMPL_ERR_CODE);
     }
 }
 
