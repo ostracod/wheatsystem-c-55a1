@@ -983,9 +983,11 @@ void scheduleCurrentThread() {
         );
         threadAction();
     }
-    // currentThread will be null if the app quits while running.
-    if (unhandledErrorCode != NONE_ERR_CODE && currentThread != NULL_ALLOC_POINTER) {
-        registerErrorInCurrentThread(unhandledErrorCode);
+    if (unhandledErrorCode != NONE_ERR_CODE) {
+        if (currentThread != NULL_ALLOC_POINTER) {
+            // currentThread will be null if the app quits while running.
+            registerErrorInCurrentThread(unhandledErrorCode);
+        }
         unhandledErrorCode = NONE_ERR_CODE;
     }
 }
@@ -997,6 +999,7 @@ void runAppSystem() {
     allocPointer_t bootFileName = createStringAllocFromFixedArray(bootStringConstant);
     checkUnhandledError();
     allocPointer_t bootFileHandle = openFileByStringAlloc(bootFileName);
+    checkUnhandledError();
     deleteAlloc(bootFileName);
     checkUnhandledError();
     if (bootFileHandle == NULL_ALLOC_POINTER) {

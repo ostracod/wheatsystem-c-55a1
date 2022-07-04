@@ -211,8 +211,11 @@ void createFileByTestPacket(testPacket_t packet) {
         packet.data + nameStartIndex,
         nameSize
     );
+    checkUnhandledError();
     createFile(nameAlloc, packetHeader->type, packetHeader->isGuarded, contentSize);
+    checkUnhandledError();
     allocPointer_t fileHandle = openFileByStringAlloc(nameAlloc);
+    checkUnhandledError();
     deleteAlloc(nameAlloc);
     setFileHasAdminPerm(fileHandle, packetHeader->hasAdminPerm);
     storageOffset_t contentAddress = getFileHandleDataAddress(fileHandle);
@@ -260,6 +263,7 @@ int8_t runIntegrationTests(int8_t *socketPath) {
             }
             case CREATE_FILE_TEST_PACKET_TYPE: {
                 createFileByTestPacket(inputPacket);
+                checkUnhandledError(false);
                 break;
             }
             case START_TEST_PACKET_TYPE: {
@@ -272,6 +276,7 @@ int8_t runIntegrationTests(int8_t *socketPath) {
                 heapMemoryOffset_t size = *(int32_t *)inputPacket.data;
                 createdAllocPacketBody_t body;
                 body.pointer = createAlloc(TEST_ALLOC_TYPE, size);
+                checkUnhandledError(false);
                 body.startAddress = convertPointerToAddress(body.pointer);
                 body.endAddress = body.startAddress + sizeof(allocHeader_t) + size;
                 testPacket_t createdPacket = {
