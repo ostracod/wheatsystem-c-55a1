@@ -1047,13 +1047,14 @@ int8_t currentImplementerHasAdminPerm() {
     return getHasAdminPermFromFileAttributes(attributes);
 }
 
+int8_t runningAppMayAccessAlloc(allocPointer_t runningApp, allocPointer_t dynamicAlloc) {
+    runningAppMayAccessAllocHelper(runningApp, dynamicAlloc);
+    return runningAppHasAdminPerm(runningApp);
+}
+
 int8_t currentImplementerMayAccessAlloc(allocPointer_t dynamicAlloc) {
-    int8_t attributes = getDynamicAllocMember(dynamicAlloc, attributes);
-    if ((attributes & GUARDED_ALLOC_ATTR) == 0) {
-        return true;
-    }
-    allocPointer_t creator = getDynamicAllocMember(dynamicAlloc, creator);
-    return (creator == currentImplementer || currentImplementerHasAdminPerm());
+    runningAppMayAccessAllocHelper(currentImplementer, dynamicAlloc);
+    return currentImplementerHasAdminPerm();
 }
 
 int8_t currentImplementerMayAccessFile(allocPointer_t fileHandle) {
@@ -1772,6 +1773,9 @@ void evaluateBytecodeInstruction() {
         if (opcodeOffset == 0x0) {
             // newFile.
             allocPointer_t fileName = readArgDynamicAlloc(0);
+            if (!currentImplementerMayAccessAlloc(fileName)) {
+                throw(PERM_ERR_CODE);
+            }
             int32_t type = readArgInt(1);
             int8_t isGuarded = (readArgInt(2) != 0);
             int32_t size = readArgInt(3);
@@ -1786,6 +1790,9 @@ void evaluateBytecodeInstruction() {
         } else if (opcodeOffset == 0x2) {
             // openFile.
             allocPointer_t fileName = readArgDynamicAlloc(1);
+            if (!currentImplementerMayAccessAlloc(fileName)) {
+                throw(PERM_ERR_CODE);
+            }
             allocPointer_t fileHandle = openFileByStringAlloc(fileName);
             checkUnhandledError();
             if (fileHandle == NULL_ALLOC_POINTER) {
@@ -1843,6 +1850,9 @@ void evaluateBytecodeInstruction() {
         } else if (opcodeOffset == 0x1) {
             // fileExists.
             allocPointer_t fileName = readArgDynamicAlloc(1);
+            if (!currentImplementerMayAccessAlloc(fileName)) {
+                throw(PERM_ERR_CODE);
+            }
             heapMemoryOffset_t nameAddress = getDynamicAllocDataAddress(fileName);
             heapMemoryOffset_t nameSize = getDynamicAllocSize(fileName);
             storageOffset_t fileAddress = getFileAddressByName(nameAddress, nameSize);

@@ -369,6 +369,12 @@ void writeTermText() {
     int32_t posX = readArgFrame(previousArgFrame, 0, int32_t);
     int32_t posY = readArgFrame(previousArgFrame, 4, int32_t);
     allocPointer_t textAlloc = readArgFrame(previousArgFrame, 8, int32_t);
+    if (!runningAppMayAccessAlloc(getCurrentCaller(), textAlloc)
+            || !currentImplementerMayAccessAlloc(textAlloc)) {
+        unhandledErrorCode = PERM_ERR_CODE;
+        returnFromFunction();
+        return;
+    }
     heapMemoryOffset_t textSize = getDynamicAllocSize(textAlloc);
     sendLcdCommand(0x80 | (posX + posY * 0x40));
     for (heapMemoryOffset_t index = 0; index < textSize; index++) {

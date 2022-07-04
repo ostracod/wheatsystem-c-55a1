@@ -196,6 +196,18 @@
 // Retrieves the type of a file from the given bit field.
 #define getTypeFromFileAttributes(fileAttributes) (fileAttributes & 0x03)
 
+// Helper macro for runningAppMayAccessAlloc and currentImplementerMayAccessAlloc.
+#define runningAppMayAccessAllocHelper(runningApp, dynamicAlloc) { \
+    int8_t attributes = getDynamicAllocMember(dynamicAlloc, attributes); \
+    if ((attributes & GUARDED_ALLOC_ATTR) == 0) { \
+        return true; \
+    } \
+    allocPointer_t creator = getDynamicAllocMember(dynamicAlloc, creator); \
+    if (creator == runningApp) { \
+        return true; \
+    } \
+}
+
 // Retrieves a member of the given thread.
 // "thread" is an allocPointer_t to a thread_t.
 // "memberName" is the name of a member in thread_t.
@@ -697,6 +709,10 @@ void runAppSystem();
 int8_t runningAppHasAdminPerm(allocPointer_t runningApp);
 // Returns whether the implementer of the current function has admin permission.
 int8_t currentImplementerHasAdminPerm();
+// Returns whether the given running application has permission to read or modify the data region of the given dynamic allocation.
+// "runningApp" is a pointer to a runningApp_t.
+// "dynamicAlloc" is a pointer to a dynamicAlloc_t.
+int8_t runningAppMayAccessAlloc(allocPointer_t runningApp, allocPointer_t dynamicAlloc);
 // Returns whether the implementer of the current function has permission to read or modify the data region of the given dynamic allocation.
 // "dynamicAlloc" is a pointer to a dynamicAlloc_t.
 int8_t currentImplementerMayAccessAlloc(allocPointer_t dynamicAlloc);
