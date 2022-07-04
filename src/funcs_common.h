@@ -308,6 +308,31 @@
 // Deletes any argument frame which has been created by the current function invocation.
 #define cleanUpNextArgFrame() cleanUpNextArgFrameHelper(currentLocalFrame)
 
+// Helper macros coupled tightly to callFunction and functionIsGuarded.
+#define validateFunctionIndex(implementer, fileType, functionIndex, systemAppFunctionList, ...) { \
+    int32_t functionAmount; \
+    if (fileType == BYTECODE_APP_FILE_TYPE) { \
+        functionAmount = getBytecodeGlobalFrameMember(implementer, functionTableLength); \
+    } else { \
+        int8_t systemAppId = getSystemGlobalFrameMember(implementer, id); \
+        systemAppFunctionList = getSystemAppMember(systemAppId, functionList); \
+        functionAmount = getSystemAppMember(systemAppId, functionAmount); \
+    } \
+    if (functionIndex < 0 || functionIndex >= functionAmount) { \
+        throw(INDEX_ERR_CODE, __VA_ARGS__); \
+    } \
+}
+#define functionIsGuardedHelper(destination, fileHandle, fileType, functionIndex, systemAppFunctionList) \
+    if (fileType == BYTECODE_APP_FILE_TYPE) { \
+        destination = getBytecodeFunctionMember(fileHandle, functionIndex, isGuarded); \
+    } else { \
+        destination = getSystemAppFunctionListMember( \
+            systemAppFunctionList, \
+            functionIndex, \
+            isGuarded \
+        ); \
+    }
+
 // Retrieves a member from the header of the given bytecode application.
 // "fileHandle" is an allocPointer_t to a fileHandle_t.
 // "memberName" is the name of a member in bytecodeAppHeader_t
@@ -626,6 +651,10 @@ void softKillApp(allocPointer_t runningApp);
 // "runningApp" is a pointer to a runningApp_t.
 void hardKillApp(allocPointer_t runningApp, int8_t errorCode);
 
+// Determines whether the given function is guarded.
+// "implementer" is a pointer to a runningApp_t.
+// "functionIndex" is the index of the function in "implementer".
+int8_t functionIsGuarded(allocPointer_t implementer, int32_t functionIndex);
 // Invokes a function in the given thread.
 // "thread" is a pointer to a thread_t.
 // "implementer" is a pointer to a runningApp_t.

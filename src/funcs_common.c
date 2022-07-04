@@ -708,6 +708,22 @@ void hardKillApp(allocPointer_t runningApp, int8_t errorCode) {
     deleteAlloc(runningApp);
 }
 
+int8_t functionIsGuarded(allocPointer_t implementer, int32_t functionIndex) {
+    allocPointer_t fileHandle = getRunningAppMember(implementer, fileHandle);
+    int8_t fileType = getFileHandleType(fileHandle);
+    const systemAppFunction_t *systemAppFunctionList;
+    validateFunctionIndex(implementer, fileType, functionIndex, systemAppFunctionList, false);
+    int8_t output;
+    functionIsGuardedHelper(
+        output,
+        fileHandle,
+        fileType,
+        functionIndex,
+        systemAppFunctionList
+    );
+    return output;
+}
+
 void callFunction(
     allocPointer_t thread,
     allocPointer_t implementer,
@@ -721,31 +737,19 @@ void callFunction(
     const systemAppFunction_t *systemAppFunctionList;
     
     // Validate function index.
-    int32_t functionAmount;
-    if (fileType == BYTECODE_APP_FILE_TYPE) {
-        functionAmount = getBytecodeGlobalFrameMember(implementer, functionTableLength);
-    } else {
-        int8_t systemAppId = getSystemGlobalFrameMember(implementer, id);
-        systemAppFunctionList = getSystemAppMember(systemAppId, functionList);
-        functionAmount = getSystemAppMember(systemAppId, functionAmount);
-    }
-    if (functionIndex < 0 || functionIndex >= functionAmount) {
-        throw(INDEX_ERR_CODE);
-    }
+    validateFunctionIndex(implementer, fileType, functionIndex, systemAppFunctionList);
     
     // Validate current implementer permission.
     if (shouldCheckPerm && currentImplementer != implementer
             && !currentImplementerHasAdminPerm()) {
         int8_t isGuarded;
-        if (fileType == BYTECODE_APP_FILE_TYPE) {
-            isGuarded = getBytecodeFunctionMember(fileHandle, functionIndex, isGuarded);
-        } else {
-            isGuarded = getSystemAppFunctionListMember(
-                systemAppFunctionList,
-                functionIndex,
-                isGuarded
-            );
-        }
+        functionIsGuardedHelper(
+            isGuarded,
+            fileHandle,
+            fileType,
+            functionIndex,
+            systemAppFunctionList
+        );
         if (isGuarded) {
             throw(PERM_ERR_CODE);
         }
@@ -1647,6 +1651,13 @@ void evaluateBytecodeInstruction() {
                 fileHandle = getRunningAppMember(tempCaller, fileHandle);
             }
             writeArgInt(0, fileHandle);
+        } else if (opcodeOffset == 0x5) {
+            // funcIsGuarded.
+            allocPointer_t implementer = readArgRunningApp(1);
+            int32_t functionIndex = readArgInt(2);
+            int8_t isGuarded = functionIsGuarded(implementer, functionIndex);
+            checkUnhandledError();
+            writeArgInt(0, isGuarded);
         }
     } else if (opcodeCategory == 0x4) {
         // Bitwise instructions.
