@@ -24,6 +24,12 @@ typedef struct createFilePacketHeader_t {
     int8_t hasAdminPerm;
 } createFilePacketHeader_t;
 
+typedef struct createdAllocPacketBody_t {
+    int32_t pointer;
+    int32_t startAddress;
+    int32_t endAddress;
+} createdAllocPacketBody_t;
+
 #pragma pack(pop)
 
 

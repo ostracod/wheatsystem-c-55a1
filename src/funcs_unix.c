@@ -258,7 +258,7 @@ int8_t runIntegrationTests(int8_t *socketPath) {
                 clearStorageSpace();
                 break;
             }
-            case CREATE_TEST_PACKET_TYPE: {
+            case CREATE_FILE_TEST_PACKET_TYPE: {
                 createFileByTestPacket(inputPacket);
                 break;
             }
@@ -266,6 +266,27 @@ int8_t runIntegrationTests(int8_t *socketPath) {
                 runAppSystem();
                 testPacket_t haltedPacket = {HALTED_TEST_PACKET_TYPE, 0, NULL};
                 sendTestPacket(haltedPacket);
+                break;
+            }
+            case CREATE_ALLOC_TEST_PACKET_TYPE: {
+                heapMemoryOffset_t size = *(int32_t *)inputPacket.data;
+                createdAllocPacketBody_t body;
+                body.pointer = createAlloc(TEST_ALLOC_TYPE, size);
+                body.startAddress = convertPointerToAddress(body.pointer);
+                body.endAddress = body.startAddress + sizeof(allocHeader_t) + size;
+                testPacket_t createdPacket = {
+                    CREATED_ALLOC_TEST_PACKET_TYPE,
+                    sizeof(createdAllocPacketBody_t),
+                    (int8_t *)&body
+                };
+                sendTestPacket(createdPacket);
+                break;
+            }
+            case DELETE_ALLOC_TEST_PACKET_TYPE: {
+                allocPointer_t pointer = *(int32_t *)inputPacket.data;
+                deleteAlloc(pointer);
+                testPacket_t deletedPacket = {DELETED_ALLOC_TEST_PACKET_TYPE, 0, NULL};
+                sendTestPacket(deletedPacket);
                 break;
             }
             case QUIT_TEST_PACKET_TYPE: {
