@@ -54,11 +54,11 @@ void flushStorageSpace() {
 }
 
 void handleWindowResize() {
-    int32_t tempWidth;
-    int32_t tempHeight;
-    getmaxyx(window, tempHeight, tempWidth);
-    writeTermAppGlobalVariable(width, tempWidth);
-    writeTermAppGlobalVariable(height, tempHeight);
+    int32_t width;
+    int32_t height;
+    getmaxyx(window, height, width);
+    writeTermAppGlobalVariable(width, width);
+    writeTermAppGlobalVariable(height, height);
 }
 
 void initializeTermApp() {
@@ -71,53 +71,53 @@ void initializeTermApp() {
         timeout(0);
         handleWindowResize();
     }
-    allocPointer_t tempObserver = readTermAppGlobalVariable(observer);
-    if (tempObserver == NULL_ALLOC_POINTER) {
+    allocPointer_t observer = readTermAppGlobalVariable(observer);
+    if (observer == NULL_ALLOC_POINTER) {
         return;
     }
     // TODO: Check whether observer is still running.
     
-    int32_t tempKey = getch();
-    if (tempKey < 32 || tempKey > 127) {
-        if (tempKey == KEY_LEFT) {
-            tempKey = -1;
-        } else if (tempKey == KEY_RIGHT) {
-            tempKey = -2;
-        } else if (tempKey == KEY_UP) {
-            tempKey = -3;
-        } else if (tempKey == KEY_DOWN) {
-            tempKey = -4;
-        } else if (tempKey == 263) {
-            tempKey = 127;
-        } else if (tempKey != 10 && tempKey != 27) {
+    int32_t key = getch();
+    if (key < 32 || key > 127) {
+        if (key == KEY_LEFT) {
+            key = -1;
+        } else if (key == KEY_RIGHT) {
+            key = -2;
+        } else if (key == KEY_UP) {
+            key = -3;
+        } else if (key == KEY_DOWN) {
+            key = -4;
+        } else if (key == 263) {
+            key = 127;
+        } else if (key != 10 && key != 27) {
             return;
         }
     }
     allocPointer_t nextArgFrame = createNextArgFrame(1);
     checkUnhandledError();
-    writeArgFrame(nextArgFrame, 0, int8_t, (int8_t)tempKey);
+    writeArgFrame(nextArgFrame, 0, int8_t, (int8_t)key);
     int32_t termInputIndex = readTermAppGlobalVariable(termInputIndex);
-    callFunction(currentThread, tempObserver, termInputIndex, true);
+    callFunction(currentThread, observer, termInputIndex, true);
 }
 
 void setTermObserver() {
-    allocPointer_t tempCaller = getCurrentCaller();
-    int32_t termInputIndex = findFunctionById(tempCaller, TERM_INPUT_FUNC_ID);
+    allocPointer_t caller = getCurrentCaller();
+    int32_t termInputIndex = findFunctionById(caller, TERM_INPUT_FUNC_ID);
     if (termInputIndex < 0) {
         unhandledErrorCode = MISSING_ERR_CODE;
     } else {
-        writeTermAppGlobalVariable(observer, tempCaller);
+        writeTermAppGlobalVariable(observer, caller);
         writeTermAppGlobalVariable(termInputIndex, termInputIndex);
     }
     returnFromFunction();
 }
 
 void getTermSize() {
-    int32_t tempWidth = readTermAppGlobalVariable(width);
-    int32_t tempHeight = readTermAppGlobalVariable(height);
+    int32_t width = readTermAppGlobalVariable(width);
+    int32_t height = readTermAppGlobalVariable(height);
     allocPointer_t previousArgFrame = getPreviousArgFrame();
-    writeArgFrame(previousArgFrame, 0, int32_t, tempWidth);
-    writeArgFrame(previousArgFrame, 4, int32_t, tempHeight);
+    writeArgFrame(previousArgFrame, 0, int32_t, width);
+    writeArgFrame(previousArgFrame, 4, int32_t, height);
     returnFromFunction();
 }
 
@@ -135,8 +135,8 @@ void writeTermText() {
     heapMemoryOffset_t textSize = getDynamicAllocSize(textAlloc);
     wmove(window, posY, posX);
     for (heapMemoryOffset_t index = 0; index < textSize; index++) {
-        int8_t tempCharacter = readDynamicAlloc(textAlloc, index, int8_t);
-        waddch(window, (char)tempCharacter);
+        int8_t character = readDynamicAlloc(textAlloc, index, int8_t);
+        waddch(window, (char)character);
     }
     refresh();
     returnFromFunction();

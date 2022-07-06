@@ -153,22 +153,11 @@
 // Retrieves the type of the given file.
 #define getFileHandleType(fileHandle) \
     getTypeFromFileAttributes(getFileHandleMember(fileHandle, attributes))
-// Retrieves the size of the data region in the given file.
-#define getFileHandleSize(fileHandle) getFileHandleMember(fileHandle, contentSize)
 // Retrieves the running app of the given file. Returns NULL_ALLOC_POINTER if the file has no associated running app.
 #define getFileHandleRunningApp(fileHandle) getFileHandleMember(fileHandle, runningApp)
-// Retrieves the last unhandled error code when launching an app from the given file. Returns 0 if there is no such error.
-#define getFileHandleInitErr(fileHandle) getFileHandleMember(fileHandle, initErr)
 // Retrieves the start address of the data region in the given file.
 #define getFileHandleDataAddress(fileHandle) \
     getFileDataAddress(getFileHandleMember(fileHandle, address), getFileHandleMember(fileHandle, nameSize))
-
-// Assigns a running app to the given file.
-#define setFileHandleRunningApp(fileHandle, runningAppValue) \
-    setFileHandleMember(fileHandle, runningApp, runningAppValue)
-// Assigns an initialization error code to the given file.
-#define setFileHandleInitErr(fileHandle, initErrValue) \
-    setFileHandleMember(fileHandle, initErr, initErrValue)
 
 // Reads a value from the data region in the given file.
 // "pos" is the offset of first byte to read.
@@ -178,7 +167,7 @@
 // "pos" is the offset of first byte in the range.
 // "size" is the number of bytes in the range.
 #define validateFileRange(fileHandle, pos, size) { \
-    storageOffset_t contentSize = getFileHandleSize(fileHandle); \
+    storageOffset_t contentSize = getFileHandleMember(fileHandle, contentSize); \
     if (pos < 0 || pos >= contentSize) { \
         throw(INDEX_ERR_CODE); \
     } \
@@ -314,8 +303,8 @@
 
 // Retrieves the argument frame which has been passed to the current function invocation.
 #define getPreviousArgFrame() ({ \
-    allocPointer_t tempLocalFrame = getLocalFrameMember(currentLocalFrame, previousLocalFrame); \
-    getLocalFrameMember(tempLocalFrame, nextArgFrame); \
+    allocPointer_t localFrame = getLocalFrameMember(currentLocalFrame, previousLocalFrame); \
+    getLocalFrameMember(localFrame, nextArgFrame); \
 })
 // Deletes any argument frame which has been created by the current function invocation.
 #define cleanUpNextArgFrame() cleanUpNextArgFrameHelper(currentLocalFrame)
@@ -433,9 +422,9 @@
 
 // Reads an integer from a bytecode argument, and enforces that the integer is constant.
 #define readArgConstantInt(index) ({ \
-    int32_t tempResult = readArgConstantIntHelper(index); \
+    int32_t result = readArgConstantIntHelper(index); \
     checkUnhandledError(); \
-    tempResult; \
+    result; \
 });
 // Reads a pointer to a dynamic allocation from a bytecode argument.
 #define readArgDynamicAlloc(index) ({ \
