@@ -608,6 +608,9 @@ allocPointer_t openFile(heapMemoryOffset_t nameAddress, heapMemoryOffset_t nameS
 // Deletes the given file handle, and kills any running app launched from the file.
 // "fileHandle" is a pointer to a dynamicAlloc_t.
 void deleteFileHandle(allocPointer_t fileHandle);
+// Deletes the given file handle if it is not being used by any application.
+// "fileHandle" is a pointer to a dynamicAlloc_t.
+void deleteFileHandleIfUnused(allocPointer_t fileHandle);
 // Closes the given file, decrementing the open depth of the file handle. If the open depth reaches zero, the file handle is deleted.
 // "fileHandle" is a pointer to a dynamicAlloc_t.
 void closeFile(allocPointer_t fileHandle);

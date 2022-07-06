@@ -354,17 +354,22 @@ void deleteFileHandle(allocPointer_t fileHandle) {
     deleteAlloc(fileHandle);
 }
 
+void deleteFileHandleIfUnused(allocPointer_t fileHandle) {
+    int8_t openDepth = getFileHandleMember(fileHandle, openDepth);
+    if (openDepth > 0) {
+        return;
+    }
+    allocPointer_t runningApp = getFileHandleRunningApp(fileHandle);
+    if (runningApp == NULL_ALLOC_POINTER) {
+        deleteFileHandle(fileHandle);
+    }
+}
+
 void closeFile(allocPointer_t fileHandle) {
     flushStorageSpace();
     int8_t openDepth = getFileHandleMember(fileHandle, openDepth);
-    if (openDepth <= 0) {
-        return;
-    }
-    openDepth -= 1;
-    setFileHandleMember(fileHandle, openDepth, openDepth);
-    if (openDepth <= 0) {
-        deleteFileHandle(fileHandle);
-    }
+    setFileHandleMember(fileHandle, openDepth, openDepth - 1);
+    deleteFileHandleIfUnused(fileHandle);
 }
 
 void readFileRange(
@@ -403,8 +408,15 @@ allocPointer_t getAllFileNames() {
             GUARDED_ALLOC_ATTR,
             currentImplementer
         );
-        // TODO: Clean up garbage allocations if we have an error.
-        checkUnhandledError(NULL_ALLOC_POINTER);
+        if (unhandledErrorCode != NONE_ERR_CODE) {
+            while (index > 0) {
+                index -= 1;
+                nameAlloc = readDynamicAlloc(output, index * 4, int32_t);
+                deleteAlloc(nameAlloc);
+            }
+            deleteAlloc(output);
+            return NULL_ALLOC_POINTER;
+        }
         copyStorageNameToMemory(
             getFileNameAddress(fileAddress),
             getDynamicAllocDataAddress(nameAlloc),
@@ -526,10 +538,6 @@ void launchApp(allocPointer_t fileHandle) {
     int32_t functionTableLength;
     int32_t appDataFilePos;
     int8_t systemAppId;
-    
-    // Increment file open depth.
-    int8_t depth = getFileHandleMember(fileHandle, openDepth);
-    setFileHandleMember(fileHandle, openDepth, depth + 1);
     
     // Determine global frame size.
     heapMemoryOffset_t globalFrameSize;
@@ -694,7 +702,7 @@ void hardKillApp(allocPointer_t runningApp, int8_t errorCode) {
     // Update file handle and delete running app.
     allocPointer_t fileHandle = getRunningAppMember(runningApp, fileHandle);
     setFileHandleRunningApp(fileHandle, NULL_ALLOC_POINTER);
-    closeFile(fileHandle);
+    deleteFileHandleIfUnused(fileHandle);
     allocPointer_t previousRunningApp = getRunningAppMember(runningApp, previous);
     allocPointer_t nextRunningApp = getRunningAppMember(runningApp, next);
     if (previousRunningApp == NULL_ALLOC_POINTER) {
