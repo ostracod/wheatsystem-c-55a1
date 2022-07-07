@@ -442,9 +442,9 @@ int8_t allocIsFileHandle(allocPointer_t pointer) {
 }
 
 void validateFileHandle(allocPointer_t fileHandle) {
-    validateDynamicAlloc(fileHandle);
+    validateAllocPointer(fileHandle);
     checkUnhandledError();
-    if (getDynamicAllocMember(fileHandle, creator) != NULL_ALLOC_POINTER) {
+    if (!allocIsFileHandle(fileHandle)) {
         throw(TYPE_ERR_CODE);
     }
 }
@@ -1317,7 +1317,7 @@ void readArgRunningAppHelper(allocPointer_t *destination, int8_t index) {
     allocPointer_t appHandle = readArgFileHandle(index);
     allocPointer_t runningApp = getFileHandleRunningApp(appHandle);
     if (runningApp == NULL_ALLOC_POINTER) {
-        if (getFileHandleType(runningApp) == GENERIC_FILE_TYPE) {
+        if (getFileHandleType(appHandle) == GENERIC_FILE_TYPE) {
             throw(TYPE_ERR_CODE);
         } else {
             throw(STATE_ERR_CODE);
