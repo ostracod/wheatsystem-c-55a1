@@ -112,10 +112,10 @@ void sendAddressToSram(int16_t address) {
     sendSpiInt8(address & 0x00FF);
 }
 
-void readHeapMemoryRange(
+void readHeapMemRange(
     void *destination,
-    heapMemoryOffset_t address,
-    heapMemoryOffset_t amount
+    heapMemOffset_t address,
+    heapMemOffset_t amount
 ) {
     int8_t shouldStartRead = true;
     if (currentSpiMode == SRAM_READ_SPI_MODE) {
@@ -131,17 +131,17 @@ void readHeapMemoryRange(
         sendSpiInt8(0x03);
         sendAddressToSram(sramAddress);
     }
-    for (heapMemoryOffset_t index = 0; index < amount; index++) {
+    for (heapMemOffset_t index = 0; index < amount; index++) {
         int8_t value = receiveSpiInt8();
         *(int8_t *)(destination + index) = value;
     }
     sramAddress += amount;
 }
 
-void writeHeapMemoryRange(
-    heapMemoryOffset_t address,
+void writeHeapMemRange(
+    heapMemOffset_t address,
     void *source,
-    heapMemoryOffset_t amount
+    heapMemOffset_t amount
 ) {
     int8_t shouldStartWrite = true;
     if (currentSpiMode == SRAM_WRITE_SPI_MODE) {
@@ -157,7 +157,7 @@ void writeHeapMemoryRange(
         sendSpiInt8(0x02);
         sendAddressToSram(sramAddress);
     }
-    for (heapMemoryOffset_t index = 0; index < amount; index++) {
+    for (heapMemOffset_t index = 0; index < amount; index++) {
         int8_t value = *(int8_t *)(source + index);
         sendSpiInt8(value);
     }
@@ -170,7 +170,7 @@ void sendAddressToEeprom(storageOffset_t address) {
     sendSpiInt8(address & 0x000000FF);
 }
 
-void readStorageSpaceRange(
+void readStorageRange(
     void *destination,
     storageOffset_t address,
     storageOffset_t amount
@@ -199,7 +199,7 @@ void readStorageSpaceRange(
     eepromAddress += amount;
 }
 
-void writeStorageSpaceRange(storageOffset_t address, void *source, storageOffset_t amount) {
+void writeStorageRange(storageOffset_t address, void *source, storageOffset_t amount) {
     if (amount <= 0) {
         return;
     }
@@ -223,7 +223,7 @@ void writeStorageSpaceRange(storageOffset_t address, void *source, storageOffset
     }
 }
 
-void flushStorageSpace() {
+void flushStorage() {
     if (currentSpiMode == EEPROM_WRITE_SPI_MODE) {
         setSpiMode(NONE_SPI_MODE);
     }
@@ -336,7 +336,7 @@ void runTransferMode() {
         ((int8_t *)&address)[2] = receiveUartInt8();
         int8_t buffer[TRANSFER_MODE_BUFFER_SIZE];
         if (command == 'R') {
-            readStorageSpaceRange(buffer, address, TRANSFER_MODE_BUFFER_SIZE);
+            readStorageRange(buffer, address, TRANSFER_MODE_BUFFER_SIZE);
             sendUartInt8('!');
             for (int16_t index = 0; index < TRANSFER_MODE_BUFFER_SIZE; index++) {
                 sendUartInt8(buffer[index]);
@@ -345,8 +345,8 @@ void runTransferMode() {
             for (int16_t index = 0; index < TRANSFER_MODE_BUFFER_SIZE; index++) {
                 buffer[index] = receiveUartInt8();
             }
-            writeStorageSpaceRange(address, buffer, TRANSFER_MODE_BUFFER_SIZE);
-            flushStorageSpace();
+            writeStorageRange(address, buffer, TRANSFER_MODE_BUFFER_SIZE);
+            flushStorage();
             sendUartInt8('!');
         }
     }
@@ -372,16 +372,16 @@ void writeTermText() {
     if (!runningAppMayAccessAlloc(getCurrentCaller(), textAlloc)
             || !currentImplementerMayAccessAlloc(textAlloc)) {
         unhandledErrorCode = PERM_ERR_CODE;
-        returnFromFunction();
+        returnFromFunc();
         return;
     }
-    heapMemoryOffset_t textSize = getDynamicAllocSize(textAlloc);
+    heapMemOffset_t textSize = getDynamicAllocSize(textAlloc);
     sendLcdCommand(0x80 | (posX + posY * 0x40));
-    for (heapMemoryOffset_t index = 0; index < textSize; index++) {
+    for (heapMemOffset_t index = 0; index < textSize; index++) {
         int8_t character = readDynamicAlloc(textAlloc, index, int8_t);
         sendLcdCharacter(character);
     }
-    returnFromFunction();
+    returnFromFunc();
 }
 
 

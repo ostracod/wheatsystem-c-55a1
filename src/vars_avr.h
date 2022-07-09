@@ -1,6 +1,6 @@
 
 int8_t currentSpiMode;
-heapMemoryOffset_t sramAddress;
+heapMemOffset_t sramAddress;
 storageOffset_t eepromAddress;
 
 

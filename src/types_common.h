@@ -2,8 +2,8 @@
 // Includes all standard integer types.
 #include <stdint.h>
 
-// Stores an offset within heap memory. Must accommodate values between negative HEAP_MEMORY_SIZE and positive HEAP_MEMORY_SIZE.
-#define heapMemoryOffset_t int16_t
+// Stores an offset within heap memory. Must accommodate values between negative HEAP_MEM_SIZE and positive HEAP_MEM_SIZE.
+#define heapMemOffset_t int16_t
 // Stores an offset within volume storage.
 #define storageOffset_t int32_t
 

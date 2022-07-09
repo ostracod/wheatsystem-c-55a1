@@ -57,15 +57,15 @@
 
 // Reads a value from heap memory.
 // "address" is the address of first byte to read.
-#define readHeapMemory(address, type) \
-    ({type result; readHeapMemoryRange(&result, address, sizeof(type)); result;})
+#define readHeapMem(address, type) \
+    ({type result; readHeapMemRange(&result, address, sizeof(type)); result;})
 // Writes a value to heap memory.
 // "address" is the address of first byte to write.
-#define writeHeapMemory(address, type, value) \
-    ({type tempValue = value; writeHeapMemoryRange(address, &tempValue, sizeof(type));})
+#define writeHeapMem(address, type, value) \
+    ({type tempValue = value; writeHeapMemRange(address, &tempValue, sizeof(type));})
 
 // External EEPROM does not require any initialization beyond setting pin modes.
-#define initializeStorageSpace() true
+#define initializeStorage() true
 
 // We do not support integration tests on the AVR platform yet.
 #define handleTestInstruction()
@@ -96,33 +96,33 @@ void initializeSram();
 void sendAddressToSram(int16_t address);
 // Reads an interval of data from heap memory.
 // "address" is the offset of first byte to read.
-void readHeapMemoryRange(
+void readHeapMemRange(
     void *destination,
-    heapMemoryOffset_t address,
-    heapMemoryOffset_t amount
+    heapMemOffset_t address,
+    heapMemOffset_t amount
 );
 // Writes an interval of data to heap memory.
 // "address" is the offset of first byte to write.
-void writeHeapMemoryRange(
-    heapMemoryOffset_t address,
+void writeHeapMemRange(
+    heapMemOffset_t address,
     void *source,
-    heapMemoryOffset_t amount
+    heapMemOffset_t amount
 );
 
 // Sends an address to EEPROM over SPI.
 void sendAddressToEeprom();
 // Reads an interval of data from non-volatile storage.
 // "address" is the offset of first byte to read.
-void readStorageSpaceRange(
+void readStorageRange(
     void *destination,
     storageOffset_t address,
     storageOffset_t amount
 );
-// Writes an interval of data to non-volatile storage. Changes might not be persisted until calling flushStorageSpace.
+// Writes an interval of data to non-volatile storage. Changes might not be persisted until calling flushStorage.
 // "address" is the offset of first byte to write.
-void writeStorageSpaceRange(storageOffset_t address, void *source, storageOffset_t amount);
+void writeStorageRange(storageOffset_t address, void *source, storageOffset_t amount);
 // Persists any pending changes to non-volatile storage.
-void flushStorageSpace();
+void flushStorage();
 
 // Sends a command to the character LCD.
 void sendLcdCommand(int8_t command);

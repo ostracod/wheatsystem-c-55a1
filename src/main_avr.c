@@ -7,7 +7,7 @@ int main(void) {
     initializeSpi();
     initializeUart();
     initializeSram();
-    initializeStorageSpace();
+    initializeStorage();
     initializeLcd();
     int8_t button = getPressedButton();
     if (button == ACTION_BUTTON) {

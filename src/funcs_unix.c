@@ -17,9 +17,9 @@ int32_t getNativeFileSize(FILE *fileHandle) {
     return output;
 }
 
-int8_t initializeStorageSpace() {
+int8_t initializeStorage() {
     if (unixVolumePath == NULL) {
-        clearStorageSpace();
+        clearStorage();
         return true;
     }
     FILE *fileHandle = fopen((char *)unixVolumePath, "r");
@@ -30,12 +30,12 @@ int8_t initializeStorageSpace() {
     volumeFileSize = getNativeFileSize(fileHandle);
     fread(storageSpace, 1, volumeFileSize, fileHandle);
     fclose(fileHandle);
-    storageSpaceIsDirty = false;
+    storageIsDirty = false;
     return true;
 }
 
-void writeStorageSpaceRange(storageOffset_t address, void *source, storageOffset_t amount) {
-    storageSpaceIsDirty = true;
+void writeStorageRange(storageOffset_t address, void *source, storageOffset_t amount) {
+    storageIsDirty = true;
     storageOffset_t endAddress = address + amount;
     if (endAddress > volumeFileSize) {
         volumeFileSize = endAddress;
@@ -43,22 +43,22 @@ void writeStorageSpaceRange(storageOffset_t address, void *source, storageOffset
     memcpy(storageSpace + address, source, amount);
 }
 
-void flushStorageSpace() {
-    if (!storageSpaceIsDirty || unixVolumePath == NULL) {
+void flushStorage() {
+    if (!storageIsDirty || unixVolumePath == NULL) {
         return;
     }
     FILE *fileHandle = fopen((char *)unixVolumePath, "w");
     fwrite(storageSpace, 1, volumeFileSize, fileHandle);
     fclose(fileHandle);
-    storageSpaceIsDirty = false;
+    storageIsDirty = false;
 }
 
 void handleWindowResize() {
     int32_t width;
     int32_t height;
     getmaxyx(window, height, width);
-    writeTermAppGlobalVariable(width, width);
-    writeTermAppGlobalVariable(height, height);
+    writeTermAppGlobalVar(width, width);
+    writeTermAppGlobalVar(height, height);
 }
 
 void initializeTermApp() {
@@ -71,7 +71,7 @@ void initializeTermApp() {
         timeout(0);
         handleWindowResize();
     }
-    allocPointer_t observer = readTermAppGlobalVariable(observer);
+    allocPointer_t observer = readTermAppGlobalVar(observer);
     if (observer == NULL_ALLOC_POINTER) {
         return;
     }
@@ -96,29 +96,29 @@ void initializeTermApp() {
     allocPointer_t nextArgFrame = createNextArgFrame(1);
     checkUnhandledError();
     writeArgFrame(nextArgFrame, 0, int8_t, (int8_t)key);
-    int32_t termInputIndex = readTermAppGlobalVariable(termInputIndex);
-    callFunction(currentThread, observer, termInputIndex, true);
+    int32_t termInputIndex = readTermAppGlobalVar(termInputIndex);
+    callFunc(currentThread, observer, termInputIndex, true);
 }
 
 void setTermObserver() {
     allocPointer_t caller = getCurrentCaller();
-    int32_t termInputIndex = findFunctionById(caller, TERM_INPUT_FUNC_ID);
+    int32_t termInputIndex = findFuncById(caller, TERM_INPUT_FUNC_ID);
     if (termInputIndex < 0) {
         unhandledErrorCode = MISSING_ERR_CODE;
     } else {
-        writeTermAppGlobalVariable(observer, caller);
-        writeTermAppGlobalVariable(termInputIndex, termInputIndex);
+        writeTermAppGlobalVar(observer, caller);
+        writeTermAppGlobalVar(termInputIndex, termInputIndex);
     }
-    returnFromFunction();
+    returnFromFunc();
 }
 
 void getTermSize() {
-    int32_t width = readTermAppGlobalVariable(width);
-    int32_t height = readTermAppGlobalVariable(height);
+    int32_t width = readTermAppGlobalVar(width);
+    int32_t height = readTermAppGlobalVar(height);
     allocPointer_t previousArgFrame = getPreviousArgFrame();
     writeArgFrame(previousArgFrame, 0, int32_t, width);
     writeArgFrame(previousArgFrame, 4, int32_t, height);
-    returnFromFunction();
+    returnFromFunc();
 }
 
 void writeTermText() {
@@ -129,17 +129,17 @@ void writeTermText() {
     if (!runningAppMayAccessAlloc(getCurrentCaller(), textAlloc)
             || !currentImplementerMayAccessAlloc(textAlloc)) {
         unhandledErrorCode = PERM_ERR_CODE;
-        returnFromFunction();
+        returnFromFunc();
         return;
     }
-    heapMemoryOffset_t textSize = getDynamicAllocSize(textAlloc);
+    heapMemOffset_t textSize = getDynamicAllocSize(textAlloc);
     wmove(window, posY, posX);
-    for (heapMemoryOffset_t index = 0; index < textSize; index++) {
+    for (heapMemOffset_t index = 0; index < textSize; index++) {
         int8_t character = readDynamicAlloc(textAlloc, index, int8_t);
         waddch(window, (char)character);
     }
     refresh();
-    returnFromFunction();
+    returnFromFunc();
 }
 
 void sleepMilliseconds(int32_t milliseconds) {
@@ -188,18 +188,18 @@ testPacket_t receiveTestPacket() {
     return output;
 }
 
-void clearHeapMemory() {
-    for (heapMemoryOffset_t address = 0; address < HEAP_MEMORY_SIZE; address++) {
-        writeHeapMemory(address, int8_t, 0);
+void clearHeapMem() {
+    for (heapMemOffset_t address = 0; address < HEAP_MEM_SIZE; address++) {
+        writeHeapMem(address, int8_t, 0);
     }
 }
 
-void clearStorageSpace() {
-    for (storageOffset_t address = 0; address < STORAGE_SPACE_SIZE; address++) {
-        writeStorageSpace(address, int8_t, 0);
+void clearStorage() {
+    for (storageOffset_t address = 0; address < STORAGE_SIZE; address++) {
+        writeStorage(address, int8_t, 0);
     }
-    setStorageSpaceMember(firstFileAddress, MISSING_FILE_ADDRESS);
-    flushStorageSpace();
+    setStorageMember(firstFileAddress, MISSING_FILE_ADDRESS);
+    flushStorage();
 }
 
 void createFileByTestPacket(testPacket_t packet) {
@@ -222,7 +222,7 @@ void createFileByTestPacket(testPacket_t packet) {
     storageOffset_t contentAddress = getFileHandleDataAddress(fileHandle);
     for (storageOffset_t offset = 0; offset < contentSize; offset++) {
         int8_t value = packet.data[contentStartIndex + offset];
-        writeStorageSpace(contentAddress + offset, int8_t, value);
+        writeStorage(contentAddress + offset, int8_t, value);
     }
     closeFile(fileHandle);
 }
@@ -258,8 +258,8 @@ int8_t runIntegrationTests(int8_t *socketPath) {
         switch (inputPacket.type) {
             case RESET_TEST_PACKET_TYPE: {
                 resetSystemState();
-                clearHeapMemory();
-                clearStorageSpace();
+                clearHeapMem();
+                clearStorage();
                 break;
             }
             case CREATE_FILE_TEST_PACKET_TYPE: {
@@ -274,7 +274,7 @@ int8_t runIntegrationTests(int8_t *socketPath) {
                 break;
             }
             case CREATE_ALLOC_TEST_PACKET_TYPE: {
-                heapMemoryOffset_t size = *(int32_t *)inputPacket.data;
+                heapMemOffset_t size = *(int32_t *)inputPacket.data;
                 createdAllocPacketBody_t body;
                 body.pointer = createAlloc(TEST_ALLOC_TYPE, size);
                 checkUnhandledError(false);

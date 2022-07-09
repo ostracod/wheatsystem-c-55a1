@@ -4,7 +4,7 @@
 // Stored at the beginning of each heap allocation.
 typedef struct allocHeader_t {
     int8_t type;
-    heapMemoryOffset_t size;
+    heapMemOffset_t size;
     allocPointer_t next;
 } allocHeader_t;
 
@@ -24,9 +24,9 @@ typedef struct dynamicAlloc_t {
 } dynamicAlloc_t;
 
 // Stored at the beginning of non-volatile storage
-typedef struct storageSpaceHeader_t {
+typedef struct storageHeader_t {
     storageOffset_t firstFileAddress;
-} storageSpaceHeader_t;
+} storageHeader_t;
 
 // Stored at the beginning of each file.
 typedef struct fileHeader_t {
@@ -53,7 +53,7 @@ typedef struct thread_t {
     // runningApp_t which implements the base function in the thread.
     allocPointer_t runningApp;
     // ID of the base function in the thread.
-    int8_t functionId;
+    int8_t funcId;
     // Currently active localFrame_t.
     allocPointer_t localFrame;
     // Whether the thread is blocked by a "wait" instruction.
@@ -76,7 +76,7 @@ typedef struct runningAppHeader_t {
     int8_t killActionDelay;
     // Note that this member variable is only used by updateKillStates.
     // It is not updated regularly.
-    heapMemoryOffset_t memoryUsage;
+    heapMemOffset_t memUsage;
     // Previous runningApp_t in the linked list.
     allocPointer_t previous;
     // Next runningApp_t in the linked list.
@@ -96,7 +96,7 @@ typedef struct localFrameHeader_t {
     allocPointer_t thread;
     // runningApp_t which implements the function.
     allocPointer_t implementer;
-    int32_t functionIndex;
+    int32_t funcIndex;
     // Pointer to the previous localFrame_t.
     allocPointer_t previousLocalFrame;
     // argFrame_t to pass to the next function invocation.
@@ -129,25 +129,25 @@ typedef struct argFrame_t {
 typedef struct bytecodeAppHeader_t {
     int32_t globalFrameSize;
     // Number of functions in the function table.
-    int32_t functionTableLength;
+    int32_t funcTableLength;
     // Offset from the beginning of the file.
     int32_t appDataFilePos;
 } bytecodeAppHeader_t;
 
 // Stored in the function table of a bytecode application file.
-typedef struct bytecodeFunction_t {
-    int32_t functionId;
+typedef struct bytecodeFunc_t {
+    int32_t funcId;
     int8_t isGuarded;
     int32_t argFrameSize;
     int32_t localFrameSize;
     // Offset from the beginning of the file.
     int32_t instructionBodyFilePos;
     int32_t instructionBodySize;
-} bytecodeFunction_t;
+} bytecodeFunc_t;
 
 // Stored at the beginning of the global frame of a bytecode application.
 typedef struct bytecodeGlobalFrameHeader_t {
-    int32_t functionTableLength;
+    int32_t funcTableLength;
     int32_t appDataFilePos;
     int32_t appDataSize;
 } bytecodeGlobalFrameHeader_t;
@@ -172,11 +172,11 @@ typedef struct instructionArg_t {
         // For APP_DATA_REF_TYPE, the union contains appDataIndex.
         struct {
             // Start address of the data region which contains the argument.
-            heapMemoryOffset_t startAddress;
+            heapMemOffset_t startAddress;
             // Start index of the argument within the parent data region.
-            heapMemoryOffset_t index;
+            heapMemOffset_t index;
             // Size of the parent data region.
-            heapMemoryOffset_t size;
+            heapMemOffset_t size;
         };
         int32_t constantValue;
         int32_t appDataIndex;
@@ -190,7 +190,7 @@ typedef struct instructionArg_t {
 #endif
 
 // Defines a function available in a system application.
-typedef struct systemAppFunction_t {
+typedef struct systemAppFunc_t {
     // ID of the function.
     int8_t id;
     int8_t isGuarded;
@@ -198,15 +198,15 @@ typedef struct systemAppFunction_t {
     int8_t localFrameSize;
     // Task to perform whenever the function is scheduled.
     systemAppThreadAction_t threadAction;
-} systemAppFunction_t;
+} systemAppFunc_t;
 
 // Defines a system application available on the current platform.
 typedef struct systemApp_t {
     int8_t globalFrameSize;
     // Pointer to fixed values.
-    const systemAppFunction_t *functionList;
-    // Number of functions in functionList.
-    int8_t functionAmount;
+    const systemAppFunc_t *funcList;
+    // Number of functions in funcList.
+    int8_t funcAmount;
 } systemApp_t;
 
 #ifdef WHEATSYSTEM_UNIX

@@ -3,7 +3,7 @@
 #define false 0
 
 // Size of memory available in the heap.
-#define HEAP_MEMORY_SIZE 32767
+#define HEAP_MEM_SIZE 32767
 
 // Has the type allocPointer_t.
 #define NULL_ALLOC_POINTER 0
@@ -21,7 +21,7 @@
 #define ALLOC_ATTR_MASK (GUARDED_ALLOC_ATTR | SENTRY_ALLOC_ATTR)
 
 // Size available to store files.
-#define STORAGE_SPACE_SIZE ((storageOffset_t)128 * (storageOffset_t)1024)
+#define STORAGE_SIZE ((storageOffset_t)128 * (storageOffset_t)1024)
 
 #define MISSING_FILE_ADDRESS 0
 
@@ -53,7 +53,7 @@
 // Amount of time to wait before updating kill states.
 #define KILL_STATES_PERIOD 50
 // Amount of free memory remaining before the resource system kills apps.
-#define KILL_PANIC_THRESHOLD (HEAP_MEMORY_SIZE / 4)
+#define KILL_PANIC_THRESHOLD (HEAP_MEM_SIZE / 4)
 
 #define NONE_KILL_ACTION 0
 #define WARN_KILL_ACTION 1
@@ -95,13 +95,13 @@
 // Fixed array of characters.
 const int8_t bootStringConstant[7];
 
-// Mapping from more significant opcode nybble to offset in argumentAmountArray. Fixed array of values.
-const int8_t argumentAmountOffsetArray[14];
+// Mapping from more significant opcode nybble to offset in argAmountArray. Fixed array of values.
+const int8_t argAmountOffsetArray[14];
 // Expected number of arguments for each bytecode instruction. Fixed array of values.
-const int8_t argumentAmountArray[67];
+const int8_t argAmountArray[67];
 
 // List of functions which the term driver implements. Fixed array of values.
-const systemAppFunction_t termAppFunctionArray[4];
+const systemAppFunc_t termAppFuncArray[4];
 
 // Determines the system apps which are available on the current platform. Fixed array of values.
 const systemApp_t systemAppArray[1];

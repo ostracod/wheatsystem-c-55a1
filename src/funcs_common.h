@@ -36,12 +36,12 @@
 // "pointer" is an allocPointer_t.
 // "memberName" is the name of a member in allocHeader_t.
 #define getAllocMember(pointer, memberName) \
-    readHeapMemory(getAllocMemberAddress(pointer, memberName), getStructMemberType(allocHeader_t, memberName))
+    readHeapMem(getAllocMemberAddress(pointer, memberName), getStructMemberType(allocHeader_t, memberName))
 // Modifies a member of the allocation header in the given allocation.
 // "pointer" is an allocPointer_t.
 // "memberName" is the name of a member in allocHeader_t.
 #define setAllocMember(pointer, memberName, value) \
-    writeHeapMemory(getAllocMemberAddress(pointer, memberName), getStructMemberType(allocHeader_t, memberName), value)
+    writeHeapMem(getAllocMemberAddress(pointer, memberName), getStructMemberType(allocHeader_t, memberName), value)
 
 // Retrieves the start address of the data region in the given allocation.
 #define getAllocDataAddress(pointer) \
@@ -50,12 +50,12 @@
 // "pointer" is an allocPointer_t.
 // "index" is the offset of value in the data region.
 #define readAlloc(pointer, index, type) \
-    readHeapMemory(getAllocDataAddress(pointer) + index, type)
+    readHeapMem(getAllocDataAddress(pointer) + index, type)
 // Write a value to the data region in the given allocation.
 // "pointer" is an allocPointer_t.
 // "index" is the offset of value in the data region.
 #define writeAlloc(pointer, index, type, value) \
-    writeHeapMemory(getAllocDataAddress(pointer) + index, type, value)
+    writeHeapMem(getAllocDataAddress(pointer) + index, type, value)
 
 // Retrieves the type of the given allocation.
 #define getAllocType(pointer) getAllocMember(pointer, type)
@@ -85,12 +85,12 @@
 // "pointer" is an allocPointer_t to a dynamicAlloc_t.
 // "index" is the integer offset of first byte to read.
 #define readDynamicAlloc(pointer, index, type) \
-    readHeapMemory(getDynamicAllocDataAddress(pointer) + index, type)
+    readHeapMem(getDynamicAllocDataAddress(pointer) + index, type)
 // Writes a value to the data region of the given dynamic allocation.
 // "pointer" is an allocPointer_t to a dynamicAlloc_t.
 // "index" is the integer offset of first byte to write.
 #define writeDynamicAlloc(pointer, index, type, value) \
-    writeHeapMemory(getDynamicAllocDataAddress(pointer) + index, type, value)
+    writeHeapMem(getDynamicAllocDataAddress(pointer) + index, type, value)
 
 // Retrieves the size of the data region in the given dynamic allocation.
 // "pointer" is an allocPointer_t to a dynamicAlloc_t.
@@ -100,35 +100,35 @@
 // Creates a dynamic allocation whose data region contains the string in the given fixed array.
 // "fixedArray" is a fixed array of int8_t ending in the null character.
 #define createStringAllocFromFixedArray(fixedArray) \
-    createStringAllocFromFixedArrayHelper(fixedArray, (heapMemoryOffset_t)(getArrayLength(fixedArray) - 1))
+    createStringAllocFromFixedArrayHelper(fixedArray, (heapMemOffset_t)(getArrayLength(fixedArray) - 1))
 
 // Reads a value from non-volatile storage.
 // "address" is the offset of first byte to read.
-#define readStorageSpace(address, type) \
-    ({type result; readStorageSpaceRange(&result, address, sizeof(type)); result;})
-// Writes a value to non-volatile storage. Changes might not be persisted until calling flushStorageSpace.
+#define readStorage(address, type) \
+    ({type result; readStorageRange(&result, address, sizeof(type)); result;})
+// Writes a value to non-volatile storage. Changes might not be persisted until calling flushStorage.
 // "address" is the offset of first byte to write.
-#define writeStorageSpace(address, type, value) \
-    ({type tempValue = value; writeStorageSpaceRange(address, &tempValue, sizeof(type));})
+#define writeStorage(address, type, value) \
+    ({type tempValue = value; writeStorageRange(address, &tempValue, sizeof(type));})
 
 // Retrieves a member of the storage space header.
-// "memberName" is the name of a member in storageSpaceHeader_t.
-#define getStorageSpaceMember(memberName) readStorageSpace(getStructMemberOffset(storageSpaceHeader_t, memberName), getStructMemberType(storageSpaceHeader_t, memberName))
+// "memberName" is the name of a member in storageHeader_t.
+#define getStorageMember(memberName) readStorage(getStructMemberOffset(storageHeader_t, memberName), getStructMemberType(storageHeader_t, memberName))
 // Modifies a member of the storage space header.
-// "memberName" is the name of a member in storageSpaceHeader_t.
-#define setStorageSpaceMember(memberName, value) writeStorageSpace(getStructMemberOffset(storageSpaceHeader_t, memberName), getStructMemberType(storageSpaceHeader_t, memberName), value)
+// "memberName" is the name of a member in storageHeader_t.
+#define setStorageMember(memberName, value) writeStorage(getStructMemberOffset(storageHeader_t, memberName), getStructMemberType(storageHeader_t, memberName), value)
 
 // Retrieves the address of the first file in the linked list.
-#define getFirstFileAddress() getStorageSpaceMember(firstFileAddress)
+#define getFirstFileAddress() getStorageMember(firstFileAddress)
 
 // Retrieves a member of the file header at the given storage address.
 // "memberName" is the name of a member in fileHeader_t.
 #define getFileHeaderMember(address, memberName) \
-    readStorageSpace(address + getStructMemberOffset(fileHeader_t, memberName), getStructMemberType(fileHeader_t, memberName))
+    readStorage(address + getStructMemberOffset(fileHeader_t, memberName), getStructMemberType(fileHeader_t, memberName))
 // Modifies a member of the file header at the given storage address.
 // "memberName" is the name of a member in fileHeader_t.
 #define setFileHeaderMember(address, memberName, value) \
-    writeStorageSpace(address + getStructMemberOffset(fileHeader_t, memberName), getStructMemberType(fileHeader_t, memberName), value)
+    writeStorage(address + getStructMemberOffset(fileHeader_t, memberName), getStructMemberType(fileHeader_t, memberName), value)
 
 // Retrieves the name address of the given file.
 #define getFileNameAddress(fileAddress) (fileAddress + sizeof(fileHeader_t))
@@ -232,12 +232,12 @@
 // "runningApp" is an allocPointer_t to a runningApp_t.
 // "index" is the offset of first byte to read.
 #define readGlobalFrame(runningApp, index, type) \
-    readHeapMemory(getGlobalFrameDataAddress(runningApp) + index, type)
+    readHeapMem(getGlobalFrameDataAddress(runningApp) + index, type)
 // Writes a value to the global frame data region in the given running application.
 // "runningApp" is an allocPointer_t to a runningApp_t.
 // "index" is the offset of first byte to write.
 #define writeGlobalFrame(runningApp, index, type, value) \
-    writeHeapMemory(getGlobalFrameDataAddress(runningApp) + index, type, value)
+    writeHeapMem(getGlobalFrameDataAddress(runningApp) + index, type, value)
 
 // Retrieves a member of the local frame header in the given local frame.
 // "localFrame" is an allocPointer_t to a localFrame_t.
@@ -263,12 +263,12 @@
 // "localFrame" is an allocPointer_t to a localFrame_t.
 // "index" is the offset of first byte to read.
 #define readLocalFrame(localFrame, index, type) \
-    readHeapMemory(getLocalFrameDataAddress(localFrame) + index, type)
+    readHeapMem(getLocalFrameDataAddress(localFrame) + index, type)
 // Writes a value to the data region in the given local frame.
 // "localFrame" is an allocPointer_t to a localFrame_t.
 // "index" is the offset of first byte to write.
 #define writeLocalFrame(localFrame, index, type, value) \
-    writeHeapMemory(getLocalFrameDataAddress(localFrame) + index, type, value)
+    writeHeapMem(getLocalFrameDataAddress(localFrame) + index, type, value)
 
 // Retrieves a member of the argument frame header in the given argument frame.
 // "argFrame" is an allocPointer_t to an argFrame_t.
@@ -294,12 +294,12 @@
 // "argFrame" is an allocPointer_t to an argFrame_t.
 // "index" is the offset of first byte to read.
 #define readArgFrame(argFrame, index, type) \
-    readHeapMemory(getArgFrameDataAddress(argFrame) + index, type)
+    readHeapMem(getArgFrameDataAddress(argFrame) + index, type)
 // Writes a value to the data region in the given argument frame.
 // "argFrame" is an allocPointer_t to an argFrame_t.
 // "index" is the offset of first byte to write.
 #define writeArgFrame(argFrame, index, type, value) \
-    writeHeapMemory(getArgFrameDataAddress(argFrame) + index, type, value)
+    writeHeapMem(getArgFrameDataAddress(argFrame) + index, type, value)
 
 // Retrieves the argument frame which has been passed to the current function invocation.
 #define getPreviousArgFrame() ({ \
@@ -309,27 +309,27 @@
 // Deletes any argument frame which has been created by the current function invocation.
 #define cleanUpNextArgFrame() cleanUpNextArgFrameHelper(currentLocalFrame)
 
-// Helper macros coupled tightly to callFunction and functionIsGuarded.
-#define validateFunctionIndex(implementer, fileType, functionIndex, systemAppFunctionList, ...) { \
-    int32_t functionAmount; \
+// Helper macros coupled tightly to callFunc and funcIsGuarded.
+#define validateFuncIndex(implementer, fileType, funcIndex, systemAppFuncList, ...) { \
+    int32_t funcAmount; \
     if (fileType == BYTECODE_APP_FILE_TYPE) { \
-        functionAmount = getBytecodeGlobalFrameMember(implementer, functionTableLength); \
+        funcAmount = getBytecodeGlobalFrameMember(implementer, funcTableLength); \
     } else { \
         int8_t systemAppId = getSystemGlobalFrameMember(implementer, id); \
-        systemAppFunctionList = getSystemAppMember(systemAppId, functionList); \
-        functionAmount = getSystemAppMember(systemAppId, functionAmount); \
+        systemAppFuncList = getSystemAppMember(systemAppId, funcList); \
+        funcAmount = getSystemAppMember(systemAppId, funcAmount); \
     } \
-    if (functionIndex < 0 || functionIndex >= functionAmount) { \
+    if (funcIndex < 0 || funcIndex >= funcAmount) { \
         throw(INDEX_ERR_CODE, __VA_ARGS__); \
     } \
 }
-#define functionIsGuardedHelper(destination, fileHandle, fileType, functionIndex, systemAppFunctionList) \
+#define funcIsGuardedHelper(destination, fileHandle, fileType, funcIndex, systemAppFuncList) \
     if (fileType == BYTECODE_APP_FILE_TYPE) { \
-        destination = getBytecodeFunctionMember(fileHandle, functionIndex, isGuarded); \
+        destination = getBytecodeFuncMember(fileHandle, funcIndex, isGuarded); \
     } else { \
-        destination = getSystemAppFunctionListMember( \
-            systemAppFunctionList, \
-            functionIndex, \
+        destination = getSystemAppFuncListMember( \
+            systemAppFuncList, \
+            funcIndex, \
             isGuarded \
         ); \
     }
@@ -343,14 +343,14 @@
 // Reads a value from the function table of a bytecode app.
 // "fileHandle" is an allocPointer_t to a fileHandle_t.
 // "index" is the offset of first byte to read.
-#define readBytecodeFunctionTable(fileHandle, index, type) \
+#define readBytecodeFuncTable(fileHandle, index, type) \
     readFile(fileHandle, sizeof(bytecodeAppHeader_t) + index, type)
 
 // Retrieves a member from a function in the given bytecode application.
 // "fileHandle" is an allocPointer_t to a fileHandle_t.
-// "memberName" is the name of a member in bytecodeFunction_t
-#define getBytecodeFunctionMember(fileHandle, functionIndex, memberName) \
-    readBytecodeFunctionTable(fileHandle, functionIndex * sizeof(bytecodeFunction_t) + getStructMemberOffset(bytecodeFunction_t, memberName), getStructMemberType(bytecodeFunction_t, memberName))
+// "memberName" is the name of a member in bytecodeFunc_t
+#define getBytecodeFuncMember(fileHandle, funcIndex, memberName) \
+    readBytecodeFuncTable(fileHandle, funcIndex * sizeof(bytecodeFunc_t) + getStructMemberOffset(bytecodeFunc_t, memberName), getStructMemberType(bytecodeFunc_t, memberName))
 
 // Retrieves a member from the global frame header belonging to the given bytecode application.
 // "runningApp" is an allocPointer_t to a runningApp_t.
@@ -450,25 +450,25 @@
 });
 
 // Convenience function to create a system application.
-// "systemAppFunctionArray" is a fixed array of systemAppFunction_t.
-#define createSystemApp(globalFrameSize, systemAppFunctionArray) \
-    (systemApp_t){globalFrameSize, systemAppFunctionArray, getArrayLength(systemAppFunctionArray)}
+// "systemAppFuncArray" is a fixed array of systemAppFunc_t.
+#define createSystemApp(globalFrameSize, systemAppFuncArray) \
+    (systemApp_t){globalFrameSize, systemAppFuncArray, getArrayLength(systemAppFuncArray)}
 
 // Retrieves a member from the system application with the given ID.
 // "memberName" is the name of a member in systemApp_t.
 #define getSystemAppMember(id, memberName) \
     readFixedArrayValue(systemAppArray, id * sizeof(systemApp_t) + getStructMemberOffset(systemApp_t, memberName), getStructMemberType(systemApp_t, memberName))
-// "systemAppFunctionArray" is a fixed array of systemAppFunction_t.
-// "index" is the index of function in "systemAppFunctionArray".
-// "memberName" is the name of a member in systemAppFunction_t.
-#define getSystemAppFunctionListMember(systemAppFunctionArray, index, memberName) \
-    readFixedArrayValue(systemAppFunctionArray, index * sizeof(systemAppFunction_t) + getStructMemberOffset(systemAppFunction_t, memberName), getStructMemberType(systemAppFunction_t, memberName))
+// "systemAppFuncArray" is a fixed array of systemAppFunc_t.
+// "index" is the index of function in "systemAppFuncArray".
+// "memberName" is the name of a member in systemAppFunc_t.
+#define getSystemAppFuncListMember(systemAppFuncArray, index, memberName) \
+    readFixedArrayValue(systemAppFuncArray, index * sizeof(systemAppFunc_t) + getStructMemberOffset(systemAppFunc_t, memberName), getStructMemberType(systemAppFunc_t, memberName))
 // Retrieves a member from a function belonging to the system application with the given ID.
-// "index" is the index of function in functionList of systemApp_t.
-// "memberName" is the name of a member in systemAppFunction_t.
-#define getSystemAppFunctionMember(id, index, memberName) ({ \
-    const systemAppFunction_t *functionList = getSystemAppMember(id, functionList); \
-    getSystemAppFunctionListMember(functionList, index, memberName); \
+// "index" is the index of function in funcList of systemApp_t.
+// "memberName" is the name of a member in systemAppFunc_t.
+#define getSystemAppFuncMember(id, index, memberName) ({ \
+    const systemAppFunc_t *funcList = getSystemAppMember(id, funcList); \
+    getSystemAppFuncListMember(funcList, index, memberName); \
 })
 
 // Retrieves a member from the global frame header belonging to the given system application.
@@ -491,22 +491,22 @@
 // "runningApp" is an allocPointer_t to a runningApp_t.
 // "index" is the offset of first byte to read.
 #define readSystemGlobalFrame(runningApp, index, type) \
-    readHeapMemory(getSystemGlobalFrameDataAddress(runningApp) + index, type)
+    readHeapMem(getSystemGlobalFrameDataAddress(runningApp) + index, type)
 // Writes a value to the global frame data region belonging to the given system application.
 // "runningApp" is an allocPointer_t to a runningApp_t.
 // "index" is the offset of first byte to write.
 #define writeSystemGlobalFrame(runningApp, index, type, value) \
-    writeHeapMemory(getSystemGlobalFrameDataAddress(runningApp) + index, type, value)
+    writeHeapMem(getSystemGlobalFrameDataAddress(runningApp) + index, type, value)
 
 // Reads a global variable of the currently active system application.
 // "structDefinition" is the structure of global frame data region.
 // "memberName" is the name of a member in "structDefinition".
-#define readSystemAppGlobalVariable(structDefinition, memberName) \
+#define readSystemAppGlobalVar(structDefinition, memberName) \
     readSystemGlobalFrame(currentImplementer, getStructMemberOffset(structDefinition, memberName), getStructMemberType(structDefinition, memberName))
 // Writes a global variable of the currently active system application.
 // "structDefinition" is the structure of global frame data region.
 // "memberName" is the name of a member in "structDefinition".
-#define writeSystemAppGlobalVariable(structDefinition, memberName, value) \
+#define writeSystemAppGlobalVar(structDefinition, memberName, value) \
     writeSystemGlobalFrame(currentImplementer, getStructMemberOffset(structDefinition, memberName), getStructMemberType(structDefinition, memberName), value)
 
 // Retrieves a member from the given system application.
@@ -518,25 +518,25 @@
 })
 // Retrieves a member from a function belonging to the given system application.
 // "runningApp" is an allocPointer_t to a runningApp_t.
-// "index" is the index of function in functionList of systemApp_t.
-// "memberName" is the name of a member in systemAppFunction_t.
-#define getRunningSystemAppFunctionMember(runningApp, functionIndex, memberName) ({ \
+// "index" is the index of function in funcList of systemApp_t.
+// "memberName" is the name of a member in systemAppFunc_t.
+#define getRunningSystemAppFuncMember(runningApp, funcIndex, memberName) ({ \
     int8_t systemAppId = getSystemGlobalFrameMember(runningApp, id); \
-    getSystemAppFunctionMember(systemAppId, functionIndex, memberName); \
+    getSystemAppFuncMember(systemAppId, funcIndex, memberName); \
 })
 
 // Retrieves a global variable of a term driver.
 // "memberName" is the name of a member in termAppGlobalFrame_t.
-#define readTermAppGlobalVariable(memberName) \
-    readSystemAppGlobalVariable(termAppGlobalFrame_t, memberName)
+#define readTermAppGlobalVar(memberName) \
+    readSystemAppGlobalVar(termAppGlobalFrame_t, memberName)
 // Modifies a global variable of a term driver.
 // "memberName" is the name of a member in termAppGlobalFrame_t.
-#define writeTermAppGlobalVariable(memberName, value) \
-    writeSystemAppGlobalVariable(termAppGlobalFrame_t, memberName, value)
+#define writeTermAppGlobalVar(memberName, value) \
+    writeSystemAppGlobalVar(termAppGlobalFrame_t, memberName, value)
 
 // Creates a heap allocation.
 // "size" is the size of data region in the new allocation.
-allocPointer_t createAlloc(int8_t type, heapMemoryOffset_t size);
+allocPointer_t createAlloc(int8_t type, heapMemOffset_t size);
 // Frees the given heap allocation.
 int8_t deleteAlloc(allocPointer_t pointer);
 // Verifies whether the given pointer is valid. May set unhandledErrorCode to NULL_ERR_CODE or PTR_ERR_CODE.
@@ -545,7 +545,7 @@ void validateAllocPointer(allocPointer_t pointer);
 // Returns an allocPointer_t to a dynamicAlloc_t.
 allocPointer_t createDynamicAlloc(
     // Number of bytes in the data region of the new dynamic allocation.
-    heapMemoryOffset_t size,
+    heapMemOffset_t size,
     int8_t attributes,
     // Pointer to runningApp_t.
     allocPointer_t creator
@@ -554,23 +554,23 @@ allocPointer_t createDynamicAlloc(
 allocPointer_t createStringAllocFromFixedArrayHelper(
     // Fixed array of characters.
     const int8_t *fixedArray,
-    heapMemoryOffset_t size
+    heapMemOffset_t size
 );
 // Verifies whether the given pointer references a valid dynamic allocation. May assign a new value to unhandledErrorCode.
 // "dynamicAlloc" is a pointer to dynamicAlloc_t.
 void validateDynamicAlloc(allocPointer_t dynamicAlloc);
 
 // Determines whether a file name in heap memory equals a file name in storage.
-int8_t memoryNameEqualsStorageName(
-    heapMemoryOffset_t memoryNameAddress,
-    uint8_t memoryNameSize,
+int8_t heapMemNameEqualsStorageName(
+    heapMemOffset_t heapMemNameAddress,
+    uint8_t heapMemNameSize,
     storageOffset_t storageNameAddress,
     uint8_t storageNameSize
 );
 // Copies a file name from storage to heap memory.
-void copyStorageNameToMemory(
+void copyStorageNameToHeapMem(
     storageOffset_t storageNameAddress,
-    heapMemoryOffset_t memoryNameAddress,
+    heapMemOffset_t heapMemNameAddress,
     uint8_t nameSize
 );
 
@@ -587,13 +587,13 @@ void createFile(
 void deleteFile(allocPointer_t fileHandle);
 // Finds the address of the file with the given name. Returns MISSING_FILE_ADDRESS if the file cannot be found.
 storageOffset_t getFileAddressByName(
-    heapMemoryOffset_t nameAddress,
-    heapMemoryOffset_t nameSize
+    heapMemOffset_t nameAddress,
+    heapMemOffset_t nameSize
 );
 // Determines the total amount of storage space which the given file occupies.
 storageOffset_t getFileStorageSize(storageOffset_t fileAddress);
 // Opens the file with the given name, returning a file handle. If the file has already been opened, this function returns the existing file handle and increments its open depth. If the file is missing, this function returns NULL_ALLOC_POINTER.
-allocPointer_t openFile(heapMemoryOffset_t nameAddress, heapMemoryOffset_t nameSize);
+allocPointer_t openFile(heapMemOffset_t nameAddress, heapMemOffset_t nameSize);
 // Deletes the given file handle, and kills any running app launched from the file.
 // "fileHandle" is a pointer to a dynamicAlloc_t.
 void deleteFileHandle(allocPointer_t fileHandle);
@@ -626,14 +626,14 @@ void validateFileHandle(allocPointer_t fileHandle);
 
 // Retrieves an index in the function table of the given running application.
 // "runningApp" is a pointer to a runningApp_t.
-int32_t findFunctionById(allocPointer_t runningApp, int32_t functionId);
+int32_t findFuncById(allocPointer_t runningApp, int32_t funcId);
 // Retrieves the running application which implements the caller of the currently active function invocation.
 // Returns a pointer to a runningApp_t.
 allocPointer_t getCurrentCaller();
 // Creates an argument frame to be passed to the next function invocation.
 // "size" is the size of data region in the new argument frame.
 // Returns a pointer to a argFrame_t.
-allocPointer_t createNextArgFrame(heapMemoryOffset_t size);
+allocPointer_t createNextArgFrame(heapMemOffset_t size);
 // "localFrame" is a pointer to a localFrame_t.
 void cleanUpNextArgFrameHelper(allocPointer_t localFrame);
 // Finds the lowest local frame in the given thread whose function is implemented by runningApp.
@@ -657,28 +657,28 @@ void hardKillApp(allocPointer_t runningApp, int8_t errorCode);
 
 // Determines whether the given function is guarded.
 // "implementer" is a pointer to a runningApp_t.
-// "functionIndex" is the index of the function in "implementer".
-int8_t functionIsGuarded(allocPointer_t implementer, int32_t functionIndex);
+// "funcIndex" is the index of the function in "implementer".
+int8_t funcIsGuarded(allocPointer_t implementer, int32_t funcIndex);
 // Invokes a function in the given thread.
 // "thread" is a pointer to a thread_t.
 // "implementer" is a pointer to a runningApp_t.
-// "functionIndex" is the index of the function in "implementer".
+// "funcIndex" is the index of the function in "implementer".
 // "shouldCheckPerm" determines whether to check the permission of the current function implementer to invoke the given function.
-void callFunction(
+void callFunc(
     allocPointer_t thread,
     allocPointer_t implementer,
-    int32_t functionIndex,
+    int32_t funcIndex,
     int8_t shouldCheckPerm
 );
 void setCurrentLocalFrame(allocPointer_t localFrame);
 // Stops evaluation of the current function invocation, and returns control to the previous function invocation.
-void returnFromFunction();
+void returnFromFunc();
 
 // Invokes the given function in a new thread, if the function exists.
 // "runningApp" is a pointer to a runningApp_t.
-// "functionId" is the ID of a function which runningApp implements.
+// "funcId" is the ID of a function which runningApp implements.
 // Returns whether the function exists in the running app.
-int8_t createThread(allocPointer_t runningApp, int32_t functionId);
+int8_t createThread(allocPointer_t runningApp, int32_t funcId);
 // Deletes the given thread.
 // "thread" is a pointer to a thread_t.
 void deleteThread(allocPointer_t thread);

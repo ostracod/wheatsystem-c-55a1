@@ -2,7 +2,7 @@
 #include "./headers.h"
 
 allocPointer_t firstAlloc;
-heapMemoryOffset_t heapMemorySizeLeft;
+heapMemOffset_t heapMemSizeLeft;
 allocPointer_t firstThread;
 allocPointer_t firstRunningApp;
 int16_t killStatesDelay;

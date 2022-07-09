@@ -1,16 +1,16 @@
 
 #include "./headers.h"
 
-allocPointer_t createAlloc(int8_t type, heapMemoryOffset_t size) {
+allocPointer_t createAlloc(int8_t type, heapMemOffset_t size) {
     
-    heapMemoryOffset_t sizeWithHeader = sizeof(allocHeader_t) + size;
-    heapMemoryOffset_t startAddress = 0;
+    heapMemOffset_t sizeWithHeader = sizeof(allocHeader_t) + size;
+    heapMemOffset_t startAddress = 0;
     allocPointer_t previousPointer = NULL_ALLOC_POINTER;
     allocPointer_t nextPointer = firstAlloc;
     
     // Find a gap which is large enough for the new allocation.
     while (nextPointer != NULL_ALLOC_POINTER) {
-        heapMemoryOffset_t endAddress = convertPointerToAddress(nextPointer);
+        heapMemOffset_t endAddress = convertPointerToAddress(nextPointer);
         if (endAddress - startAddress >= sizeWithHeader) {
             break;
         }
@@ -20,8 +20,8 @@ allocPointer_t createAlloc(int8_t type, heapMemoryOffset_t size) {
     }
     
     // Throw an error if there is not enough free memory.
-    heapMemoryOffset_t endAddress = startAddress + sizeWithHeader;
-    if (endAddress > HEAP_MEMORY_SIZE || endAddress < 0) {
+    heapMemOffset_t endAddress = startAddress + sizeWithHeader;
+    if (endAddress > HEAP_MEM_SIZE || endAddress < 0) {
         throw(CAPACITY_ERR_CODE, NULL_ALLOC_POINTER);
     }
     
@@ -30,7 +30,7 @@ allocPointer_t createAlloc(int8_t type, heapMemoryOffset_t size) {
     setAllocMember(output, type, type);
     setAllocMember(output, size, size);
     setAllocMember(output, next, nextPointer);
-    heapMemorySizeLeft -= sizeWithHeader;
+    heapMemSizeLeft -= sizeWithHeader;
     
     // Update previous allocation or firstAlloc.
     if (previousPointer == NULL_ALLOC_POINTER) {
@@ -63,7 +63,7 @@ int8_t deleteAlloc(allocPointer_t pointer) {
     
     // Update previous allocation or firstAlloc to
     // point to the next allocation.
-    heapMemorySizeLeft += getAllocSizeWithHeader(pointer);
+    heapMemSizeLeft += getAllocSizeWithHeader(pointer);
     if (previousPointer == NULL_ALLOC_POINTER) {
         firstAlloc = nextPointer;
     } else {
@@ -88,7 +88,7 @@ void validateAllocPointer(allocPointer_t pointer) {
 }
 
 allocPointer_t createDynamicAlloc(
-    heapMemoryOffset_t size,
+    heapMemOffset_t size,
     int8_t attributes,
     allocPointer_t creator
 ) {
@@ -99,7 +99,7 @@ allocPointer_t createDynamicAlloc(
     checkUnhandledError(NULL_ALLOC_POINTER);
     setDynamicAllocMember(output, attributes, attributes);
     setDynamicAllocMember(output, creator, creator);
-    for (heapMemoryOffset_t index = 0; index < size; index++) {
+    for (heapMemOffset_t index = 0; index < size; index++) {
         writeDynamicAlloc(output, index, int8_t, 0);
     }
     return output;
@@ -107,11 +107,11 @@ allocPointer_t createDynamicAlloc(
 
 allocPointer_t createStringAllocFromFixedArrayHelper(
     const int8_t *fixedArray,
-    heapMemoryOffset_t size
+    heapMemOffset_t size
 ) {
     allocPointer_t output = createDynamicAlloc(size, GUARDED_ALLOC_ATTR, NULL_ALLOC_POINTER);
     checkUnhandledError(NULL_ALLOC_POINTER);
-    for (heapMemoryOffset_t index = 0; index < size; index++) {
+    for (heapMemOffset_t index = 0; index < size; index++) {
         int8_t character = readFixedArrayElement(fixedArray, index);
         writeDynamicAlloc(output, index, int8_t, character);
     }
@@ -126,18 +126,18 @@ void validateDynamicAlloc(allocPointer_t dynamicAlloc) {
     }
 }
 
-int8_t memoryNameEqualsStorageName(
-    heapMemoryOffset_t memoryNameAddress,
-    uint8_t memoryNameSize,
+int8_t heapMemNameEqualsStorageName(
+    heapMemOffset_t heapMemNameAddress,
+    uint8_t heapMemNameSize,
     storageOffset_t storageNameAddress,
     uint8_t storageNameSize
 ) {
-    if (memoryNameSize != storageNameSize) {
+    if (heapMemNameSize != storageNameSize) {
         return false;
     }
-    for (uint8_t index = 0; index < memoryNameSize; index++) {
-        int8_t character1 = readHeapMemory(memoryNameAddress + index, int8_t);
-        int8_t character2 = readStorageSpace(storageNameAddress + index, int8_t);
+    for (uint8_t index = 0; index < heapMemNameSize; index++) {
+        int8_t character1 = readHeapMem(heapMemNameAddress + index, int8_t);
+        int8_t character2 = readStorage(storageNameAddress + index, int8_t);
         if (character1 != character2) {
             return false;
         }
@@ -145,14 +145,14 @@ int8_t memoryNameEqualsStorageName(
     return true;
 }
 
-void copyStorageNameToMemory(
+void copyStorageNameToHeapMem(
     storageOffset_t storageNameAddress,
-    heapMemoryOffset_t memoryNameAddress,
+    heapMemOffset_t heapMemNameAddress,
     uint8_t nameSize
 ) {
     for (uint8_t index = 0; index < nameSize; index++) {
-        int8_t character = readStorageSpace(storageNameAddress + index, int8_t);
-        writeHeapMemory(memoryNameAddress + index, int8_t, character);
+        int8_t character = readStorage(storageNameAddress + index, int8_t);
+        writeHeapMem(heapMemNameAddress + index, int8_t, character);
     }
 }
 
@@ -164,8 +164,8 @@ void createFile(
 ) {
     
     // Verify argument values.
-    heapMemoryOffset_t nameAllocAddress = getDynamicAllocDataAddress(name);
-    heapMemoryOffset_t nameSize = getDynamicAllocSize(name);
+    heapMemOffset_t nameAllocAddress = getDynamicAllocDataAddress(name);
+    heapMemOffset_t nameSize = getDynamicAllocSize(name);
     if (nameSize > 127) {
         throw(DATA_ERR_CODE);
     }
@@ -187,11 +187,11 @@ void createFile(
         if (newFileAddress == MISSING_FILE_ADDRESS) {
             storageOffset_t startAddress;
             if (previousFileAddress == MISSING_FILE_ADDRESS) {
-                startAddress = sizeof(storageSpaceHeader_t);
+                startAddress = sizeof(storageHeader_t);
             } else {
                 startAddress = previousFileAddress + getFileStorageSize(previousFileAddress);
             }
-            storageOffset_t endAddress = hasReachedEnd ? STORAGE_SPACE_SIZE : nextFileAddress;
+            storageOffset_t endAddress = hasReachedEnd ? STORAGE_SIZE : nextFileAddress;
             if (endAddress - startAddress >= fileStorageSize) {
                 newFileAddress = startAddress;
             }
@@ -199,7 +199,7 @@ void createFile(
         if (hasReachedEnd) {
             break;
         }
-        if (memoryNameEqualsStorageName(
+        if (heapMemNameEqualsStorageName(
             nameAllocAddress,
             nameSize,
             getFileNameAddress(nextFileAddress),
@@ -216,7 +216,7 @@ void createFile(
     
     // Update file linked list.
     if (previousFileAddress == MISSING_FILE_ADDRESS) {
-        setStorageSpaceMember(firstFileAddress, newFileAddress);
+        setStorageMember(firstFileAddress, newFileAddress);
     } else {
         setFileHeaderMember(previousFileAddress, next, newFileAddress);
     }
@@ -233,13 +233,13 @@ void createFile(
     storageOffset_t nameAddress = newFileAddress + sizeof(fileHeader_t);
     for (uint8_t offset = 0; offset < nameSize; offset++) {
         int8_t character = readDynamicAlloc(name, offset, int8_t);
-        writeStorageSpace(nameAddress + offset, int8_t, character);
+        writeStorage(nameAddress + offset, int8_t, character);
     }
     storageOffset_t contentAddress = nameAddress + nameSize;
     for (storageOffset_t offset = 0; offset < contentSize; offset++) {
-        writeStorageSpace(contentAddress + offset, int8_t, 0);
+        writeStorage(contentAddress + offset, int8_t, 0);
     }
-    flushStorageSpace();
+    flushStorage();
 }
 
 void deleteFile(allocPointer_t fileHandle) {
@@ -263,21 +263,21 @@ void deleteFile(allocPointer_t fileHandle) {
     
     // Delete the file.
     if (previousFileAddress == MISSING_FILE_ADDRESS) {
-        setStorageSpaceMember(firstFileAddress, nextFileAddress);
+        setStorageMember(firstFileAddress, nextFileAddress);
     } else {
         setFileHeaderMember(previousFileAddress, next, nextFileAddress);
     }
-    flushStorageSpace();
+    flushStorage();
     deleteFileHandle(fileHandle);
 }
 
 storageOffset_t getFileAddressByName(
-    heapMemoryOffset_t nameAddress,
-    heapMemoryOffset_t nameSize
+    heapMemOffset_t nameAddress,
+    heapMemOffset_t nameSize
 ) {
     storageOffset_t fileAddress = getFirstFileAddress();
     while (fileAddress != MISSING_FILE_ADDRESS) {
-        if (memoryNameEqualsStorageName(
+        if (heapMemNameEqualsStorageName(
             nameAddress,
             nameSize,
             getFileNameAddress(fileAddress),
@@ -296,7 +296,7 @@ storageOffset_t getFileStorageSize(storageOffset_t fileAddress) {
     return getFileStorageSizeHelper(nameSize, contentSize);
 }
 
-allocPointer_t openFile(heapMemoryOffset_t nameAddress, heapMemoryOffset_t nameSize) {
+allocPointer_t openFile(heapMemOffset_t nameAddress, heapMemOffset_t nameSize) {
     
     // Return matching file handle if it already exists.
     allocPointer_t nextPointer = firstAlloc;
@@ -306,7 +306,7 @@ allocPointer_t openFile(heapMemoryOffset_t nameAddress, heapMemoryOffset_t nameS
         if (!allocIsFileHandle(pointer)) {
             continue;
         }
-        if (!memoryNameEqualsStorageName(
+        if (!heapMemNameEqualsStorageName(
             nameAddress,
             nameSize,
             getFileNameAddress(getFileHandleMember(pointer, address)),
@@ -366,7 +366,7 @@ void deleteFileHandleIfUnused(allocPointer_t fileHandle) {
 }
 
 void closeFile(allocPointer_t fileHandle) {
-    flushStorageSpace();
+    flushStorage();
     int8_t openDepth = getFileHandleMember(fileHandle, openDepth);
     setFileHandleMember(fileHandle, openDepth, openDepth - 1);
     deleteFileHandleIfUnused(fileHandle);
@@ -379,7 +379,7 @@ void readFileRange(
     storageOffset_t amount
 ) {
     storageOffset_t address = getFileHandleDataAddress(fileHandle) + pos;
-    readStorageSpaceRange(destination, address, amount);
+    readStorageRange(destination, address, amount);
 }
 
 allocPointer_t getAllFileNames() {
@@ -417,7 +417,7 @@ allocPointer_t getAllFileNames() {
             deleteAlloc(output);
             return NULL_ALLOC_POINTER;
         }
-        copyStorageNameToMemory(
+        copyStorageNameToHeapMem(
             getFileNameAddress(fileAddress),
             getDynamicAllocDataAddress(nameAlloc),
             nameSize
@@ -430,8 +430,8 @@ allocPointer_t getAllFileNames() {
 }
 
 allocPointer_t openFileByStringAlloc(allocPointer_t stringAlloc) {
-    heapMemoryOffset_t address = getDynamicAllocDataAddress(stringAlloc);
-    heapMemoryOffset_t size = getDynamicAllocSize(stringAlloc);
+    heapMemOffset_t address = getDynamicAllocDataAddress(stringAlloc);
+    heapMemOffset_t size = getDynamicAllocSize(stringAlloc);
     return openFile(address, (uint8_t)size);
 }
 
@@ -449,30 +449,30 @@ void validateFileHandle(allocPointer_t fileHandle) {
     }
 }
 
-int32_t findFunctionById(allocPointer_t runningApp, int32_t functionId) {
+int32_t findFuncById(allocPointer_t runningApp, int32_t funcId) {
     allocPointer_t fileHandle = getRunningAppMember(runningApp, fileHandle);
     int8_t fileType = getFileHandleType(fileHandle);
     if (fileType == BYTECODE_APP_FILE_TYPE) {
-        int32_t functionTableLength = getBytecodeGlobalFrameMember(
+        int32_t funcTableLength = getBytecodeGlobalFrameMember(
             runningApp,
-            functionTableLength
+            funcTableLength
         );
-        for (int32_t index = 0; index < functionTableLength; index++) {
-            int32_t tempId = getBytecodeFunctionMember(fileHandle, index, functionId);
-            if (tempId == functionId) {
+        for (int32_t index = 0; index < funcTableLength; index++) {
+            int32_t tempId = getBytecodeFuncMember(fileHandle, index, funcId);
+            if (tempId == funcId) {
                 return index;
             }
         }
     } else if (fileType == SYSTEM_APP_FILE_TYPE) {
         int8_t systemAppId = getSystemGlobalFrameMember(runningApp, id);
-        const systemAppFunction_t *functionList = getSystemAppMember(
+        const systemAppFunc_t *funcList = getSystemAppMember(
             systemAppId,
-            functionList
+            funcList
         );
-        int8_t functionAmount = getSystemAppMember(systemAppId, functionAmount);
-        for (int8_t index = 0; index < functionAmount; index++) {
-            int8_t tempId = getSystemAppFunctionListMember(functionList, index, id);
-            if (tempId == functionId) {
+        int8_t funcAmount = getSystemAppMember(systemAppId, funcAmount);
+        for (int8_t index = 0; index < funcAmount; index++) {
+            int8_t tempId = getSystemAppFuncListMember(funcList, index, id);
+            if (tempId == funcId) {
                 return index;
             }
         }
@@ -491,7 +491,7 @@ allocPointer_t getCurrentCaller() {
     return getLocalFrameMember(previousLocalFrame, implementer);
 }
 
-allocPointer_t createNextArgFrame(heapMemoryOffset_t size) {
+allocPointer_t createNextArgFrame(heapMemOffset_t size) {
     cleanUpNextArgFrame();
     allocPointer_t output = createAlloc(
         ARG_FRAME_ALLOC_TYPE,
@@ -499,7 +499,7 @@ allocPointer_t createNextArgFrame(heapMemoryOffset_t size) {
     );
     checkUnhandledError(NULL_ALLOC_POINTER);
     setArgFrameMember(output, thread, currentThread);
-    for (heapMemoryOffset_t index = 0; index < size; index++) {
+    for (heapMemOffset_t index = 0; index < size; index++) {
         writeArgFrame(output, index, int8_t, 0);
     }
     setLocalFrameMember(currentLocalFrame, nextArgFrame, output);
@@ -535,31 +535,31 @@ void launchApp(allocPointer_t fileHandle) {
     }
     int8_t fileType = getFileHandleType(fileHandle);
     storageOffset_t fileSize = getFileHandleMember(fileHandle, contentSize);
-    int32_t functionTableLength;
+    int32_t funcTableLength;
     int32_t appDataFilePos;
     int8_t systemAppId;
     
     // Determine global frame size.
-    heapMemoryOffset_t globalFrameSize;
+    heapMemOffset_t globalFrameSize;
     if (fileType == BYTECODE_APP_FILE_TYPE) {
         
         // Validate bytecode app file.
         if (fileSize < sizeof(bytecodeAppHeader_t)) {
             throw(DATA_ERR_CODE);
         }
-        functionTableLength = getBytecodeAppMember(fileHandle, functionTableLength);
+        funcTableLength = getBytecodeAppMember(fileHandle, funcTableLength);
         appDataFilePos = getBytecodeAppMember(fileHandle, appDataFilePos);
-        int32_t expectedFilePos = sizeof(bytecodeAppHeader_t) + functionTableLength * sizeof(bytecodeFunction_t);
+        int32_t expectedFilePos = sizeof(bytecodeAppHeader_t) + funcTableLength * sizeof(bytecodeFunc_t);
         if (expectedFilePos > fileSize) {
             throw(DATA_ERR_CODE);
         }
-        for (int32_t index = 0; index < functionTableLength; index++) {
-            int32_t instructionBodyFilePos = getBytecodeFunctionMember(
+        for (int32_t index = 0; index < funcTableLength; index++) {
+            int32_t instructionBodyFilePos = getBytecodeFuncMember(
                 fileHandle,
                 index,
                 instructionBodyFilePos
             );
-            int32_t instructionBodySize = getBytecodeFunctionMember(
+            int32_t instructionBodySize = getBytecodeFuncMember(
                 fileHandle,
                 index,
                 instructionBodySize
@@ -573,7 +573,7 @@ void launchApp(allocPointer_t fileHandle) {
             throw(DATA_ERR_CODE);
         }
         
-        globalFrameSize = sizeof(bytecodeGlobalFrameHeader_t) + (heapMemoryOffset_t)getBytecodeAppMember(fileHandle, globalFrameSize);
+        globalFrameSize = sizeof(bytecodeGlobalFrameHeader_t) + (heapMemOffset_t)getBytecodeAppMember(fileHandle, globalFrameSize);
     } else if (fileType == SYSTEM_APP_FILE_TYPE) {
         
         // Validate system app file.
@@ -606,11 +606,11 @@ void launchApp(allocPointer_t fileHandle) {
     setFileHandleMember(fileHandle, initErr, NONE_ERR_CODE);
     
     // Initialize global frame.
-    for (heapMemoryOffset_t index = 0; index < globalFrameSize; index++) {
+    for (heapMemOffset_t index = 0; index < globalFrameSize; index++) {
         writeGlobalFrame(runningApp, index, int8_t, 0);
     }
     if (fileType == BYTECODE_APP_FILE_TYPE) {
-        setBytecodeGlobalFrameMember(runningApp, functionTableLength, functionTableLength);
+        setBytecodeGlobalFrameMember(runningApp, funcTableLength, funcTableLength);
         setBytecodeGlobalFrameMember(runningApp, appDataFilePos, appDataFilePos);
         setBytecodeGlobalFrameMember(runningApp, appDataSize, fileSize - appDataFilePos);
     } else {
@@ -676,7 +676,7 @@ void hardKillApp(allocPointer_t runningApp, int8_t errorCode) {
         setCurrentThread(tempThread);
         while (currentLocalFrame != NULL_ALLOC_POINTER) {
             allocPointer_t localFrame = currentLocalFrame;
-            returnFromFunction();
+            returnFromFunc();
             if (localFrame == bottomFrame) {
                 break;
             }
@@ -716,47 +716,47 @@ void hardKillApp(allocPointer_t runningApp, int8_t errorCode) {
     deleteAlloc(runningApp);
 }
 
-int8_t functionIsGuarded(allocPointer_t implementer, int32_t functionIndex) {
+int8_t funcIsGuarded(allocPointer_t implementer, int32_t funcIndex) {
     allocPointer_t fileHandle = getRunningAppMember(implementer, fileHandle);
     int8_t fileType = getFileHandleType(fileHandle);
-    const systemAppFunction_t *systemAppFunctionList;
-    validateFunctionIndex(implementer, fileType, functionIndex, systemAppFunctionList, false);
+    const systemAppFunc_t *systemAppFuncList;
+    validateFuncIndex(implementer, fileType, funcIndex, systemAppFuncList, false);
     int8_t output;
-    functionIsGuardedHelper(
+    funcIsGuardedHelper(
         output,
         fileHandle,
         fileType,
-        functionIndex,
-        systemAppFunctionList
+        funcIndex,
+        systemAppFuncList
     );
     return output;
 }
 
-void callFunction(
+void callFunc(
     allocPointer_t thread,
     allocPointer_t implementer,
-    int32_t functionIndex,
+    int32_t funcIndex,
     int8_t shouldCheckPerm
 ) {
     
     allocPointer_t fileHandle = getRunningAppMember(implementer, fileHandle);
     int8_t fileType = getFileHandleType(fileHandle);
     allocPointer_t previousLocalFrame = getThreadMember(thread, localFrame);
-    const systemAppFunction_t *systemAppFunctionList;
+    const systemAppFunc_t *systemAppFuncList;
     
     // Validate function index.
-    validateFunctionIndex(implementer, fileType, functionIndex, systemAppFunctionList);
+    validateFuncIndex(implementer, fileType, funcIndex, systemAppFuncList);
     
     // Validate current implementer permission.
     if (shouldCheckPerm && currentImplementer != implementer
             && !currentImplementerHasAdminPerm()) {
         int8_t isGuarded;
-        functionIsGuardedHelper(
+        funcIsGuardedHelper(
             isGuarded,
             fileHandle,
             fileType,
-            functionIndex,
-            systemAppFunctionList
+            funcIndex,
+            systemAppFuncList
         );
         if (isGuarded) {
             throw(PERM_ERR_CODE);
@@ -766,11 +766,11 @@ void callFunction(
     // Validate arg frame size.
     int32_t argFrameSize;
     if (fileType == BYTECODE_APP_FILE_TYPE) {
-        argFrameSize = getBytecodeFunctionMember(fileHandle, functionIndex, argFrameSize);
+        argFrameSize = getBytecodeFuncMember(fileHandle, funcIndex, argFrameSize);
     } else {
-        argFrameSize = getSystemAppFunctionListMember(
-            systemAppFunctionList,
-            functionIndex,
+        argFrameSize = getSystemAppFuncListMember(
+            systemAppFuncList,
+            funcIndex,
             argFrameSize
         );
     }
@@ -788,16 +788,16 @@ void callFunction(
     }
     
     // Determine local frame size.
-    heapMemoryOffset_t localVarsStartIndex;
-    heapMemoryOffset_t localVarsSize;
+    heapMemOffset_t localVarsStartIndex;
+    heapMemOffset_t localVarsSize;
     if (fileType == BYTECODE_APP_FILE_TYPE) {
         localVarsStartIndex = sizeof(bytecodeLocalFrameHeader_t);
-        localVarsSize = (heapMemoryOffset_t)getBytecodeFunctionMember(fileHandle, functionIndex, localFrameSize);
+        localVarsSize = (heapMemOffset_t)getBytecodeFuncMember(fileHandle, funcIndex, localFrameSize);
     } else {
         localVarsStartIndex = 0;
-        localVarsSize = getSystemAppFunctionListMember(
-            systemAppFunctionList,
-            functionIndex,
+        localVarsSize = getSystemAppFuncListMember(
+            systemAppFuncList,
+            funcIndex,
             localFrameSize
         );
     }
@@ -816,7 +816,7 @@ void callFunction(
     checkUnhandledError();
     setLocalFrameMember(localFrame, thread, thread);
     setLocalFrameMember(localFrame, implementer, implementer);
-    setLocalFrameMember(localFrame, functionIndex, functionIndex);
+    setLocalFrameMember(localFrame, funcIndex, funcIndex);
     setLocalFrameMember(localFrame, previousLocalFrame, previousLocalFrame);
     setLocalFrameMember(localFrame, nextArgFrame, NULL_ALLOC_POINTER);
     setLocalFrameMember(localFrame, lastErrorCode, NONE_ERR_CODE);
@@ -824,14 +824,14 @@ void callFunction(
     
     if (fileType == BYTECODE_APP_FILE_TYPE) {
         // Initialize members specific to bytecode functions.
-        int32_t instructionBodyFilePos = getBytecodeFunctionMember(
+        int32_t instructionBodyFilePos = getBytecodeFuncMember(
             fileHandle,
-            functionIndex,
+            funcIndex,
             instructionBodyFilePos
         );
-        int32_t instructionBodySize = getBytecodeFunctionMember(
+        int32_t instructionBodySize = getBytecodeFuncMember(
             fileHandle,
-            functionIndex,
+            funcIndex,
             instructionBodySize
         );
         setBytecodeLocalFrameMember(
@@ -848,7 +848,7 @@ void callFunction(
         setBytecodeLocalFrameMember(localFrame, errorHandler, -1);
     }
     // Clear local variables data.
-    for (heapMemoryOffset_t offset = 0; offset < localVarsSize; offset++) {
+    for (heapMemOffset_t offset = 0; offset < localVarsSize; offset++) {
         writeLocalFrame(localFrame, localVarsStartIndex + offset, int8_t, 0);
     }
     
@@ -870,7 +870,7 @@ void setCurrentLocalFrame(allocPointer_t localFrame) {
     }
 }
 
-void returnFromFunction() {
+void returnFromFunc() {
     cleanUpNextArgFrame();
     allocPointer_t previousLocalFrame = getLocalFrameMember(
         currentLocalFrame,
@@ -881,15 +881,15 @@ void returnFromFunction() {
     setCurrentLocalFrame(previousLocalFrame);
 }
 
-int8_t createThread(allocPointer_t runningApp, int32_t functionId) {
-    int32_t functionIndex = findFunctionById(runningApp, functionId);
-    if (functionIndex < 0) {
+int8_t createThread(allocPointer_t runningApp, int32_t funcId) {
+    int32_t funcIndex = findFuncById(runningApp, funcId);
+    if (funcIndex < 0) {
         return false;
     }
     allocPointer_t thread = createAlloc(THREAD_ALLOC_TYPE, sizeof(thread_t));
     checkUnhandledError(true);
     setThreadMember(thread, runningApp, runningApp);
-    setThreadMember(thread, functionId, functionId);
+    setThreadMember(thread, funcId, funcId);
     setThreadMember(thread, localFrame, NULL_ALLOC_POINTER);
     setThreadMember(thread, isWaiting, false);
     setThreadMember(thread, previous, NULL_ALLOC_POINTER);
@@ -898,7 +898,7 @@ int8_t createThread(allocPointer_t runningApp, int32_t functionId) {
         setThreadMember(firstThread, previous, thread);
     }
     firstThread = thread;
-    callFunction(thread, runningApp, functionIndex, false);
+    callFunc(thread, runningApp, funcIndex, false);
     if (nextThread == NULL_ALLOC_POINTER) {
         nextThread = thread;
     }
@@ -955,9 +955,9 @@ void registerErrorInCurrentThread(int8_t error) {
             setThreadMember(currentThread, isWaiting, false);
             break;
         }
-        returnFromFunction();
+        returnFromFunc();
         if (currentLocalFrame == NULL_ALLOC_POINTER) {
-            if (getThreadMember(currentThread, functionId) == INIT_FUNC_ID) {
+            if (getThreadMember(currentThread, funcId) == INIT_FUNC_ID) {
                 allocPointer_t runningApp = getThreadMember(currentThread, runningApp);
                 allocPointer_t fileHandle = getRunningAppMember(
                     runningApp,
@@ -987,10 +987,10 @@ void scheduleCurrentThread() {
     if (currentImplementerFileType == BYTECODE_APP_FILE_TYPE) {
         evaluateBytecodeInstruction();
     } else {
-        int8_t functionIndex = (int8_t)getLocalFrameMember(currentLocalFrame, functionIndex);
-        void (*threadAction)() = getRunningSystemAppFunctionMember(
+        int8_t funcIndex = (int8_t)getLocalFrameMember(currentLocalFrame, funcIndex);
+        void (*threadAction)() = getRunningSystemAppFuncMember(
             currentImplementer,
-            functionIndex,
+            funcIndex,
             threadAction
         );
         threadAction();
@@ -1083,7 +1083,7 @@ void setFileHasAdminPerm(allocPointer_t fileHandle, int8_t hasAdminPerm) {
     setFileHandleMember(fileHandle, attributes, attributes);
     storageOffset_t address = getFileHandleMember(fileHandle, address);
     setFileHeaderMember(address, attributes, attributes);
-    flushStorageSpace();
+    flushStorage();
 }
 
 int8_t throttleAppInCurrentThread(allocPointer_t runningApp) {
@@ -1178,39 +1178,39 @@ void updateKillStates() {
     
     // If we are already killing an app, or we have enough
     // memory, don't kill more apps to free memory.
-    if (killActionCount > 0 || heapMemorySizeLeft > KILL_PANIC_THRESHOLD) {
+    if (killActionCount > 0 || heapMemSizeLeft > KILL_PANIC_THRESHOLD) {
         return;
     }
     
     // Calculate memory usage for all running apps.
     runningApp = firstRunningApp;
     while (runningApp != NULL_ALLOC_POINTER) {
-        setRunningAppMember(runningApp, memoryUsage, 0);
+        setRunningAppMember(runningApp, memUsage, 0);
         runningApp = getRunningAppMember(runningApp, next);
     }
     allocPointer_t pointer = firstAlloc;
     while (pointer != NULL_ALLOC_POINTER) {
         allocPointer_t owner = getAllocOwner(pointer);
         if (owner != NULL_ALLOC_POINTER) {
-            heapMemoryOffset_t memoryUsage = getRunningAppMember(owner, memoryUsage);
-            memoryUsage += getAllocSizeWithHeader(pointer);
-            setRunningAppMember(owner, memoryUsage, memoryUsage);
+            heapMemOffset_t memUsage = getRunningAppMember(owner, memUsage);
+            memUsage += getAllocSizeWithHeader(pointer);
+            setRunningAppMember(owner, memUsage, memUsage);
         }
         pointer = getAllocNext(pointer);
     }
     
     // Determine the best app to kill.
     allocPointer_t victimRunningApp = NULL_ALLOC_POINTER;
-    allocPointer_t victimMemoryUsage = 0;
+    allocPointer_t victimMemUsage = 0;
     allocPointer_t victimHasAdminPerm = true;
     runningApp = firstRunningApp;
     while (runningApp != NULL_ALLOC_POINTER) {
-        heapMemoryOffset_t memoryUsage = getRunningAppMember(runningApp, memoryUsage);
+        heapMemOffset_t memUsage = getRunningAppMember(runningApp, memUsage);
         int8_t hasAdminPerm = runningAppHasAdminPerm(runningApp);
-        if ((hasAdminPerm == victimHasAdminPerm && memoryUsage > victimMemoryUsage)
+        if ((hasAdminPerm == victimHasAdminPerm && memUsage > victimMemUsage)
                 || (!hasAdminPerm && victimHasAdminPerm)) {
             victimRunningApp = runningApp;
-            victimMemoryUsage = memoryUsage;
+            victimMemUsage = memUsage;
             victimHasAdminPerm = hasAdminPerm;
         }
         runningApp = getRunningAppMember(runningApp, next);
@@ -1258,11 +1258,11 @@ int32_t readArgIntHelper2(instructionArg_t *arg, int32_t offset, int8_t dataType
             return readFile(currentImplementerFileHandle, filePos, int32_t);
         }
     } else {
-        heapMemoryOffset_t address = arg->startAddress + arg->index + offset;
+        heapMemOffset_t address = arg->startAddress + arg->index + offset;
         if (dataType == SIGNED_INT_8_TYPE) {
-            return readHeapMemory(address, int8_t);
+            return readHeapMem(address, int8_t);
         } else {
-            return readHeapMemory(address, int32_t);
+            return readHeapMem(address, int32_t);
         }
     }
 }
@@ -1275,11 +1275,11 @@ void writeArgIntHelper2(
 ) {
     uint8_t referenceType = getArgPrefixReferenceType(arg->prefix);
     if (referenceType == HEAP_MEM_REF_TYPE) {
-        heapMemoryOffset_t address = arg->startAddress + arg->index + offset;
+        heapMemOffset_t address = arg->startAddress + arg->index + offset;
         if (dataType == SIGNED_INT_8_TYPE) {
-            writeHeapMemory(address, int8_t, (int8_t)value);
+            writeHeapMem(address, int8_t, (int8_t)value);
         } else {
-            writeHeapMemory(address, int32_t, value);
+            writeHeapMem(address, int32_t, value);
         }
     } else {
         throw(TYPE_ERR_CODE);
@@ -1362,9 +1362,9 @@ void parseInstructionArg(instructionArg_t *destination) {
             destination->prefix = argPrefix;
             destination->appDataIndex = argValue1;
         } else {
-            heapMemoryOffset_t startAddress;
-            heapMemoryOffset_t size;
-            heapMemoryOffset_t index;
+            heapMemOffset_t startAddress;
+            heapMemOffset_t size;
+            heapMemOffset_t index;
             if (referenceType == DYNAMIC_ALLOC_REF_TYPE) {
                 validateDynamicAlloc(argValue1);
                 checkUnhandledError();
@@ -1375,11 +1375,11 @@ void parseInstructionArg(instructionArg_t *destination) {
                 instructionArg_t arg2;
                 parseInstructionArg(&arg2);
                 checkUnhandledError();
-                index = (heapMemoryOffset_t)readArgIntHelper1(&arg2);
+                index = (heapMemOffset_t)readArgIntHelper1(&arg2);
                 checkUnhandledError();
                 size = getDynamicAllocSize(argValue1);
             } else {
-                index = (heapMemoryOffset_t)argValue1;
+                index = (heapMemOffset_t)argValue1;
                 if (referenceType == GLOBAL_FRAME_REF_TYPE) {
                     startAddress = getBytecodeGlobalFrameDataAddress(currentImplementer);
                     size = getBytecodeGlobalFrameSize(currentImplementer);
@@ -1431,8 +1431,8 @@ void evaluateWrtBuffInstruction() {
     uint8_t destRefType = getArgPrefixReferenceType(destination->prefix);
     uint8_t sourceRefType = getArgPrefixReferenceType(source->prefix);
     if (destRefType == HEAP_MEM_REF_TYPE && sourceRefType == HEAP_MEM_REF_TYPE) {
-        heapMemoryOffset_t destStartAddress = destination->startAddress + destination->index;
-        heapMemoryOffset_t sourceStartAddress = source->startAddress + source->index;
+        heapMemOffset_t destStartAddress = destination->startAddress + destination->index;
+        heapMemOffset_t sourceStartAddress = source->startAddress + source->index;
         shouldCopyBackward = (destStartAddress > sourceStartAddress);
     } else {
         shouldCopyBackward = false;
@@ -1471,25 +1471,25 @@ void evaluateBytecodeInstruction() {
         instructionFilePos
     );
     if (currentInstructionFilePos == instructionBodyEndFilePos) {
-        returnFromFunction();
+        returnFromFunc();
         return;
     }
     uint8_t opcode = readInstructionData(uint8_t);
     uint8_t opcodeCategory = opcode >> 4;
-    if (opcodeCategory >= getArrayLength(argumentAmountOffsetArray) - 1) {
+    if (opcodeCategory >= getArrayLength(argAmountOffsetArray) - 1) {
         throw(NO_IMPL_ERR_CODE);
     }
     uint8_t opcodeOffset = opcode & 0x0F;
-    int8_t offset1 = readFixedArrayElement(argumentAmountOffsetArray, opcodeCategory);
-    int8_t offset2 = readFixedArrayElement(argumentAmountOffsetArray, opcodeCategory + 1);
+    int8_t offset1 = readFixedArrayElement(argAmountOffsetArray, opcodeCategory);
+    int8_t offset2 = readFixedArrayElement(argAmountOffsetArray, opcodeCategory + 1);
     if (opcodeOffset >= offset2 - offset1) {
         throw(NO_IMPL_ERR_CODE);
     }
-    int8_t argumentAmount = readFixedArrayElement(
-        argumentAmountArray,
+    int8_t argAmount = readFixedArrayElement(
+        argAmountArray,
         offset1 + opcodeOffset
     );
-    for (int8_t index = 0; index < argumentAmount; index++) {
+    for (int8_t index = 0; index < argAmount; index++) {
         parseInstructionArg(instructionArgArray + index);
         checkUnhandledError();
     }
@@ -1510,7 +1510,7 @@ void evaluateBytecodeInstruction() {
             evaluateWrtBuffInstruction();
         } else if (opcodeOffset == 0x2) {
             // newArgFrame.
-            heapMemoryOffset_t argFrameSize = (heapMemoryOffset_t)readArgInt(0);
+            heapMemOffset_t argFrameSize = (heapMemOffset_t)readArgInt(0);
             if (argFrameSize < 0) {
                 throw(LEN_ERR_CODE);
             }
@@ -1518,7 +1518,7 @@ void evaluateBytecodeInstruction() {
         } else if (opcodeOffset == 0x3) {
             // newAlloc.
             int8_t attributes = (int8_t)readArgInt(1) & ALLOC_ATTR_MASK;
-            heapMemoryOffset_t size = (heapMemoryOffset_t)readArgInt(2);
+            heapMemOffset_t size = (heapMemOffset_t)readArgInt(2);
             if (size < 0) {
                 throw(LEN_ERR_CODE);
             }
@@ -1544,7 +1544,7 @@ void evaluateBytecodeInstruction() {
         } else if (opcodeOffset == 0x6) {
             // allocSize.
             allocPointer_t alloc = readArgDynamicAlloc(1);
-            heapMemoryOffset_t size = getDynamicAllocSize(alloc);
+            heapMemOffset_t size = getDynamicAllocSize(alloc);
             writeArgInt(0, size);
         } else if (opcodeOffset == 0x7) {
             // allocCreator.
@@ -1635,21 +1635,21 @@ void evaluateBytecodeInstruction() {
         if (opcodeOffset == 0x0) {
             // findFunc.
             allocPointer_t runningApp = readArgRunningApp(1);
-            int32_t functionId = readArgInt(2);
-            int32_t functionIndex = findFunctionById(runningApp, functionId);
-            writeArgInt(0, functionIndex);
+            int32_t funcId = readArgInt(2);
+            int32_t funcIndex = findFuncById(runningApp, funcId);
+            writeArgInt(0, funcIndex);
         } else if (opcodeOffset == 0x1) {
             // call.
-            int32_t functionIndex = readArgInt(0);
-            callFunction(currentThread, currentImplementer, functionIndex, false);
+            int32_t funcIndex = readArgInt(0);
+            callFunc(currentThread, currentImplementer, funcIndex, false);
         } else if (opcodeOffset == 0x2) {
             // callRemote.
             allocPointer_t implementer = readArgRunningApp(0);
-            int32_t functionIndex = readArgInt(1);
-            callFunction(currentThread, implementer, functionIndex, true);
+            int32_t funcIndex = readArgInt(1);
+            callFunc(currentThread, implementer, funcIndex, true);
         } else if (opcodeOffset == 0x3) {
             // ret.
-            returnFromFunction();
+            returnFromFunc();
         } else if (opcodeOffset == 0x4) {
             // caller.
             allocPointer_t caller = getCurrentCaller();
@@ -1663,8 +1663,8 @@ void evaluateBytecodeInstruction() {
         } else if (opcodeOffset == 0x5) {
             // funcIsGuarded.
             allocPointer_t implementer = readArgRunningApp(1);
-            int32_t functionIndex = readArgInt(2);
-            int8_t isGuarded = functionIsGuarded(implementer, functionIndex);
+            int32_t funcIndex = readArgInt(2);
+            int8_t isGuarded = funcIsGuarded(implementer, funcIndex);
             checkUnhandledError();
             writeArgInt(0, isGuarded);
         }
@@ -1825,7 +1825,7 @@ void evaluateBytecodeInstruction() {
             validateFileRange(fileHandle, pos, size);
             storageOffset_t contentAddress = getFileHandleDataAddress(fileHandle) + pos;
             for (storageOffset_t offset = 0; offset < size; offset++) {
-                int8_t value = readStorageSpace(contentAddress + offset, int8_t);
+                int8_t value = readStorage(contentAddress + offset, int8_t);
                 writeArgIntHelper2(destination, offset, SIGNED_INT_8_TYPE, value);
                 checkUnhandledError();
             }
@@ -1845,7 +1845,7 @@ void evaluateBytecodeInstruction() {
             for (storageOffset_t offset = 0; offset < size; offset++) {
                 int8_t value = readArgIntHelper2(source, offset, SIGNED_INT_8_TYPE);
                 checkUnhandledError();
-                writeStorageSpace(contentAddress + offset, int8_t, value);
+                writeStorage(contentAddress + offset, int8_t, value);
             }
         }
     } else if (opcodeCategory == 0x9) {
@@ -1861,8 +1861,8 @@ void evaluateBytecodeInstruction() {
             if (!currentImplementerMayAccessAlloc(fileName)) {
                 throw(PERM_ERR_CODE);
             }
-            heapMemoryOffset_t nameAddress = getDynamicAllocDataAddress(fileName);
-            heapMemoryOffset_t nameSize = getDynamicAllocSize(fileName);
+            heapMemOffset_t nameAddress = getDynamicAllocDataAddress(fileName);
+            heapMemOffset_t nameSize = getDynamicAllocSize(fileName);
             storageOffset_t fileAddress = getFileAddressByName(nameAddress, nameSize);
             writeArgInt(0, (fileAddress != MISSING_FILE_ADDRESS));
         } else if (opcodeOffset == 0x2) {
@@ -1876,7 +1876,7 @@ void evaluateBytecodeInstruction() {
             );
             checkUnhandledError();
             storageOffset_t fileAddress = getFileHandleMember(fileHandle, address);
-            copyStorageNameToMemory(
+            copyStorageNameToHeapMem(
                 getFileNameAddress(fileAddress),
                 getDynamicAllocDataAddress(nameAlloc),
                 nameSize
@@ -1926,42 +1926,42 @@ void evaluateBytecodeInstruction() {
         // Resource instructions.
         if (opcodeOffset == 0x0) {
             // memSize.
-            writeArgInt(0, HEAP_MEMORY_SIZE);
+            writeArgInt(0, HEAP_MEM_SIZE);
         } else if (opcodeOffset == 0x1) {
             // appMemSize.
             allocPointer_t runningApp = readArgRunningApp(1);
-            heapMemoryOffset_t memoryUsage = 0;
+            heapMemOffset_t memUsage = 0;
             allocPointer_t pointer = firstAlloc;
             while (pointer != NULL_ALLOC_POINTER) {
                 allocPointer_t owner = getAllocOwner(pointer);
                 if (owner == runningApp) {
-                    memoryUsage += getAllocSizeWithHeader(pointer);
+                    memUsage += getAllocSizeWithHeader(pointer);
                 }
                 pointer = getAllocNext(pointer);
             }
-            writeArgInt(0, memoryUsage);
+            writeArgInt(0, memUsage);
         } else if (opcodeOffset == 0x2) {
             // memSizeLeft.
-            writeArgInt(0, heapMemorySizeLeft);
+            writeArgInt(0, heapMemSizeLeft);
         } else if (opcodeOffset == 0x3) {
             // volSize.
-            writeArgInt(0, STORAGE_SPACE_SIZE);
+            writeArgInt(0, STORAGE_SIZE);
         } else if (opcodeOffset == 0x4) {
             // volSizeLeft.
-            storageOffset_t storageUsage = sizeof(storageSpaceHeader_t);
+            storageOffset_t storageUsage = sizeof(storageHeader_t);
             storageOffset_t address = getFirstFileAddress();
             while (address != MISSING_FILE_ADDRESS) {
                 storageUsage += getFileStorageSize(address);
                 address = getFileHeaderMember(address, next);
             }
-            writeArgInt(0, STORAGE_SPACE_SIZE - storageUsage);
+            writeArgInt(0, STORAGE_SIZE - storageUsage);
         }
     }
 }
 
 void resetSystemState() {
     firstAlloc = NULL_ALLOC_POINTER;
-    heapMemorySizeLeft = HEAP_MEMORY_SIZE;
+    heapMemSizeLeft = HEAP_MEM_SIZE;
     firstThread = NULL_ALLOC_POINTER;
     firstRunningApp = NULL_ALLOC_POINTER;
     killStatesDelay = 0;
