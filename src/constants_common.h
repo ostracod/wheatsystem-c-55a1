@@ -5,15 +5,19 @@
 // Size of memory available in the heap.
 #define HEAP_MEM_SIZE 32767
 
+// Has the type heapMemOffset_t.
+#define MISSING_SPAN_ADDRESS -1
+
 // Has the type allocPointer_t.
 #define NULL_ALLOC_POINTER 0
 
-#define RUNNING_APP_ALLOC_TYPE 0
-#define THREAD_ALLOC_TYPE 1
-#define LOCAL_FRAME_ALLOC_TYPE 2
-#define ARG_FRAME_ALLOC_TYPE 3
-#define DYNAMIC_ALLOC_TYPE 4
-#define TEST_ALLOC_TYPE 5
+#define NONE_ALLOC_TYPE 0
+#define RUNNING_APP_ALLOC_TYPE 1
+#define THREAD_ALLOC_TYPE 2
+#define LOCAL_FRAME_ALLOC_TYPE 3
+#define ARG_FRAME_ALLOC_TYPE 4
+#define DYNAMIC_ALLOC_TYPE 5
+#define TEST_ALLOC_TYPE 6
 
 #define GUARDED_ALLOC_ATTR 0x01
 #define SENTRY_ALLOC_ATTR 0x02

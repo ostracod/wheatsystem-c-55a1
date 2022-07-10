@@ -1,11 +1,21 @@
 
 #pragma pack(push, 1)
 
-// Stored at the beginning of each heap allocation.
-typedef struct allocHeader_t {
-    int8_t type;
+// Stored at the beginning of each heap memory span.
+typedef struct spanHeader_t {
+    // Previous and next spans which are immediately adjacent.
+    heapMemOffset_t previousByNeighbor;
+    heapMemOffset_t nextByNeighbor;
+    // Size of the span data region.
     heapMemOffset_t size;
-    allocPointer_t next;
+    // Type of allocation stored in the span, if any.
+    int8_t allocType;
+} spanHeader_t;
+
+// Stored after spanHeader_t when allocType is not NONE_ALLOC_TYPE.
+typedef struct allocHeader_t {
+    // Size of the allocation data region. Note that there may be unused space after the allocation within its parent span.
+    heapMemOffset_t size;
 } allocHeader_t;
 
 // Stored at the beginning of a dynamic allocation.

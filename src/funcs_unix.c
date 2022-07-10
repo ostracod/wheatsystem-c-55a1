@@ -257,9 +257,9 @@ int8_t runIntegrationTests(int8_t *socketPath) {
         testPacket_t inputPacket = receiveTestPacket();
         switch (inputPacket.type) {
             case RESET_TEST_PACKET_TYPE: {
-                resetSystemState();
                 clearHeapMem();
                 clearStorage();
+                resetSystemState();
                 break;
             }
             case CREATE_FILE_TEST_PACKET_TYPE: {
@@ -278,8 +278,10 @@ int8_t runIntegrationTests(int8_t *socketPath) {
                 createdAllocPacketBody_t body;
                 body.pointer = createAlloc(TEST_ALLOC_TYPE, size);
                 checkUnhandledError(false);
-                body.startAddress = convertPointerToAddress(body.pointer);
-                body.endAddress = body.startAddress + sizeof(allocHeader_t) + size;
+                heapMemOffset_t spanAddress = getAllocSpanAddress(body.pointer);
+                heapMemOffset_t spanSize = getSpanMember(spanAddress, size);
+                body.startAddress = spanAddress;
+                body.endAddress = spanAddress + sizeof(spanHeader_t) + spanSize;
                 testPacket_t createdPacket = {
                     CREATED_ALLOC_TEST_PACKET_TYPE,
                     sizeof(createdAllocPacketBody_t),

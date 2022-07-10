@@ -1,7 +1,6 @@
 
 #include "./headers.h"
 
-allocPointer_t firstAlloc;
 heapMemOffset_t heapMemSizeLeft;
 allocPointer_t firstThread;
 allocPointer_t firstRunningApp;

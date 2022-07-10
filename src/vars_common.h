@@ -1,6 +1,4 @@
 
-// First allocation in the linked list.
-allocPointer_t firstAlloc;
 // The amount of unused space remaining in heap memory.
 heapMemOffset_t heapMemSizeLeft;
 // First thread_t in the linked list.

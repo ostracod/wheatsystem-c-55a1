@@ -23,15 +23,46 @@
 #define readFixedArrayElement(fixedArray, index) \
     readFixedArrayValue(fixedArray, getArrayElementOffset(fixedArray, index), getArrayElementType(fixedArray))
 
-// We need the zero pointer to be null, so we offset all addresses by one.
-#define convertPointerToAddress(pointer) (pointer - 1)
-#define convertAddressToPointer(address) (address + 1)
+// Retrieves the address of a span header member in the given span.
+// "address" is the start address of the span.
+// "memberName" is the name of a member in spanHeader_t.
+#define getSpanMemberAddress(address, memberName) \
+    address + getStructMemberOffset(spanHeader_t, memberName)
+// Retrieves a member of the span header in the given span.
+// "address" is the start address of the span.
+// "memberName" is the name of a member in spanHeader_t.
+#define getSpanMember(address, memberName) \
+    readHeapMem(getSpanMemberAddress(address, memberName), getStructMemberType(spanHeader_t, memberName))
+// Modifies a member of the span header in the given span.
+// "address" is the start address of the span.
+// "memberName" is the name of a member in spanHeader_t.
+#define setSpanMember(address, memberName, value) \
+    writeHeapMem(getSpanMemberAddress(address, memberName), getStructMemberType(spanHeader_t, memberName), value)
+
+// Retrieves the start address of the data region in the given span.
+// "address" is the start address of the span.
+#define getSpanDataAddress(address) (address + sizeof(spanHeader_t))
+// Reads a value from the data region in the given span.
+// "address" is the start address of the span.
+// "index" is the offset of value in the data region.
+#define readSpan(address, index, type) \
+    readHeapMem(getSpanDataAddress(address) + index, type)
+// Write a value to the data region in the given span.
+// "address" is the start address of the span.
+// "index" is the offset of value in the data region.
+#define writeSpan(address, index, type, value) \
+    writeHeapMem(getSpanDataAddress(address) + index, type, value)
+
+// Converts the start address of a span to the allocPointer_t of its child allocation.
+#define getSpanAllocPointer(address) getSpanDataAddress(address)
+// Converts the allocPointer_t of an allocation to the start address of its parent span.
+#define getAllocSpanAddress(pointer) (pointer - sizeof(spanHeader_t))
 
 // Retrieves the address of an allocation header member in the given allocation.
 // "pointer" is an allocPointer_t.
 // "memberName" is the name of a member in allocHeader_t.
 #define getAllocMemberAddress(pointer, memberName) \
-    convertPointerToAddress(pointer) + getStructMemberOffset(allocHeader_t, memberName)
+    pointer + getStructMemberOffset(allocHeader_t, memberName)
 // Retrieves a member of the allocation header in the given allocation.
 // "pointer" is an allocPointer_t.
 // "memberName" is the name of a member in allocHeader_t.
@@ -44,8 +75,7 @@
     writeHeapMem(getAllocMemberAddress(pointer, memberName), getStructMemberType(allocHeader_t, memberName), value)
 
 // Retrieves the start address of the data region in the given allocation.
-#define getAllocDataAddress(pointer) \
-    (convertPointerToAddress(pointer) + sizeof(allocHeader_t))
+#define getAllocDataAddress(pointer) (pointer + sizeof(allocHeader_t))
 // Reads a value from the data region in the given allocation.
 // "pointer" is an allocPointer_t.
 // "index" is the offset of value in the data region.
@@ -58,13 +88,11 @@
     writeHeapMem(getAllocDataAddress(pointer) + index, type, value)
 
 // Retrieves the type of the given allocation.
-#define getAllocType(pointer) getAllocMember(pointer, type)
+#define getAllocType(pointer) getSpanMember(getAllocSpanAddress(pointer), allocType)
 // Retrieves the size of the data region in the given allocation.
 #define getAllocSize(pointer) getAllocMember(pointer, size)
 // Retrieves the size of the given allocation including its header.
 #define getAllocSizeWithHeader(pointer) (getAllocSize(pointer) + sizeof(allocHeader_t))
-// Retrieves the allocation after the given allocation in the linked list.
-#define getAllocNext(pointer) getAllocMember(pointer, next)
 
 // Retrieves a member of the dynamic allocation header in the given dynamic allocation.
 // "pointer" is an allocPointer_t to a dynamicAlloc_t.
@@ -538,7 +566,12 @@
 // "size" is the size of data region in the new allocation.
 allocPointer_t createAlloc(int8_t type, heapMemOffset_t size);
 // Frees the given heap allocation.
-int8_t deleteAlloc(allocPointer_t pointer);
+void deleteAlloc(allocPointer_t pointer);
+
+// These functions are stop-gaps until we optimize allocations further.
+allocPointer_t getFirstAlloc();
+allocPointer_t getAllocNext(allocPointer_t pointer);
+
 // Verifies whether the given pointer is valid. May set unhandledErrorCode to NULL_ERR_CODE or PTR_ERR_CODE.
 void validateAllocPointer(allocPointer_t pointer);
 

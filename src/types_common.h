@@ -7,7 +7,7 @@
 // Stores an offset within volume storage.
 #define storageOffset_t int32_t
 
-// Stores a pointer to a heap allocation. allocPointer_t must accommodate the maximum possible pointer value.
+// Stores the start address of the allocHeader_t belonging to a heap allocation. allocPointer_t must accommodate the maximum possible pointer value.
 #define allocPointer_t int16_t
 
 // Schedules work for a particular function of a system application.

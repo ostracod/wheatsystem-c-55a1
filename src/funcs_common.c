@@ -4,80 +4,138 @@
 allocPointer_t createAlloc(int8_t type, heapMemOffset_t size) {
     
     heapMemOffset_t sizeWithHeader = sizeof(allocHeader_t) + size;
-    heapMemOffset_t startAddress = 0;
-    allocPointer_t previousPointer = NULL_ALLOC_POINTER;
-    allocPointer_t nextPointer = firstAlloc;
+    heapMemOffset_t spanAddress1 = 0;
+    heapMemOffset_t spanSize1;
+    heapMemOffset_t nextSpanAddress;
     
     // Find a gap which is large enough for the new allocation.
-    while (nextPointer != NULL_ALLOC_POINTER) {
-        heapMemOffset_t endAddress = convertPointerToAddress(nextPointer);
-        if (endAddress - startAddress >= sizeWithHeader) {
-            break;
+    while (true) {
+        nextSpanAddress = getSpanMember(spanAddress1, nextByNeighbor);
+        int8_t tempType = getSpanMember(spanAddress1, allocType);
+        if (tempType == NONE_ALLOC_TYPE) {
+            spanSize1 = getSpanMember(spanAddress1, size);
+            if (spanSize1 >= sizeWithHeader) {
+                break;
+            }
         }
-        startAddress = endAddress + getAllocSizeWithHeader(nextPointer);
-        previousPointer = nextPointer;
-        nextPointer = getAllocNext(nextPointer);
+        if (nextSpanAddress == MISSING_SPAN_ADDRESS) {
+            throw(CAPACITY_ERR_CODE, NULL_ALLOC_POINTER);
+        }
+        spanAddress1 = nextSpanAddress;
     }
     
-    // Throw an error if there is not enough free memory.
-    heapMemOffset_t endAddress = startAddress + sizeWithHeader;
-    if (endAddress > HEAP_MEM_SIZE || endAddress < 0) {
-        throw(CAPACITY_ERR_CODE, NULL_ALLOC_POINTER);
-    }
-    
-    // Set up output allocation.
-    allocPointer_t output = convertAddressToPointer(startAddress);
-    setAllocMember(output, type, type);
-    setAllocMember(output, size, size);
-    setAllocMember(output, next, nextPointer);
-    heapMemSizeLeft -= sizeWithHeader;
-    
-    // Update previous allocation or firstAlloc.
-    if (previousPointer == NULL_ALLOC_POINTER) {
-        firstAlloc = output;
+    // Split span if enough space is left over.
+    heapMemOffset_t sizeWithHeaders = sizeWithHeader + sizeof(spanHeader_t);
+    heapMemOffset_t spanSize2 = spanSize1 - sizeWithHeaders;
+    if (spanSize2 > (heapMemOffset_t)(sizeof(allocHeader_t) + 10)) {
+        // This usage of sizeWithHeaders is a bit sneaky, because it
+        // refers to the header of span 1 rather than span 2.
+        heapMemOffset_t spanAddress2 = spanAddress1 + sizeWithHeaders;
+        setSpanMember(spanAddress2, previousByNeighbor, spanAddress1);
+        setSpanMember(spanAddress2, nextByNeighbor, nextSpanAddress);
+        if (nextSpanAddress != MISSING_SPAN_ADDRESS) {
+            setSpanMember(nextSpanAddress, previousByNeighbor, spanAddress2);
+        }
+        setSpanMember(spanAddress2, size, spanSize2);
+        setSpanMember(spanAddress2, allocType, NONE_ALLOC_TYPE);
+        spanSize1 = sizeWithHeader;
+        setSpanMember(spanAddress1, nextByNeighbor, spanAddress2);
     } else {
-        setAllocMember(previousPointer, next, output);
+        setSpanMember(spanAddress1, nextByNeighbor, nextSpanAddress);
+        if (nextSpanAddress != MISSING_SPAN_ADDRESS) {
+            setSpanMember(nextSpanAddress, previousByNeighbor, spanAddress1);
+        }
     }
+    
+    // Set up remaining span members.
+    // Note that previousByNeighbor is already set correctly.
+    setSpanMember(spanAddress1, size, spanSize1);
+    setSpanMember(spanAddress1, allocType, type);
+    allocPointer_t output = getSpanAllocPointer(spanAddress1);
+    setAllocMember(output, size, size);
+    heapMemSizeLeft -= sizeof(spanHeader_t) + spanSize1;
     
     return output;
 }
 
-int8_t deleteAlloc(allocPointer_t pointer) {
+void deleteAlloc(allocPointer_t pointer) {
     
-    allocPointer_t previousPointer = NULL_ALLOC_POINTER;
-    allocPointer_t nextPointer = firstAlloc;
+    heapMemOffset_t address = getAllocSpanAddress(pointer);
+    heapMemOffset_t size = getSpanMember(address, size);
+    heapMemSizeLeft += sizeof(spanHeader_t) + size;
+    heapMemOffset_t previousAddress = getSpanMember(address, previousByNeighbor);
+    heapMemOffset_t nextAddress = getSpanMember(address, nextByNeighbor);
+    heapMemOffset_t linkAddress1 = address;
+    heapMemOffset_t linkAddress2 = nextAddress;
     
-    // Find previous and next allocations.
+    // Merge with previous empty span if it exists.
+    if (previousAddress != MISSING_SPAN_ADDRESS) {
+        int8_t previousType = getSpanMember(previousAddress, allocType);
+        if (previousType == NONE_ALLOC_TYPE) {
+            linkAddress1 = previousAddress;
+        }
+    }
+    
+    // Merge with next empty span if it exists.
+    if (nextAddress != MISSING_SPAN_ADDRESS) {
+        int8_t nextType = getSpanMember(nextAddress, allocType);
+        if (nextType == NONE_ALLOC_TYPE) {
+            linkAddress2 = getSpanMember(nextAddress, nextByNeighbor);
+        }
+    }
+    
+    // Update the linked list and allocation type if necessary.
+    int8_t addressIsEqual = (linkAddress1 == address);
+    if (addressIsEqual) {
+        setSpanMember(linkAddress1, allocType, NONE_ALLOC_TYPE);
+    }
+    if (!addressIsEqual || linkAddress2 != nextAddress) {
+        setSpanMember(linkAddress1, nextByNeighbor, linkAddress2);
+        heapMemOffset_t endAddress;
+        if (linkAddress2 == MISSING_SPAN_ADDRESS) {
+            endAddress = HEAP_MEM_SIZE;
+        } else {
+            setSpanMember(linkAddress2, previousByNeighbor, linkAddress1);
+            endAddress = linkAddress2;
+        }
+        heapMemOffset_t newSize = (endAddress - linkAddress1) - sizeof(spanHeader_t);
+        setSpanMember(linkAddress1, size, newSize);
+    }
+}
+
+allocPointer_t getFirstAlloc() {
+    heapMemOffset_t address = 0;
     while (true) {
-        if (nextPointer == NULL_ALLOC_POINTER) {
-            return false;
+        int8_t type = getSpanMember(address, allocType);
+        if (type != NONE_ALLOC_TYPE) {
+            return getSpanAllocPointer(address);
         }
-        allocPointer_t tempPointer = nextPointer;
-        nextPointer = getAllocNext(nextPointer);
-        if (tempPointer == pointer) {
-            break;
+        address = getSpanMember(address, nextByNeighbor);
+        if (address == MISSING_SPAN_ADDRESS) {
+            return NULL_ALLOC_POINTER;
         }
-        previousPointer = tempPointer;
     }
-    
-    
-    // Update previous allocation or firstAlloc to
-    // point to the next allocation.
-    heapMemSizeLeft += getAllocSizeWithHeader(pointer);
-    if (previousPointer == NULL_ALLOC_POINTER) {
-        firstAlloc = nextPointer;
-    } else {
-        setAllocMember(previousPointer, next, nextPointer);
+}
+
+allocPointer_t getAllocNext(allocPointer_t pointer) {
+    heapMemOffset_t address = getAllocSpanAddress(pointer);
+    while (true) {
+        address = getSpanMember(address, nextByNeighbor);
+        if (address == MISSING_SPAN_ADDRESS) {
+            return NULL_ALLOC_POINTER;
+        }
+        int8_t type = getSpanMember(address, allocType);
+        if (type != NONE_ALLOC_TYPE) {
+            return getSpanAllocPointer(address);
+        }
     }
-    
-    return true;
 }
 
 void validateAllocPointer(allocPointer_t pointer) {
     if (pointer == NULL_ALLOC_POINTER) {
         throw(NULL_ERR_CODE);
     }
-    allocPointer_t alloc = firstAlloc;
+    allocPointer_t alloc = getFirstAlloc();
     while (alloc != NULL_ALLOC_POINTER) {
         if (alloc == pointer) {
             return;
@@ -299,7 +357,7 @@ storageOffset_t getFileStorageSize(storageOffset_t fileAddress) {
 allocPointer_t openFile(heapMemOffset_t nameAddress, heapMemOffset_t nameSize) {
     
     // Return matching file handle if it already exists.
-    allocPointer_t nextPointer = firstAlloc;
+    allocPointer_t nextPointer = getFirstAlloc();
     while (nextPointer != NULL_ALLOC_POINTER) {
         allocPointer_t pointer = nextPointer;
         nextPointer = getAllocNext(pointer);
@@ -497,7 +555,10 @@ allocPointer_t createNextArgFrame(heapMemOffset_t size) {
         ARG_FRAME_ALLOC_TYPE,
         sizeof(argFrameHeader_t) + size
     );
-    checkUnhandledError(NULL_ALLOC_POINTER);
+    if (unhandledErrorCode != NONE_ERR_CODE) {
+        setLocalFrameMember(currentLocalFrame, nextArgFrame, NULL_ALLOC_POINTER);
+        return NULL_ALLOC_POINTER;
+    }
     setArgFrameMember(output, thread, currentThread);
     for (heapMemOffset_t index = 0; index < size; index++) {
         writeArgFrame(output, index, int8_t, 0);
@@ -686,7 +747,7 @@ void hardKillApp(allocPointer_t runningApp, int8_t errorCode) {
     setCurrentThread(lastThread);
     
     // Delete dynamic allocations.
-    allocPointer_t alloc = firstAlloc;
+    allocPointer_t alloc = getFirstAlloc();
     while (alloc != NULL_ALLOC_POINTER) {
         allocPointer_t nextAlloc = getAllocNext(alloc);
         int8_t type = getAllocType(alloc);
@@ -1188,7 +1249,7 @@ void updateKillStates() {
         setRunningAppMember(runningApp, memUsage, 0);
         runningApp = getRunningAppMember(runningApp, next);
     }
-    allocPointer_t pointer = firstAlloc;
+    allocPointer_t pointer = getFirstAlloc();
     while (pointer != NULL_ALLOC_POINTER) {
         allocPointer_t owner = getAllocOwner(pointer);
         if (owner != NULL_ALLOC_POINTER) {
@@ -1550,8 +1611,12 @@ void evaluateBytecodeInstruction() {
             // allocCreator.
             allocPointer_t alloc = readArgDynamicAlloc(1);
             allocPointer_t creator = getDynamicAllocMember(alloc, creator);
-            allocPointer_t fileHandle = getRunningAppMember(creator, fileHandle);
-            writeArgInt(0, fileHandle);
+            if (creator == NULL_ALLOC_POINTER) {
+                writeArgInt(0, NULL_ALLOC_POINTER);
+            } else {
+                allocPointer_t fileHandle = getRunningAppMember(creator, fileHandle);
+                writeArgInt(0, fileHandle);
+            }
         } else if (opcodeOffset == 0x8) {
             // setAllocAttrs.
             allocPointer_t alloc = readArgDynamicAlloc(0);
@@ -1931,7 +1996,7 @@ void evaluateBytecodeInstruction() {
             // appMemSize.
             allocPointer_t runningApp = readArgRunningApp(1);
             heapMemOffset_t memUsage = 0;
-            allocPointer_t pointer = firstAlloc;
+            allocPointer_t pointer = getFirstAlloc();
             while (pointer != NULL_ALLOC_POINTER) {
                 allocPointer_t owner = getAllocOwner(pointer);
                 if (owner == runningApp) {
@@ -1960,12 +2025,15 @@ void evaluateBytecodeInstruction() {
 }
 
 void resetSystemState() {
-    firstAlloc = NULL_ALLOC_POINTER;
     heapMemSizeLeft = HEAP_MEM_SIZE;
     firstThread = NULL_ALLOC_POINTER;
     firstRunningApp = NULL_ALLOC_POINTER;
     killStatesDelay = 0;
     unhandledErrorCode = NONE_ERR_CODE;
+    setSpanMember(0, previousByNeighbor, MISSING_SPAN_ADDRESS);
+    setSpanMember(0, nextByNeighbor, MISSING_SPAN_ADDRESS);
+    setSpanMember(0, size, HEAP_MEM_SIZE - sizeof(spanHeader_t));
+    setSpanMember(0, allocType, NONE_ALLOC_TYPE);
 }
 
 
