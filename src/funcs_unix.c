@@ -297,6 +297,18 @@ int8_t runIntegrationTests(int8_t *socketPath) {
                 sendTestPacket(deletedPacket);
                 break;
             }
+            case VALIDATE_ALLOC_TEST_PACKET_TYPE: {
+                allocPointer_t pointer = *(int32_t *)inputPacket.data;
+                validateAllocPointer(pointer);
+                testPacket_t validatedPacket = {
+                    VALIDATED_ALLOC_TEST_PACKET_TYPE,
+                    1,
+                    &unhandledErrorCode
+                };
+                sendTestPacket(validatedPacket);
+                unhandledErrorCode = NONE_ERR_CODE;
+                break;
+            }
             case QUIT_TEST_PACKET_TYPE: {
                 hasFinished = true;
                 break;

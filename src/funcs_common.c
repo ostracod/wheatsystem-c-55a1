@@ -141,6 +141,9 @@ void validateAllocPointer(allocPointer_t pointer) {
         throw(NULL_ERR_CODE);
     }
     heapMemOffset_t address = getAllocSpanAddress(pointer);
+    if ((address & (SPAN_ALIGNMENT - 1)) != 0) {
+        throw(PTR_ERR_CODE);
+    }
     int16_t truncatedAddress = address >> SPAN_ALIGNMENT_EXPONENT;
     uint8_t result = allocBitField[truncatedAddress >> 3] & ((uint8_t)1 << (truncatedAddress & 7));
     if (result == 0) {
