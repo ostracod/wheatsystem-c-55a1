@@ -25,12 +25,9 @@ allocPointer_t createAlloc(int8_t type, heapMemOffset_t size) {
     }
     
     // Split span if enough space is left over.
-    heapMemOffset_t sizeWithHeaders = sizeWithHeader + sizeof(spanHeader_t);
-    heapMemOffset_t spanSize2 = spanSize1 - sizeWithHeaders;
+    heapMemOffset_t spanAddress2 = ((spanAddress1 + sizeof(spanHeader_t) + sizeWithHeader - 1) & ~((heapMemOffset_t)SPAN_ALIGNMENT - 1)) + SPAN_ALIGNMENT;
+    heapMemOffset_t spanSize2 = spanAddress1 + spanSize1 - spanAddress2;
     if (spanSize2 > (heapMemOffset_t)(sizeof(allocHeader_t) + 10)) {
-        // This usage of sizeWithHeaders is a bit sneaky, because it
-        // refers to the header of span 1 rather than span 2.
-        heapMemOffset_t spanAddress2 = spanAddress1 + sizeWithHeaders;
         setSpanMember(spanAddress2, previousByNeighbor, spanAddress1);
         setSpanMember(spanAddress2, nextByNeighbor, nextSpanAddress);
         if (nextSpanAddress != MISSING_SPAN_ADDRESS) {
@@ -38,7 +35,7 @@ allocPointer_t createAlloc(int8_t type, heapMemOffset_t size) {
         }
         setSpanMember(spanAddress2, size, spanSize2);
         setSpanMember(spanAddress2, allocType, NONE_ALLOC_TYPE);
-        spanSize1 = sizeWithHeader;
+        spanSize1 = (spanAddress2 - spanAddress1) - sizeof(spanHeader_t);
         setSpanMember(spanAddress1, nextByNeighbor, spanAddress2);
     } else {
         setSpanMember(spanAddress1, nextByNeighbor, nextSpanAddress);
@@ -54,6 +51,10 @@ allocPointer_t createAlloc(int8_t type, heapMemOffset_t size) {
     allocPointer_t output = getSpanAllocPointer(spanAddress1);
     setAllocMember(output, size, size);
     heapMemSizeLeft -= sizeof(spanHeader_t) + spanSize1;
+    
+    // Update the allocation bit field.
+    int16_t truncatedAddress = spanAddress1 >> SPAN_ALIGNMENT_EXPONENT;
+    allocBitField[truncatedAddress >> 3] |= (uint8_t)1 << (truncatedAddress & 7);
     
     return output;
 }
@@ -101,6 +102,10 @@ void deleteAlloc(allocPointer_t pointer) {
         heapMemOffset_t newSize = (endAddress - linkAddress1) - sizeof(spanHeader_t);
         setSpanMember(linkAddress1, size, newSize);
     }
+    
+    // Update the allocation bit field.
+    int16_t truncatedAddress = address >> SPAN_ALIGNMENT_EXPONENT;
+    allocBitField[truncatedAddress >> 3] &= ~((uint8_t)1 << (truncatedAddress & 7));
 }
 
 allocPointer_t getFirstAlloc() {
@@ -135,14 +140,12 @@ void validateAllocPointer(allocPointer_t pointer) {
     if (pointer == NULL_ALLOC_POINTER) {
         throw(NULL_ERR_CODE);
     }
-    allocPointer_t alloc = getFirstAlloc();
-    while (alloc != NULL_ALLOC_POINTER) {
-        if (alloc == pointer) {
-            return;
-        }
-        alloc = getAllocNext(alloc);
+    heapMemOffset_t address = getAllocSpanAddress(pointer);
+    int16_t truncatedAddress = address >> SPAN_ALIGNMENT_EXPONENT;
+    uint8_t result = allocBitField[truncatedAddress >> 3] & ((uint8_t)1 << (truncatedAddress & 7));
+    if (result == 0) {
+        throw(PTR_ERR_CODE);
     }
-    throw(PTR_ERR_CODE);
 }
 
 allocPointer_t createDynamicAlloc(
@@ -2034,6 +2037,9 @@ void resetSystemState() {
     setSpanMember(0, nextByNeighbor, MISSING_SPAN_ADDRESS);
     setSpanMember(0, size, HEAP_MEM_SIZE - sizeof(spanHeader_t));
     setSpanMember(0, allocType, NONE_ALLOC_TYPE);
+    for (int16_t index = 0; index < ALLOC_BIT_FIELD_SIZE; index++) {
+        allocBitField[index] = 0;
+    }
 }
 
 

@@ -4,9 +4,13 @@
 
 // Size of memory available in the heap.
 #define HEAP_MEM_SIZE 32767
+#define ALLOC_BIT_FIELD_SIZE (HEAP_MEM_SIZE / (8 * SPAN_ALIGNMENT) + 1)
 
 // Has the type heapMemOffset_t.
 #define MISSING_SPAN_ADDRESS -1
+#define SPAN_ALIGNMENT_EXPONENT 4
+// The multiple to which the start address of every span conforms.
+#define SPAN_ALIGNMENT (1 << SPAN_ALIGNMENT_EXPONENT)
 
 // Has the type allocPointer_t.
 #define NULL_ALLOC_POINTER 0

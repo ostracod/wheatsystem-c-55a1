@@ -1,6 +1,7 @@
 
 #include "./headers.h"
 
+uint8_t allocBitField[ALLOC_BIT_FIELD_SIZE];
 heapMemOffset_t heapMemSizeLeft;
 allocPointer_t firstThread;
 allocPointer_t firstRunningApp;
