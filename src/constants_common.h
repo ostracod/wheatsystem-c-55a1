@@ -11,6 +11,8 @@
 #define SPAN_ALIGNMENT_EXPONENT 4
 // The multiple to which the start address of every span conforms.
 #define SPAN_ALIGNMENT (1 << SPAN_ALIGNMENT_EXPONENT)
+// The number of possible span size degrees. Must support the largest possible span.
+#define SPAN_DEGREE_AMOUNT 37
 
 // Has the type allocPointer_t.
 #define NULL_ALLOC_POINTER 0

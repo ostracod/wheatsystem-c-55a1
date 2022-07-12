@@ -7,6 +7,8 @@
         return __VA_ARGS__; \
     }
 
+#define getMaximum(value1, value2) ((value1 > value2) ? value1 : value2)
+
 // Retrieves the number of elements in the given array.
 #define getArrayLength(name) (int32_t)(sizeof(name) / sizeof(*name))
 #define getArrayElementOffset(name, index) (index * sizeof(*name))
@@ -52,6 +54,17 @@
 // "index" is the offset of value in the data region.
 #define writeSpan(address, index, type, value) \
     writeHeapMem(getSpanDataAddress(address) + index, type, value)
+
+// Retrieves a member of the empty span header in the given span.
+// "address" is the start address of the span.
+// "memberName" is the name of a member in emptySpanHeader_t.
+#define getEmptySpanMember(address, memberName) \
+    readSpan(address, getStructMemberOffset(emptySpanHeader_t, memberName), getStructMemberType(emptySpanHeader_t, memberName))
+// Modifies a member of the empty span header in the given span.
+// "address" is the start address of the span.
+// "memberName" is the name of a member in emptySpanHeader_t.
+#define setEmptySpanMember(address, memberName, value) \
+    writeSpan(address, getStructMemberOffset(emptySpanHeader_t, memberName), getStructMemberType(emptySpanHeader_t, memberName), value)
 
 // Converts the start address of a span to the allocPointer_t of its child allocation.
 #define getSpanAllocPointer(address) getSpanDataAddress(address)
@@ -561,6 +574,16 @@
 // "memberName" is the name of a member in termAppGlobalFrame_t.
 #define writeTermAppGlobalVar(memberName, value) \
     writeSystemAppGlobalVar(termAppGlobalFrame_t, memberName, value)
+
+// Determines the degree of the given span size.
+int8_t getSpanSizeDegree(heapMemOffset_t size);
+// Initializes members of emptySpanHeader_t in the given span, and adds the span to a linked list.
+// "address" is the start address of the span.
+// "size" is the size of the data region in the span.
+void initializeEmptySpan(heapMemOffset_t address, heapMemOffset_t size);
+// Removes the given span from its linked list of empty spans.
+// "address" is the start address of the span.
+void cleanUpEmptySpan(heapMemOffset_t address);
 
 // Creates a heap allocation.
 // "size" is the size of data region in the new allocation.

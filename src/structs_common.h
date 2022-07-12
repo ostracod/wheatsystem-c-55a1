@@ -12,6 +12,15 @@ typedef struct spanHeader_t {
     int8_t allocType;
 } spanHeader_t;
 
+// Stored after spanHeader_t when allocType is NONE_ALLOC_TYPE.
+typedef struct emptySpanHeader_t {
+    // Previous and next spans which have the same size degree.
+    heapMemOffset_t previousByDegree;
+    heapMemOffset_t nextByDegree;
+    // Size degree of the span.
+    int8_t degree;
+} emptySpanHeader_t;
+
 // Stored after spanHeader_t when allocType is not NONE_ALLOC_TYPE.
 typedef struct allocHeader_t {
     // Size of the allocation data region. Note that there may be unused space after the allocation within its parent span.

@@ -1,33 +1,71 @@
 
 #include "./headers.h"
 
+int8_t getSpanSizeDegree(heapMemOffset_t size) {
+    uint16_t adjustedSize = (uint16_t)size + (uint16_t)sizeof(spanHeader_t) + (uint16_t)64;
+    int8_t exponent = 9;
+    uint16_t value = (uint16_t)64 << exponent;
+    while (value > adjustedSize) {
+        value >>= 1;
+        exponent -= 1;
+    }
+    return (exponent << 2) + ((adjustedSize - value) >> (exponent + 4));
+}
+
+void initializeEmptySpan(heapMemOffset_t address, heapMemOffset_t size) {
+    int8_t degree = getSpanSizeDegree(size);
+    heapMemOffset_t nextAddress = emptySpansByDegree[degree];
+    setEmptySpanMember(address, previousByDegree, MISSING_SPAN_ADDRESS);
+    setEmptySpanMember(address, nextByDegree, nextAddress);
+    if (nextAddress != MISSING_SPAN_ADDRESS) {
+        setEmptySpanMember(nextAddress, previousByDegree, address);
+    }
+    setEmptySpanMember(address, degree, degree);
+    emptySpansByDegree[degree] = address;
+}
+
+void cleanUpEmptySpan(heapMemOffset_t address) {
+    int8_t degree = getEmptySpanMember(address, degree);
+    heapMemOffset_t previousAddress = getEmptySpanMember(address, previousByDegree);
+    heapMemOffset_t nextAddress = getEmptySpanMember(address, nextByDegree);
+    if (previousAddress == MISSING_SPAN_ADDRESS) {
+        emptySpansByDegree[degree] = nextAddress;
+    } else {
+        setEmptySpanMember(previousAddress, nextByDegree, nextAddress);
+    }
+    if (nextAddress != MISSING_SPAN_ADDRESS) {
+        setEmptySpanMember(nextAddress, previousByDegree, previousAddress);
+    }
+}
+
 allocPointer_t createAlloc(int8_t type, heapMemOffset_t size) {
     
-    heapMemOffset_t sizeWithHeader = sizeof(allocHeader_t) + size;
-    heapMemOffset_t spanAddress1 = 0;
-    heapMemOffset_t spanSize1;
-    heapMemOffset_t nextSpanAddress;
     
     // Find a gap which is large enough for the new allocation.
+    heapMemOffset_t sizeWithHeader = sizeof(allocHeader_t) + size;
+    int8_t degree = getSpanSizeDegree(sizeWithHeader - 1) + 1;
+    heapMemOffset_t spanAddress1;
     while (true) {
-        nextSpanAddress = getSpanMember(spanAddress1, nextByNeighbor);
-        int8_t tempType = getSpanMember(spanAddress1, allocType);
-        if (tempType == NONE_ALLOC_TYPE) {
-            spanSize1 = getSpanMember(spanAddress1, size);
-            if (spanSize1 >= sizeWithHeader) {
-                break;
-            }
-        }
-        if (nextSpanAddress == MISSING_SPAN_ADDRESS) {
+        if (degree >= SPAN_DEGREE_AMOUNT) {
             throw(CAPACITY_ERR_CODE, NULL_ALLOC_POINTER);
         }
-        spanAddress1 = nextSpanAddress;
+        spanAddress1 = emptySpansByDegree[degree];
+        if (spanAddress1 != MISSING_SPAN_ADDRESS) {
+            heapMemOffset_t tempAddress = getEmptySpanMember(spanAddress1, nextByDegree);
+            emptySpansByDegree[degree] = tempAddress;
+            setEmptySpanMember(tempAddress, previousByDegree, MISSING_SPAN_ADDRESS);
+            break;
+        }
+        degree += 1;
     }
+    heapMemOffset_t spanSize1 = getSpanMember(spanAddress1, size);
+    heapMemOffset_t nextSpanAddress = getSpanMember(spanAddress1, nextByNeighbor);
+    cleanUpEmptySpan(spanAddress1);
     
     // Split span if enough space is left over.
     heapMemOffset_t spanAddress2 = ((spanAddress1 + sizeof(spanHeader_t) + sizeWithHeader - 1) & ~((heapMemOffset_t)SPAN_ALIGNMENT - 1)) + SPAN_ALIGNMENT;
     heapMemOffset_t spanSize2 = spanAddress1 + spanSize1 - spanAddress2;
-    if (spanSize2 > (heapMemOffset_t)(sizeof(allocHeader_t) + 10)) {
+    if (spanSize2 > (heapMemOffset_t)getMaximum(16 - sizeof(spanHeader_t), getMaximum(sizeof(allocHeader_t) + 10, sizeof(emptySpanHeader_t)))) {
         setSpanMember(spanAddress2, previousByNeighbor, spanAddress1);
         setSpanMember(spanAddress2, nextByNeighbor, nextSpanAddress);
         if (nextSpanAddress != MISSING_SPAN_ADDRESS) {
@@ -35,6 +73,7 @@ allocPointer_t createAlloc(int8_t type, heapMemOffset_t size) {
         }
         setSpanMember(spanAddress2, size, spanSize2);
         setSpanMember(spanAddress2, allocType, NONE_ALLOC_TYPE);
+        initializeEmptySpan(spanAddress2, spanSize2);
         spanSize1 = (spanAddress2 - spanAddress1) - sizeof(spanHeader_t);
         setSpanMember(spanAddress1, nextByNeighbor, spanAddress2);
     } else {
@@ -74,6 +113,7 @@ void deleteAlloc(allocPointer_t pointer) {
         int8_t previousType = getSpanMember(previousAddress, allocType);
         if (previousType == NONE_ALLOC_TYPE) {
             linkAddress1 = previousAddress;
+            cleanUpEmptySpan(previousAddress);
         }
     }
     
@@ -82,26 +122,30 @@ void deleteAlloc(allocPointer_t pointer) {
         int8_t nextType = getSpanMember(nextAddress, allocType);
         if (nextType == NONE_ALLOC_TYPE) {
             linkAddress2 = getSpanMember(nextAddress, nextByNeighbor);
+            cleanUpEmptySpan(nextAddress);
         }
     }
     
-    // Update the linked list and allocation type if necessary.
+    // Update linked lists and allocation type if necessary.
+    heapMemOffset_t endAddress;
+    if (linkAddress2 == MISSING_SPAN_ADDRESS) {
+        endAddress = HEAP_MEM_SIZE;
+    } else {
+        endAddress = linkAddress2;
+    }
+    heapMemOffset_t newSize = (endAddress - linkAddress1) - sizeof(spanHeader_t);
     int8_t addressIsEqual = (linkAddress1 == address);
     if (addressIsEqual) {
         setSpanMember(linkAddress1, allocType, NONE_ALLOC_TYPE);
     }
     if (!addressIsEqual || linkAddress2 != nextAddress) {
         setSpanMember(linkAddress1, nextByNeighbor, linkAddress2);
-        heapMemOffset_t endAddress;
-        if (linkAddress2 == MISSING_SPAN_ADDRESS) {
-            endAddress = HEAP_MEM_SIZE;
-        } else {
+        if (linkAddress2 != MISSING_SPAN_ADDRESS) {
             setSpanMember(linkAddress2, previousByNeighbor, linkAddress1);
-            endAddress = linkAddress2;
         }
-        heapMemOffset_t newSize = (endAddress - linkAddress1) - sizeof(spanHeader_t);
         setSpanMember(linkAddress1, size, newSize);
     }
+    initializeEmptySpan(linkAddress1, newSize);
     
     // Update the allocation bit field.
     int16_t truncatedAddress = address >> SPAN_ALIGNMENT_EXPONENT;
@@ -2036,10 +2080,16 @@ void resetSystemState() {
     firstRunningApp = NULL_ALLOC_POINTER;
     killStatesDelay = 0;
     unhandledErrorCode = NONE_ERR_CODE;
-    setSpanMember(0, previousByNeighbor, MISSING_SPAN_ADDRESS);
-    setSpanMember(0, nextByNeighbor, MISSING_SPAN_ADDRESS);
-    setSpanMember(0, size, HEAP_MEM_SIZE - sizeof(spanHeader_t));
-    setSpanMember(0, allocType, NONE_ALLOC_TYPE);
+    for (int8_t degree = 0; degree < SPAN_DEGREE_AMOUNT; degree++) {
+        emptySpansByDegree[degree] = MISSING_SPAN_ADDRESS;
+    }
+    heapMemOffset_t spanAddress = 0;
+    heapMemOffset_t spanSize = HEAP_MEM_SIZE - sizeof(spanHeader_t);
+    setSpanMember(spanAddress, previousByNeighbor, MISSING_SPAN_ADDRESS);
+    setSpanMember(spanAddress, nextByNeighbor, MISSING_SPAN_ADDRESS);
+    setSpanMember(spanAddress, size, spanSize);
+    setSpanMember(spanAddress, allocType, NONE_ALLOC_TYPE);
+    initializeEmptySpan(spanAddress, spanSize);
     for (int16_t index = 0; index < ALLOC_BIT_FIELD_SIZE; index++) {
         allocBitField[index] = 0;
     }
