@@ -22,6 +22,7 @@ void initializeEmptySpan(heapMemOffset_t address, heapMemOffset_t size) {
     }
     setEmptySpanMember(address, degree, degree);
     emptySpansByDegree[degree] = address;
+    emptySpanBitField[degree >> 3] |= 1 << (degree & 0x07);
 }
 
 void cleanUpEmptySpan(heapMemOffset_t address) {
@@ -30,6 +31,9 @@ void cleanUpEmptySpan(heapMemOffset_t address) {
     heapMemOffset_t nextAddress = getEmptySpanMember(address, nextByDegree);
     if (previousAddress == MISSING_SPAN_ADDRESS) {
         emptySpansByDegree[degree] = nextAddress;
+        if (nextAddress == MISSING_SPAN_ADDRESS) {
+            emptySpanBitField[degree >> 3] &= ~(1 << (degree & 0x07));
+        }
     } else {
         setEmptySpanMember(previousAddress, nextByDegree, nextAddress);
     }
@@ -40,25 +44,34 @@ void cleanUpEmptySpan(heapMemOffset_t address) {
 
 allocPointer_t createAlloc(int8_t type, heapMemOffset_t size) {
     
-    
     // Find a gap which is large enough for the new allocation.
     heapMemOffset_t sizeWithHeader = sizeof(allocHeader_t) + size;
     int8_t degree = getSpanSizeDegree(sizeWithHeader - 1) + 1;
-    heapMemOffset_t spanAddress1;
-    while (true) {
-        if (degree >= SPAN_DEGREE_AMOUNT) {
-            throw(CAPACITY_ERR_CODE, NULL_ALLOC_POINTER);
+    int8_t fieldIndex = degree >> 3;
+    int8_t fieldValue = emptySpanBitField[fieldIndex];
+    if ((fieldValue & (0xFF << (degree & 0x07))) == 0) {
+        while (true) {
+            fieldIndex += 1;
+            if (fieldIndex >= SPAN_BIT_FIELD_SIZE) {
+                throw(CAPACITY_ERR_CODE, NULL_ALLOC_POINTER);
+            }
+            fieldValue = emptySpanBitField[fieldIndex];
+            if (fieldValue != 0) {
+                break;
+            }
         }
-        spanAddress1 = emptySpansByDegree[degree];
-        if (spanAddress1 != MISSING_SPAN_ADDRESS) {
-            heapMemOffset_t tempAddress = getEmptySpanMember(spanAddress1, nextByDegree);
-            emptySpansByDegree[degree] = tempAddress;
-            setEmptySpanMember(tempAddress, previousByDegree, MISSING_SPAN_ADDRESS);
-            break;
-        }
-        degree += 1;
+        degree = fieldIndex << 3;
     }
+    uint8_t mask = 0xFE << (degree & 0x07);
+    while ((fieldValue & mask) != 0) {
+        degree += 1;
+        mask <<= 1;
+    }
+    heapMemOffset_t spanAddress1 = emptySpansByDegree[degree];
     heapMemOffset_t spanSize1 = getSpanMember(spanAddress1, size);
+    heapMemOffset_t tempAddress = getEmptySpanMember(spanAddress1, nextByDegree);
+    emptySpansByDegree[degree] = tempAddress;
+    setEmptySpanMember(tempAddress, previousByDegree, MISSING_SPAN_ADDRESS);
     heapMemOffset_t nextSpanAddress = getSpanMember(spanAddress1, nextByNeighbor);
     cleanUpEmptySpan(spanAddress1);
     
@@ -2086,6 +2099,9 @@ void resetSystemState() {
     unhandledErrorCode = NONE_ERR_CODE;
     for (int8_t degree = 0; degree < SPAN_DEGREE_AMOUNT; degree++) {
         emptySpansByDegree[degree] = MISSING_SPAN_ADDRESS;
+    }
+    for (int8_t index = 0; index < SPAN_BIT_FIELD_SIZE; index++) {
+        emptySpanBitField[index] = 0;
     }
     heapMemOffset_t spanAddress = 0;
     heapMemOffset_t spanSize = HEAP_MEM_SIZE - sizeof(spanHeader_t);

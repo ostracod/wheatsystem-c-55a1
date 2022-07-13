@@ -1,10 +1,13 @@
 
 // Stores the first empty span of each size degree.
 heapMemOffset_t emptySpansByDegree[SPAN_DEGREE_AMOUNT];
+// Stores one bit for every span size degree. Each bit equal to 1 indicates the existence of an empty span with the corresponding degree.
+uint8_t emptySpanBitField[SPAN_BIT_FIELD_SIZE];
 // Stores one bit for every possible span position. Each bit equal to 1 indicates the start of a span which contains an allocation.
 uint8_t allocBitField[ALLOC_BIT_FIELD_SIZE];
 // The amount of unused space remaining in heap memory.
 heapMemOffset_t heapMemSizeLeft;
+
 // First thread_t in the linked list.
 allocPointer_t firstThread;
 // First runningApp_t in the linked list.

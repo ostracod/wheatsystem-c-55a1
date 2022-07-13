@@ -2,8 +2,10 @@
 #include "./headers.h"
 
 heapMemOffset_t emptySpansByDegree[SPAN_DEGREE_AMOUNT];
+uint8_t emptySpanBitField[SPAN_BIT_FIELD_SIZE];
 uint8_t allocBitField[ALLOC_BIT_FIELD_SIZE];
 heapMemOffset_t heapMemSizeLeft;
+
 allocPointer_t firstThread;
 allocPointer_t firstRunningApp;
 int16_t killStatesDelay;

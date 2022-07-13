@@ -19,6 +19,7 @@
 )
 // The number of possible span size degrees. Must support the largest possible span.
 #define SPAN_DEGREE_AMOUNT 37
+#define SPAN_BIT_FIELD_SIZE ((SPAN_DEGREE_AMOUNT / 8) + 1)
 
 // Has the type allocPointer_t.
 #define NULL_ALLOC_POINTER 0
