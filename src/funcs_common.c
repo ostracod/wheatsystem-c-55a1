@@ -62,8 +62,8 @@ allocPointer_t createAlloc(int8_t type, heapMemOffset_t size) {
         }
         degree = fieldIndex << 3;
     }
-    uint8_t mask = 0xFE << (degree & 0x07);
-    while ((fieldValue & mask) != 0) {
+    uint8_t mask = 0x01 << (degree & 0x07);
+    while ((fieldValue & mask) == 0) {
         degree += 1;
         mask <<= 1;
     }
