@@ -3,7 +3,7 @@
 #define false 0
 
 // Size of memory available in the heap.
-#define HEAP_MEM_SIZE 32767
+#define HEAP_MEM_SIZE (32767 & ~(SPAN_ALIGNMENT - 1))
 #define ALLOC_BIT_FIELD_SIZE (HEAP_MEM_SIZE / (8 * SPAN_ALIGNMENT) + 1)
 
 // Has the type heapMemOffset_t.
@@ -11,6 +11,12 @@
 #define SPAN_ALIGNMENT_EXPONENT 4
 // The multiple to which the start address of every span conforms.
 #define SPAN_ALIGNMENT (1 << SPAN_ALIGNMENT_EXPONENT)
+// The minimum allowable size of span data region.
+#define MINIMUM_SPAN_SIZE ((heapMemOffset_t)getMaximum(getMaximum( \
+    SPAN_ALIGNMENT - sizeof(spanHeader_t), \
+    sizeof(allocHeader_t) + 10), \
+    sizeof(emptySpanHeader_t)) \
+)
 // The number of possible span size degrees. Must support the largest possible span.
 #define SPAN_DEGREE_AMOUNT 37
 

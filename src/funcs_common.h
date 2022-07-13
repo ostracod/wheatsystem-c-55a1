@@ -472,7 +472,7 @@
     allocPointer_t pointer = readArgInt(index); \
     validateDynamicAlloc(pointer); \
     checkUnhandledError(); \
-    pointer; \
+    (allocPointer_t)pointer; \
 })
 
 // Reads a pointer to a file handle from a bytecode argument.
@@ -480,7 +480,7 @@
     allocPointer_t fileHandle = readArgInt(index); \
     validateFileHandle(fileHandle); \
     checkUnhandledError(); \
-    fileHandle; \
+    (allocPointer_t)fileHandle; \
 });
 // Reads a pointer to a running app from a bytecode argument.
 #define readArgRunningApp(index) ({ \
@@ -596,7 +596,7 @@ allocPointer_t getFirstAlloc();
 allocPointer_t getAllocNext(allocPointer_t pointer);
 
 // Verifies whether the given pointer is valid. May set unhandledErrorCode to NULL_ERR_CODE or PTR_ERR_CODE.
-void validateAllocPointer(allocPointer_t pointer);
+void validateAllocPointer(int32_t pointer);
 
 // Returns an allocPointer_t to a dynamicAlloc_t.
 allocPointer_t createDynamicAlloc(
@@ -614,7 +614,7 @@ allocPointer_t createStringAllocFromFixedArrayHelper(
 );
 // Verifies whether the given pointer references a valid dynamic allocation. May assign a new value to unhandledErrorCode.
 // "dynamicAlloc" is a pointer to dynamicAlloc_t.
-void validateDynamicAlloc(allocPointer_t dynamicAlloc);
+void validateDynamicAlloc(int32_t dynamicAlloc);
 
 // Determines whether a file name in heap memory equals a file name in storage.
 int8_t heapMemNameEqualsStorageName(
@@ -678,7 +678,7 @@ allocPointer_t openFileByStringAlloc(allocPointer_t stringAlloc);
 int8_t allocIsFileHandle(allocPointer_t pointer);
 // Verifies whether the given pointer references a valid file handle. May assign a new value to unhandledErrorCode.
 // "fileHandle" is a pointer to a fileHandle_t.
-void validateFileHandle(allocPointer_t fileHandle);
+void validateFileHandle(int32_t fileHandle);
 
 // Retrieves an index in the function table of the given running application.
 // "runningApp" is a pointer to a runningApp_t.

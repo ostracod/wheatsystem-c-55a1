@@ -63,9 +63,10 @@ allocPointer_t createAlloc(int8_t type, heapMemOffset_t size) {
     cleanUpEmptySpan(spanAddress1);
     
     // Split span if enough space is left over.
-    heapMemOffset_t spanAddress2 = ((spanAddress1 + sizeof(spanHeader_t) + sizeWithHeader - 1) & ~((heapMemOffset_t)SPAN_ALIGNMENT - 1)) + SPAN_ALIGNMENT;
+    heapMemOffset_t splitSize = getMaximum(sizeWithHeader, MINIMUM_SPAN_SIZE);
+    heapMemOffset_t spanAddress2 = ((spanAddress1 + sizeof(spanHeader_t) + splitSize - 1) & ~((heapMemOffset_t)SPAN_ALIGNMENT - 1)) + SPAN_ALIGNMENT;
     heapMemOffset_t spanSize2 = spanAddress1 + spanSize1 - spanAddress2;
-    if (spanSize2 > (heapMemOffset_t)getMaximum(16 - sizeof(spanHeader_t), getMaximum(sizeof(allocHeader_t) + 10, sizeof(emptySpanHeader_t)))) {
+    if (spanSize2 > MINIMUM_SPAN_SIZE) {
         setSpanMember(spanAddress2, previousByNeighbor, spanAddress1);
         setSpanMember(spanAddress2, nextByNeighbor, nextSpanAddress);
         if (nextSpanAddress != MISSING_SPAN_ADDRESS) {
@@ -180,7 +181,10 @@ allocPointer_t getAllocNext(allocPointer_t pointer) {
     }
 }
 
-void validateAllocPointer(allocPointer_t pointer) {
+void validateAllocPointer(int32_t pointer) {
+    if (pointer < 0 || pointer >= HEAP_MEM_SIZE) {
+        throw(PTR_ERR_CODE);
+    }
     if (pointer == NULL_ALLOC_POINTER) {
         throw(NULL_ERR_CODE);
     }
@@ -226,7 +230,7 @@ allocPointer_t createStringAllocFromFixedArrayHelper(
     return output;
 }
 
-void validateDynamicAlloc(allocPointer_t dynamicAlloc) {
+void validateDynamicAlloc(int32_t dynamicAlloc) {
     validateAllocPointer(dynamicAlloc);
     checkUnhandledError();
     if (getAllocType(dynamicAlloc) != DYNAMIC_ALLOC_TYPE) {
@@ -549,7 +553,7 @@ int8_t allocIsFileHandle(allocPointer_t pointer) {
         && (getDynamicAllocMember(pointer, attributes) & SENTRY_ALLOC_ATTR));
 }
 
-void validateFileHandle(allocPointer_t fileHandle) {
+void validateFileHandle(int32_t fileHandle) {
     validateAllocPointer(fileHandle);
     checkUnhandledError();
     if (!allocIsFileHandle(fileHandle)) {
