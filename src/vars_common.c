@@ -7,6 +7,7 @@ allocPointer_t allocsByType[ALLOC_TYPE_AMOUNT];
 uint8_t allocBitField[ALLOC_BIT_FIELD_SIZE];
 heapMemOffset_t heapMemSizeLeft;
 
+allocPointer_t firstFileHandle;
 int16_t killStatesDelay;
 int8_t unhandledErrorCode;
 

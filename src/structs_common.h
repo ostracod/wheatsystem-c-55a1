@@ -64,6 +64,9 @@ typedef struct fileHandle_t {
     uint8_t attributes;
     uint8_t nameSize;
     storageOffset_t contentSize;
+    // Previous and next file handles in the linked list.
+    allocPointer_t previous;
+    allocPointer_t next;
     // Pointer to runningApp_t.
     allocPointer_t runningApp;
     int8_t initErr;

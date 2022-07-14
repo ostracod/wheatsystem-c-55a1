@@ -125,7 +125,7 @@ void deleteAlloc(allocPointer_t pointer) {
     
     // Update allocation linked list.
     allocPointer_t previousAlloc = getAllocMember(pointer, previousByType);
-    allocPointer_t nextAlloc = getAllocMember(pointer, nextByType);
+    allocPointer_t nextAlloc = getAllocNextByType(pointer);
     if (previousAlloc == NULL_ALLOC_POINTER) {
         heapMemOffset_t type = getAllocType(pointer);
         allocsByType[type] = nextAlloc;
@@ -447,24 +447,19 @@ storageOffset_t getFileStorageSize(storageOffset_t fileAddress) {
 allocPointer_t openFile(heapMemOffset_t nameAddress, heapMemOffset_t nameSize) {
     
     // Return matching file handle if it already exists.
-    allocPointer_t nextPointer = getFirstAlloc();
-    while (nextPointer != NULL_ALLOC_POINTER) {
-        allocPointer_t pointer = nextPointer;
-        nextPointer = getAllocNext(pointer);
-        if (!allocIsFileHandle(pointer)) {
-            continue;
-        }
-        if (!heapMemNameEqualsStorageName(
+    allocPointer_t fileHandle = firstFileHandle;
+    while (fileHandle != NULL_ALLOC_POINTER) {
+        if (heapMemNameEqualsStorageName(
             nameAddress,
             nameSize,
-            getFileNameAddress(getFileHandleMember(pointer, address)),
-            getFileHandleMember(pointer, nameSize)
+            getFileNameAddress(getFileHandleMember(fileHandle, address)),
+            getFileHandleMember(fileHandle, nameSize)
         )) {
-            continue;
+            int8_t depth = getFileHandleMember(fileHandle, openDepth);
+            setFileHandleMember(fileHandle, openDepth, depth + 1);
+            return fileHandle;
         }
-        int8_t depth = getFileHandleMember(pointer, openDepth);
-        setFileHandleMember(pointer, openDepth, depth + 1);
-        return pointer;
+        fileHandle = getFileHandleMember(fileHandle, next);
     }
     
     // Try to find file in storage.
@@ -488,6 +483,12 @@ allocPointer_t openFile(heapMemOffset_t nameAddress, heapMemOffset_t nameSize) {
     setFileHandleMember(output, attributes, fileAttributes);
     setFileHandleMember(output, nameSize, nameSize);
     setFileHandleMember(output, contentSize, contentSize);
+    setFileHandleMember(output, previous, NULL_ALLOC_POINTER);
+    setFileHandleMember(output, next, firstFileHandle);
+    if (firstFileHandle != NULL_ALLOC_POINTER) {
+        setFileHandleMember(firstFileHandle, previous, output);
+    }
+    firstFileHandle = output;
     setFileHandleMember(output, runningApp, NULL_ALLOC_POINTER);
     setFileHandleMember(output, initErr, NONE_ERR_CODE);
     setFileHandleMember(output, openDepth, 1);
@@ -495,6 +496,16 @@ allocPointer_t openFile(heapMemOffset_t nameAddress, heapMemOffset_t nameSize) {
 }
 
 void deleteFileHandle(allocPointer_t fileHandle) {
+    allocPointer_t previousFileHandle = getFileHandleMember(fileHandle, previous);
+    allocPointer_t nextFileHandle = getFileHandleMember(fileHandle, next);
+    if (previousFileHandle == NULL_ALLOC_POINTER) {
+        firstFileHandle = nextFileHandle;
+    } else {
+        setFileHandleMember(previousFileHandle, next, nextFileHandle);
+    }
+    if (nextFileHandle != NULL_ALLOC_POINTER) {
+        setFileHandleMember(nextFileHandle, previous, previousFileHandle);
+    }
     allocPointer_t runningApp = getFileHandleRunningApp(fileHandle);
     if (runningApp != NULL_ALLOC_POINTER) {
         hardKillApp(runningApp, MISSING_ERR_CODE);
@@ -590,9 +601,10 @@ int8_t allocIsFileHandle(allocPointer_t pointer) {
 }
 
 void validateFileHandle(int32_t fileHandle) {
-    validateAllocPointer(fileHandle);
+    validateDynamicAlloc(fileHandle);
     checkUnhandledError();
-    if (!allocIsFileHandle(fileHandle)) {
+    if (getDynamicAllocMember(fileHandle, creator) != NULL_ALLOC_POINTER
+            || !(getDynamicAllocMember(fileHandle, attributes) & SENTRY_ALLOC_ATTR)) {
         throw(TYPE_ERR_CODE);
     }
 }
@@ -790,7 +802,7 @@ void hardKillApp(allocPointer_t runningApp, int8_t errorCode) {
     allocPointer_t thread = allocsByType[THREAD_ALLOC_TYPE];
     while (thread != NULL_ALLOC_POINTER) {
         allocPointer_t tempThread = thread;
-        thread = getAllocMember(tempThread, nextByType);
+        thread = getAllocNextByType(tempThread);
         if (getThreadMember(tempThread, runningApp) != runningApp) {
             continue;
         }
@@ -813,7 +825,7 @@ void hardKillApp(allocPointer_t runningApp, int8_t errorCode) {
     thread = allocsByType[THREAD_ALLOC_TYPE];
     while (thread != NULL_ALLOC_POINTER) {
         allocPointer_t tempThread = thread;
-        thread = getAllocMember(tempThread, nextByType);
+        thread = getAllocNextByType(tempThread);
         allocPointer_t bottomFrame = getBottomLocalFrame(tempThread, runningApp);
         if (bottomFrame == NULL_ALLOC_POINTER) {
             continue;
@@ -831,9 +843,9 @@ void hardKillApp(allocPointer_t runningApp, int8_t errorCode) {
     setCurrentThread(lastThread);
     
     // Delete dynamic allocations.
-    allocPointer_t alloc = getFirstAlloc();
+    allocPointer_t alloc = allocsByType[DYNAMIC_ALLOC_TYPE];
     while (alloc != NULL_ALLOC_POINTER) {
-        allocPointer_t nextAlloc = getAllocNext(alloc);
+        allocPointer_t nextAlloc = getAllocNextByType(alloc);
         int8_t type = getAllocType(alloc);
         if (type == DYNAMIC_ALLOC_TYPE) {
             allocPointer_t creator = getDynamicAllocMember(alloc, creator);
@@ -1096,7 +1108,7 @@ void setCurrentThread(allocPointer_t thread) {
 }
 
 void advanceNextThread(allocPointer_t previousThread) {
-    nextThread = getAllocMember(previousThread, nextByType);
+    nextThread = getAllocNextByType(previousThread);
     if (nextThread == NULL_ALLOC_POINTER) {
         nextThread = allocsByType[THREAD_ALLOC_TYPE];
     }
@@ -1233,7 +1245,7 @@ int8_t performKillAction(allocPointer_t runningApp, int8_t killAction) {
         allocPointer_t thread = allocsByType[THREAD_ALLOC_TYPE];
         while (thread != NULL_ALLOC_POINTER) {
             setCurrentThread(thread);
-            thread = getAllocMember(currentThread, nextByType);
+            thread = getAllocNextByType(currentThread);
             int8_t hasThrottled = throttleAppInCurrentThread(runningApp);
             if (hasThrottled) {
                 throttleCount += 1;
@@ -1280,7 +1292,7 @@ void updateKillStates() {
     allocPointer_t nextRunningApp = allocsByType[RUNNING_APP_ALLOC_TYPE];
     while (nextRunningApp != NULL_ALLOC_POINTER) {
         runningApp = nextRunningApp;
-        nextRunningApp = getAllocMember(runningApp, nextByType);
+        nextRunningApp = getAllocNextByType(runningApp);
         int8_t killAction = getRunningAppMember(runningApp, killAction);
         if (killAction == NONE_KILL_ACTION) {
             continue;
@@ -1305,7 +1317,7 @@ void updateKillStates() {
     runningApp = allocsByType[RUNNING_APP_ALLOC_TYPE];
     while (runningApp != NULL_ALLOC_POINTER) {
         setRunningAppMember(runningApp, memUsage, 0);
-        runningApp = getAllocMember(runningApp, nextByType);
+        runningApp = getAllocNextByType(runningApp);
     }
     allocPointer_t pointer = getFirstAlloc();
     while (pointer != NULL_ALLOC_POINTER) {
@@ -1332,7 +1344,7 @@ void updateKillStates() {
             victimMemUsage = memUsage;
             victimHasAdminPerm = hasAdminPerm;
         }
-        runningApp = getAllocMember(runningApp, nextByType);
+        runningApp = getAllocNextByType(runningApp);
     }
     
     // Start killing the app to free memory.
@@ -1726,7 +1738,7 @@ void evaluateBytecodeInstruction() {
                         hasResumed = true;
                     }
                 }
-                thread = getAllocMember(thread, nextByType);
+                thread = getAllocNextByType(thread);
             }
             if (!hasResumed) {
                 setRunningAppMember(currentImplementer, shouldSkipWait, true);
@@ -2083,6 +2095,7 @@ void evaluateBytecodeInstruction() {
 }
 
 void resetSystemState() {
+    firstFileHandle = NULL_ALLOC_POINTER;
     heapMemSizeLeft = HEAP_MEM_SIZE;
     killStatesDelay = 0;
     unhandledErrorCode = NONE_ERR_CODE;

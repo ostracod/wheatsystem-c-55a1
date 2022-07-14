@@ -102,6 +102,8 @@
 
 // Retrieves the type of the given allocation.
 #define getAllocType(pointer) getSpanMember(getAllocSpanAddress(pointer), allocType)
+// Retrieves a pointer to the next allocation which has the same type.
+#define getAllocNextByType(pointer) getAllocMember(pointer, nextByType)
 // Retrieves the size of the data region in the given allocation.
 #define getAllocSize(pointer) getAllocMember(pointer, size)
 // Retrieves the size of the given allocation including its header.
@@ -674,8 +676,6 @@ allocPointer_t getAllFileNames();
 // "stringAlloc" is a pointer to a dynamicAlloc_t containing the name of the file to open.
 // Returns a pointer to a fileHandle_t.
 allocPointer_t openFileByStringAlloc(allocPointer_t stringAlloc);
-// Retrieves whether the given heap allocation is a file handle.
-int8_t allocIsFileHandle(allocPointer_t pointer);
 // Verifies whether the given pointer references a valid file handle. May assign a new value to unhandledErrorCode.
 // "fileHandle" is a pointer to a fileHandle_t.
 void validateFileHandle(int32_t fileHandle);

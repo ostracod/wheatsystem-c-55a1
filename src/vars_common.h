@@ -10,6 +10,8 @@ uint8_t allocBitField[ALLOC_BIT_FIELD_SIZE];
 // The amount of unused space remaining in heap memory.
 heapMemOffset_t heapMemSizeLeft;
 
+// The first file handle in the linked list.
+allocPointer_t firstFileHandle;
 // The amount of time since app kill states were last updated.
 int16_t killStatesDelay;
 // Stores the last thrown error code. The value of this variable must be checked after invoking certain functions.
