@@ -71,7 +71,9 @@ allocPointer_t createAlloc(int8_t type, heapMemOffset_t size) {
     heapMemOffset_t spanSize1 = getSpanMember(spanAddress1, size);
     heapMemOffset_t tempAddress = getEmptySpanMember(spanAddress1, nextByDegree);
     emptySpansByDegree[degree] = tempAddress;
-    setEmptySpanMember(tempAddress, previousByDegree, MISSING_SPAN_ADDRESS);
+    if (tempAddress != MISSING_SPAN_ADDRESS) {
+        setEmptySpanMember(tempAddress, previousByDegree, MISSING_SPAN_ADDRESS);
+    }
     heapMemOffset_t nextSpanAddress = getSpanMember(spanAddress1, nextByNeighbor);
     cleanUpEmptySpan(spanAddress1);
     
@@ -103,6 +105,13 @@ allocPointer_t createAlloc(int8_t type, heapMemOffset_t size) {
     setSpanMember(spanAddress1, allocType, type);
     allocPointer_t output = getSpanAllocPointer(spanAddress1);
     setAllocMember(output, size, size);
+    setAllocMember(output, previousByType, NULL_ALLOC_POINTER);
+    allocPointer_t nextAlloc = allocsByType[type];
+    allocsByType[type] = output;
+    setAllocMember(output, nextByType, nextAlloc);
+    if (nextAlloc != NULL_ALLOC_POINTER) {
+        setAllocMember(nextAlloc, previousByType, output);
+    }
     heapMemSizeLeft -= sizeof(spanHeader_t) + spanSize1;
     
     // Update the allocation bit field.
@@ -114,6 +123,20 @@ allocPointer_t createAlloc(int8_t type, heapMemOffset_t size) {
 
 void deleteAlloc(allocPointer_t pointer) {
     
+    // Update allocation linked list.
+    allocPointer_t previousAlloc = getAllocMember(pointer, previousByType);
+    allocPointer_t nextAlloc = getAllocMember(pointer, nextByType);
+    if (previousAlloc == NULL_ALLOC_POINTER) {
+        heapMemOffset_t type = getAllocType(pointer);
+        allocsByType[type] = nextAlloc;
+    } else {
+        setAllocMember(previousAlloc, nextByType, nextAlloc);
+    }
+    if (nextAlloc != NULL_ALLOC_POINTER) {
+        setAllocMember(nextAlloc, previousByType, previousAlloc);
+    }
+    
+    // Retrieve span members.
     heapMemOffset_t address = getAllocSpanAddress(pointer);
     heapMemOffset_t size = getSpanMember(address, size);
     heapMemSizeLeft += sizeof(spanHeader_t) + size;
@@ -140,7 +163,7 @@ void deleteAlloc(allocPointer_t pointer) {
         }
     }
     
-    // Update linked lists and allocation type if necessary.
+    // Update span linked lists and allocation type if necessary.
     heapMemOffset_t endAddress;
     if (linkAddress2 == MISSING_SPAN_ADDRESS) {
         endAddress = HEAP_MEM_SIZE;
@@ -724,12 +747,6 @@ void launchApp(allocPointer_t fileHandle) {
     setRunningAppMember(runningApp, fileHandle, fileHandle);
     setRunningAppMember(runningApp, shouldSkipWait, false);
     setRunningAppMember(runningApp, killAction, NONE_KILL_ACTION);
-    setRunningAppMember(runningApp, previous, NULL_ALLOC_POINTER);
-    setRunningAppMember(runningApp, next, firstRunningApp);
-    if (firstRunningApp != NULL_ALLOC_POINTER) {
-        setRunningAppMember(firstRunningApp, previous, runningApp);
-    }
-    firstRunningApp = runningApp;
     setFileHandleMember(fileHandle, runningApp, runningApp);
     setFileHandleMember(fileHandle, initErr, NONE_ERR_CODE);
     
@@ -770,10 +787,10 @@ void softKillApp(allocPointer_t runningApp) {
 void hardKillApp(allocPointer_t runningApp, int8_t errorCode) {
     
     // Delete all threads of the running app.
-    allocPointer_t thread = firstThread;
+    allocPointer_t thread = allocsByType[THREAD_ALLOC_TYPE];
     while (thread != NULL_ALLOC_POINTER) {
         allocPointer_t tempThread = thread;
-        thread = getThreadMember(tempThread, next);
+        thread = getAllocMember(tempThread, nextByType);
         if (getThreadMember(tempThread, runningApp) != runningApp) {
             continue;
         }
@@ -793,10 +810,10 @@ void hardKillApp(allocPointer_t runningApp, int8_t errorCode) {
     
     // Throw errors in threads which belong to other apps.
     allocPointer_t lastThread = currentThread;
-    thread = firstThread;
+    thread = allocsByType[THREAD_ALLOC_TYPE];
     while (thread != NULL_ALLOC_POINTER) {
         allocPointer_t tempThread = thread;
-        thread = getThreadMember(tempThread, next);
+        thread = getAllocMember(tempThread, nextByType);
         allocPointer_t bottomFrame = getBottomLocalFrame(tempThread, runningApp);
         if (bottomFrame == NULL_ALLOC_POINTER) {
             continue;
@@ -831,16 +848,6 @@ void hardKillApp(allocPointer_t runningApp, int8_t errorCode) {
     allocPointer_t fileHandle = getRunningAppMember(runningApp, fileHandle);
     setFileHandleMember(fileHandle, runningApp, NULL_ALLOC_POINTER);
     deleteFileHandleIfUnused(fileHandle);
-    allocPointer_t previousRunningApp = getRunningAppMember(runningApp, previous);
-    allocPointer_t nextRunningApp = getRunningAppMember(runningApp, next);
-    if (previousRunningApp == NULL_ALLOC_POINTER) {
-        firstRunningApp = nextRunningApp;
-    } else {
-        setRunningAppMember(previousRunningApp, next, nextRunningApp);
-    }
-    if (nextRunningApp != NULL_ALLOC_POINTER) {
-        setRunningAppMember(nextRunningApp, previous, previousRunningApp);
-    }
     deleteAlloc(runningApp);
 }
 
@@ -1020,12 +1027,6 @@ int8_t createThread(allocPointer_t runningApp, int32_t funcId) {
     setThreadMember(thread, funcId, funcId);
     setThreadMember(thread, localFrame, NULL_ALLOC_POINTER);
     setThreadMember(thread, isWaiting, false);
-    setThreadMember(thread, previous, NULL_ALLOC_POINTER);
-    setThreadMember(thread, next, firstThread);
-    if (firstThread != NULL_ALLOC_POINTER) {
-        setThreadMember(firstThread, previous, thread);
-    }
-    firstThread = thread;
     callFunc(thread, runningApp, funcIndex, false);
     if (nextThread == NULL_ALLOC_POINTER) {
         nextThread = thread;
@@ -1034,16 +1035,6 @@ int8_t createThread(allocPointer_t runningApp, int32_t funcId) {
 }
 
 void deleteThread(allocPointer_t thread) {
-    allocPointer_t tempPreviousThread = getThreadMember(thread, previous);
-    allocPointer_t tempNextThread = getThreadMember(thread, next);
-    if (tempPreviousThread == NULL_ALLOC_POINTER) {
-        firstThread = tempNextThread;
-    } else {
-        setThreadMember(tempPreviousThread, next, tempNextThread);
-    }
-    if (tempNextThread != NULL_ALLOC_POINTER) {
-        setThreadMember(tempNextThread, previous, tempPreviousThread);
-    }
     if (thread == nextThread) {
         advanceNextThread(nextThread);
         // If we cannot advance the next thread, there
@@ -1105,9 +1096,9 @@ void setCurrentThread(allocPointer_t thread) {
 }
 
 void advanceNextThread(allocPointer_t previousThread) {
-    nextThread = getThreadMember(previousThread, next);
+    nextThread = getAllocMember(previousThread, nextByType);
     if (nextThread == NULL_ALLOC_POINTER) {
-        nextThread = firstThread;
+        nextThread = allocsByType[THREAD_ALLOC_TYPE];
     }
 }
 
@@ -1148,7 +1139,7 @@ void runAppSystem() {
     launchApp(bootFileHandle);
     checkUnhandledError();
     closeFile(bootFileHandle);
-    nextThread = firstThread;
+    nextThread = allocsByType[THREAD_ALLOC_TYPE];
     
     // Enter loop scheduling app threads.
     while (nextThread != NULL_ALLOC_POINTER) {
@@ -1239,10 +1230,10 @@ int8_t performKillAction(allocPointer_t runningApp, int8_t killAction) {
     } else if (killAction == THROTTLE_KILL_ACTION) {
         int16_t throttleCount = 0;
         allocPointer_t lastThread = currentThread;
-        allocPointer_t thread = firstThread;
+        allocPointer_t thread = allocsByType[THREAD_ALLOC_TYPE];
         while (thread != NULL_ALLOC_POINTER) {
             setCurrentThread(thread);
-            thread = getThreadMember(currentThread, next);
+            thread = getAllocMember(currentThread, nextByType);
             int8_t hasThrottled = throttleAppInCurrentThread(runningApp);
             if (hasThrottled) {
                 throttleCount += 1;
@@ -1286,10 +1277,10 @@ void updateKillStates() {
     // Advance states of apps which are currently being killed.
     int16_t killActionCount = 0;
     allocPointer_t runningApp;
-    allocPointer_t nextRunningApp = firstRunningApp;
+    allocPointer_t nextRunningApp = allocsByType[RUNNING_APP_ALLOC_TYPE];
     while (nextRunningApp != NULL_ALLOC_POINTER) {
         runningApp = nextRunningApp;
-        nextRunningApp = getRunningAppMember(runningApp, next);
+        nextRunningApp = getAllocMember(runningApp, nextByType);
         int8_t killAction = getRunningAppMember(runningApp, killAction);
         if (killAction == NONE_KILL_ACTION) {
             continue;
@@ -1311,10 +1302,10 @@ void updateKillStates() {
     }
     
     // Calculate memory usage for all running apps.
-    runningApp = firstRunningApp;
+    runningApp = allocsByType[RUNNING_APP_ALLOC_TYPE];
     while (runningApp != NULL_ALLOC_POINTER) {
         setRunningAppMember(runningApp, memUsage, 0);
-        runningApp = getRunningAppMember(runningApp, next);
+        runningApp = getAllocMember(runningApp, nextByType);
     }
     allocPointer_t pointer = getFirstAlloc();
     while (pointer != NULL_ALLOC_POINTER) {
@@ -1331,7 +1322,7 @@ void updateKillStates() {
     allocPointer_t victimRunningApp = NULL_ALLOC_POINTER;
     allocPointer_t victimMemUsage = 0;
     allocPointer_t victimHasAdminPerm = true;
-    runningApp = firstRunningApp;
+    runningApp = allocsByType[RUNNING_APP_ALLOC_TYPE];
     while (runningApp != NULL_ALLOC_POINTER) {
         heapMemOffset_t memUsage = getRunningAppMember(runningApp, memUsage);
         int8_t hasAdminPerm = runningAppHasAdminPerm(runningApp);
@@ -1341,7 +1332,7 @@ void updateKillStates() {
             victimMemUsage = memUsage;
             victimHasAdminPerm = hasAdminPerm;
         }
-        runningApp = getRunningAppMember(runningApp, next);
+        runningApp = getAllocMember(runningApp, nextByType);
     }
     
     // Start killing the app to free memory.
@@ -1724,7 +1715,7 @@ void evaluateBytecodeInstruction() {
         } else if (opcodeOffset == 0x4) {
             // resume.
             int8_t hasResumed = false;
-            allocPointer_t thread = firstThread;
+            allocPointer_t thread = allocsByType[THREAD_ALLOC_TYPE];
             while (thread != NULL_ALLOC_POINTER) {
                 allocPointer_t localFrame = getThreadMember(thread, localFrame);
                 allocPointer_t implementer = getLocalFrameMember(localFrame, implementer);
@@ -1735,7 +1726,7 @@ void evaluateBytecodeInstruction() {
                         hasResumed = true;
                     }
                 }
-                thread = getThreadMember(thread, next);
+                thread = getAllocMember(thread, nextByType);
             }
             if (!hasResumed) {
                 setRunningAppMember(currentImplementer, shouldSkipWait, true);
@@ -2093,8 +2084,6 @@ void evaluateBytecodeInstruction() {
 
 void resetSystemState() {
     heapMemSizeLeft = HEAP_MEM_SIZE;
-    firstThread = NULL_ALLOC_POINTER;
-    firstRunningApp = NULL_ALLOC_POINTER;
     killStatesDelay = 0;
     unhandledErrorCode = NONE_ERR_CODE;
     for (int8_t degree = 0; degree < SPAN_DEGREE_AMOUNT; degree++) {
@@ -2110,6 +2099,9 @@ void resetSystemState() {
     setSpanMember(spanAddress, size, spanSize);
     setSpanMember(spanAddress, allocType, NONE_ALLOC_TYPE);
     initializeEmptySpan(spanAddress, spanSize);
+    for (int8_t type = 0; type < ALLOC_TYPE_AMOUNT; type++) {
+        allocsByType[type] = NULL_ALLOC_POINTER;
+    }
     for (int16_t index = 0; index < ALLOC_BIT_FIELD_SIZE; index++) {
         allocBitField[index] = 0;
     }

@@ -3,15 +3,13 @@
 heapMemOffset_t emptySpansByDegree[SPAN_DEGREE_AMOUNT];
 // Stores one bit for every span size degree. Each bit equal to 1 indicates the existence of an empty span with the corresponding degree.
 uint8_t emptySpanBitField[SPAN_BIT_FIELD_SIZE];
+// Stores the first allocation of each type.
+allocPointer_t allocsByType[ALLOC_TYPE_AMOUNT];
 // Stores one bit for every possible span position. Each bit equal to 1 indicates the start of a span which contains an allocation.
 uint8_t allocBitField[ALLOC_BIT_FIELD_SIZE];
 // The amount of unused space remaining in heap memory.
 heapMemOffset_t heapMemSizeLeft;
 
-// First thread_t in the linked list.
-allocPointer_t firstThread;
-// First runningApp_t in the linked list.
-allocPointer_t firstRunningApp;
 // The amount of time since app kill states were last updated.
 int16_t killStatesDelay;
 // Stores the last thrown error code. The value of this variable must be checked after invoking certain functions.

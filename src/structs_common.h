@@ -23,6 +23,9 @@ typedef struct emptySpanHeader_t {
 
 // Stored after spanHeader_t when allocType is not NONE_ALLOC_TYPE.
 typedef struct allocHeader_t {
+    // Previous and next allocations which have the same type.
+    heapMemOffset_t previousByType;
+    heapMemOffset_t nextByType;
     // Size of the allocation data region. Note that there may be unused space after the allocation within its parent span.
     heapMemOffset_t size;
 } allocHeader_t;
@@ -77,10 +80,6 @@ typedef struct thread_t {
     allocPointer_t localFrame;
     // Whether the thread is blocked by a "wait" instruction.
     int8_t isWaiting;
-    // Previous thread_t in the linked list.
-    allocPointer_t previous;
-    // Next thread_t in the linked list.
-    allocPointer_t next;
 } thread_t;
 
 // Stored at the beginning of a running application allocation.
@@ -96,10 +95,6 @@ typedef struct runningAppHeader_t {
     // Note that this member variable is only used by updateKillStates.
     // It is not updated regularly.
     heapMemOffset_t memUsage;
-    // Previous runningApp_t in the linked list.
-    allocPointer_t previous;
-    // Next runningApp_t in the linked list.
-    allocPointer_t next;
 } runningAppHeader_t;
 
 // Contains the state of a running application. This struct is stored in the data region of a heap allocation.
