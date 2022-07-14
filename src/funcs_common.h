@@ -70,6 +70,11 @@
 #define getSpanAllocPointer(address) getSpanDataAddress(address)
 // Converts the allocPointer_t of an allocation to the start address of its parent span.
 #define getAllocSpanAddress(pointer) (pointer - sizeof(spanHeader_t))
+// Retrieves the amount of heap memory required to store the given allocation.
+#define getAllocMemUsage(pointer) ({ \
+    heapMemOffset_t address = getAllocSpanAddress(pointer); \
+    getSpanMember(address, size) + sizeof(spanHeader_t); \
+})
 
 // Retrieves the address of an allocation header member in the given allocation.
 // "pointer" is an allocPointer_t.
@@ -468,7 +473,7 @@
     int32_t result = readArgConstantIntHelper(index); \
     checkUnhandledError(); \
     result; \
-});
+})
 // Reads a pointer to a dynamic allocation from a bytecode argument.
 #define readArgDynamicAlloc(index) ({ \
     allocPointer_t pointer = readArgInt(index); \
@@ -483,14 +488,14 @@
     validateFileHandle(fileHandle); \
     checkUnhandledError(); \
     (allocPointer_t)fileHandle; \
-});
+})
 // Reads a pointer to a running app from a bytecode argument.
 #define readArgRunningApp(index) ({ \
     allocPointer_t runningApp; \
     readArgRunningAppHelper(&runningApp, index); \
     checkUnhandledError(); \
     runningApp; \
-});
+})
 
 // Convenience function to create a system application.
 // "systemAppFuncArray" is a fixed array of systemAppFunc_t.
@@ -592,10 +597,6 @@ void cleanUpEmptySpan(heapMemOffset_t address);
 allocPointer_t createAlloc(int8_t type, heapMemOffset_t size);
 // Frees the given heap allocation.
 void deleteAlloc(allocPointer_t pointer);
-
-// These functions are stop-gaps until we optimize allocations further.
-allocPointer_t getFirstAlloc();
-allocPointer_t getAllocNext(allocPointer_t pointer);
 
 // Verifies whether the given pointer is valid. May set unhandledErrorCode to NULL_ERR_CODE or PTR_ERR_CODE.
 void validateAllocPointer(int32_t pointer);
@@ -771,6 +772,14 @@ int8_t currentImplementerMayAccessFile(allocPointer_t fileHandle);
 // "fileHandle" is an allocPointer_t to a fileHandle_t.
 void setFileHasAdminPerm(allocPointer_t fileHandle, int8_t hasAdminPerm);
 
+// Iterates over all allocations in the heap, calling "handle" for each allocation.
+void iterateOverAllocs(void *context, allocIterationHandle_t handle);
+void increaseRunningAppMemUsage(void *context, allocPointer_t alloc, allocPointer_t owner);
+void registerRunningAppMemUsage(
+    memUsageContext_t *context,
+    allocPointer_t alloc,
+    allocPointer_t owner
+);
 // Throws throttleErr in the current thread if any function invocation is implemented by the given running app.
 // "runningApp" is a pointer to a runningApp_t.
 // Returns whether throttleErr was thrown.

@@ -107,6 +107,11 @@ typedef struct runningApp_t {
     int8_t globalFrameData[0];
 } runningApp_t;
 
+typedef struct memUsageContext_t {
+    allocPointer_t runningApp;
+    heapMemOffset_t memUsage;
+} memUsageContext_t;
+
 // Stored at the beginning of a local frame.
 typedef struct localFrameHeader_t {
     // thread_t in which the function is running.

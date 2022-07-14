@@ -189,34 +189,6 @@ void deleteAlloc(allocPointer_t pointer) {
     allocBitField[truncatedAddress >> 3] &= ~((uint8_t)1 << (truncatedAddress & 7));
 }
 
-allocPointer_t getFirstAlloc() {
-    heapMemOffset_t address = 0;
-    while (true) {
-        int8_t type = getSpanMember(address, allocType);
-        if (type != NONE_ALLOC_TYPE) {
-            return getSpanAllocPointer(address);
-        }
-        address = getSpanMember(address, nextByNeighbor);
-        if (address == MISSING_SPAN_ADDRESS) {
-            return NULL_ALLOC_POINTER;
-        }
-    }
-}
-
-allocPointer_t getAllocNext(allocPointer_t pointer) {
-    heapMemOffset_t address = getAllocSpanAddress(pointer);
-    while (true) {
-        address = getSpanMember(address, nextByNeighbor);
-        if (address == MISSING_SPAN_ADDRESS) {
-            return NULL_ALLOC_POINTER;
-        }
-        int8_t type = getSpanMember(address, allocType);
-        if (type != NONE_ALLOC_TYPE) {
-            return getSpanAllocPointer(address);
-        }
-    }
-}
-
 void validateAllocPointer(int32_t pointer) {
     if (pointer < 0 || pointer >= HEAP_MEM_SIZE) {
         throw(PTR_ERR_CODE);
@@ -1217,6 +1189,59 @@ void setFileHasAdminPerm(allocPointer_t fileHandle, int8_t hasAdminPerm) {
     flushStorage();
 }
 
+void iterateOverAllocs(void *context, allocIterationHandle_t handle) {
+    allocPointer_t alloc;
+    alloc = allocsByType[RUNNING_APP_ALLOC_TYPE];
+    while (alloc != NULL_ALLOC_POINTER) {
+        (*handle)(context, alloc, alloc);
+        alloc = getAllocNextByType(alloc);
+    }
+    alloc = allocsByType[THREAD_ALLOC_TYPE];
+    while (alloc != NULL_ALLOC_POINTER) {
+        allocPointer_t owner = getThreadMember(alloc, runningApp);
+        (*handle)(context, alloc, owner);
+        alloc = getAllocNextByType(alloc);
+    }
+    alloc = allocsByType[LOCAL_FRAME_ALLOC_TYPE];
+    while (alloc != NULL_ALLOC_POINTER) {
+        allocPointer_t thread = getLocalFrameMember(alloc, thread);
+        allocPointer_t owner = getThreadMember(thread, runningApp);
+        (*handle)(context, alloc, owner);
+        alloc = getAllocNextByType(alloc);
+    }
+    alloc = allocsByType[ARG_FRAME_ALLOC_TYPE];
+    while (alloc != NULL_ALLOC_POINTER) {
+        allocPointer_t thread = getArgFrameMember(alloc, thread);
+        allocPointer_t owner = getThreadMember(thread, runningApp);
+        (*handle)(context, alloc, owner);
+        alloc = getAllocNextByType(alloc);
+    }
+    alloc = allocsByType[DYNAMIC_ALLOC_TYPE];
+    while (alloc != NULL_ALLOC_POINTER) {
+        allocPointer_t owner = getDynamicAllocMember(alloc, creator);
+        (*handle)(context, alloc, owner);
+        alloc = getAllocNextByType(alloc);
+    }
+}
+
+void increaseRunningAppMemUsage(void *context, allocPointer_t alloc, allocPointer_t owner) {
+    if (owner != NULL_ALLOC_POINTER) {
+        heapMemOffset_t memUsage = getRunningAppMember(owner, memUsage);
+        memUsage += getAllocMemUsage(alloc);
+        setRunningAppMember(owner, memUsage, memUsage);
+    }
+}
+
+void registerRunningAppMemUsage(
+    memUsageContext_t *context,
+    allocPointer_t alloc,
+    allocPointer_t owner
+) {
+    if (owner == context->runningApp) {
+        context->memUsage += getAllocMemUsage(alloc);
+    }
+}
+
 int8_t throttleAppInCurrentThread(allocPointer_t runningApp) {
     allocPointer_t bottomFrame = getBottomLocalFrame(currentThread, runningApp);
     if (bottomFrame == NULL_ALLOC_POINTER) {
@@ -1266,24 +1291,6 @@ int8_t performKillAction(allocPointer_t runningApp, int8_t killAction) {
     return hasStarted;
 }
 
-allocPointer_t getAllocOwner(allocPointer_t pointer) {
-    int8_t type = getAllocType(pointer);
-    if (type == RUNNING_APP_ALLOC_TYPE) {
-        return pointer;
-    } else if (type == THREAD_ALLOC_TYPE) {
-        return getThreadMember(pointer, runningApp);
-    } else if (type == LOCAL_FRAME_ALLOC_TYPE) {
-        allocPointer_t thread = getLocalFrameMember(pointer, thread);
-        return getThreadMember(thread, runningApp);
-    } else if (type == ARG_FRAME_ALLOC_TYPE) {
-        allocPointer_t thread = getArgFrameMember(pointer, thread);
-        return getThreadMember(thread, runningApp);
-    } else if (type == DYNAMIC_ALLOC_TYPE) {
-        return getDynamicAllocMember(pointer, creator);
-    }
-    return NULL_ALLOC_POINTER;
-}
-
 void updateKillStates() {
     
     // Advance states of apps which are currently being killed.
@@ -1319,16 +1326,7 @@ void updateKillStates() {
         setRunningAppMember(runningApp, memUsage, 0);
         runningApp = getAllocNextByType(runningApp);
     }
-    allocPointer_t pointer = getFirstAlloc();
-    while (pointer != NULL_ALLOC_POINTER) {
-        allocPointer_t owner = getAllocOwner(pointer);
-        if (owner != NULL_ALLOC_POINTER) {
-            heapMemOffset_t memUsage = getRunningAppMember(owner, memUsage);
-            memUsage += getAllocSizeWithHeader(pointer);
-            setRunningAppMember(owner, memUsage, memUsage);
-        }
-        pointer = getAllocNext(pointer);
-    }
+    iterateOverAllocs(NULL, increaseRunningAppMemUsage);
     
     // Determine the best app to kill.
     allocPointer_t victimRunningApp = NULL_ALLOC_POINTER;
@@ -2064,17 +2062,9 @@ void evaluateBytecodeInstruction() {
             writeArgInt(0, HEAP_MEM_SIZE);
         } else if (opcodeOffset == 0x1) {
             // appMemSize.
-            allocPointer_t runningApp = readArgRunningApp(1);
-            heapMemOffset_t memUsage = 0;
-            allocPointer_t pointer = getFirstAlloc();
-            while (pointer != NULL_ALLOC_POINTER) {
-                allocPointer_t owner = getAllocOwner(pointer);
-                if (owner == runningApp) {
-                    memUsage += getAllocSizeWithHeader(pointer);
-                }
-                pointer = getAllocNext(pointer);
-            }
-            writeArgInt(0, memUsage);
+            memUsageContext_t context = {readArgRunningApp(1), 0};
+            iterateOverAllocs(&context, (allocIterationHandle_t)registerRunningAppMemUsage);
+            writeArgInt(0, context.memUsage);
         } else if (opcodeOffset == 0x2) {
             // memSizeLeft.
             writeArgInt(0, heapMemSizeLeft);
