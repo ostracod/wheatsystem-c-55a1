@@ -92,6 +92,13 @@
 #define setAllocMember(pointer, memberName, value) \
     writeHeapMem(getAllocMemberAddress(pointer, memberName), getStructMemberType(allocHeader_t, memberName), value)
 
+// Retrieves the type of the given allocation.
+#define getAllocType(pointer) getSpanMember(getAllocSpanAddress(pointer), allocType)
+// Retrieves a pointer to the next allocation which has the same type.
+#define getAllocNextByType(pointer) getAllocMember(pointer, nextByType)
+// Retrieves the size of the data region in the given allocation.
+#define getAllocSize(pointer) getAllocMember(pointer, size)
+
 // Retrieves the start address of the data region in the given allocation.
 #define getAllocDataAddress(pointer) (pointer + sizeof(allocHeader_t))
 // Reads a value from the data region in the given allocation.
@@ -104,15 +111,6 @@
 // "index" is the offset of value in the data region.
 #define writeAlloc(pointer, index, type, value) \
     writeHeapMem(getAllocDataAddress(pointer) + index, type, value)
-
-// Retrieves the type of the given allocation.
-#define getAllocType(pointer) getSpanMember(getAllocSpanAddress(pointer), allocType)
-// Retrieves a pointer to the next allocation which has the same type.
-#define getAllocNextByType(pointer) getAllocMember(pointer, nextByType)
-// Retrieves the size of the data region in the given allocation.
-#define getAllocSize(pointer) getAllocMember(pointer, size)
-// Retrieves the size of the given allocation including its header.
-#define getAllocSizeWithHeader(pointer) (getAllocSize(pointer) + sizeof(allocHeader_t))
 
 // Retrieves a member of the dynamic allocation header in the given dynamic allocation.
 // "pointer" is an allocPointer_t to a dynamicAlloc_t.
@@ -384,7 +382,7 @@
 
 // Retrieves a member from the header of the given bytecode application.
 // "fileHandle" is an allocPointer_t to a fileHandle_t.
-// "memberName" is the name of a member in bytecodeAppHeader_t
+// "memberName" is the name of a member in bytecodeAppHeader_t.
 #define getBytecodeAppMember(fileHandle, memberName) \
     readFile(fileHandle, getStructMemberOffset(bytecodeAppHeader_t, memberName), getStructMemberType(bytecodeAppHeader_t, memberName))
 

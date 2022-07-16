@@ -17,18 +17,18 @@ void initializeEmptySpan(heapMemOffset_t address, heapMemOffset_t size) {
     heapMemOffset_t nextAddress = emptySpansByDegree[degree];
     setEmptySpanMember(address, previousByDegree, MISSING_SPAN_ADDRESS);
     setEmptySpanMember(address, nextByDegree, nextAddress);
+    setEmptySpanMember(address, degree, degree);
     if (nextAddress != MISSING_SPAN_ADDRESS) {
         setEmptySpanMember(nextAddress, previousByDegree, address);
     }
-    setEmptySpanMember(address, degree, degree);
     emptySpansByDegree[degree] = address;
     emptySpanBitField[degree >> 3] |= 1 << (degree & 0x07);
 }
 
 void cleanUpEmptySpan(heapMemOffset_t address) {
-    int8_t degree = getEmptySpanMember(address, degree);
     heapMemOffset_t previousAddress = getEmptySpanMember(address, previousByDegree);
     heapMemOffset_t nextAddress = getEmptySpanMember(address, nextByDegree);
+    int8_t degree = getEmptySpanMember(address, degree);
     if (previousAddress == MISSING_SPAN_ADDRESS) {
         emptySpansByDegree[degree] = nextAddress;
         if (nextAddress == MISSING_SPAN_ADDRESS) {
@@ -68,13 +68,13 @@ allocPointer_t createAlloc(int8_t type, heapMemOffset_t size) {
         mask <<= 1;
     }
     heapMemOffset_t spanAddress1 = emptySpansByDegree[degree];
+    heapMemOffset_t nextSpanAddress = getSpanMember(spanAddress1, nextByNeighbor);
     heapMemOffset_t spanSize1 = getSpanMember(spanAddress1, size);
     heapMemOffset_t tempAddress = getEmptySpanMember(spanAddress1, nextByDegree);
     emptySpansByDegree[degree] = tempAddress;
     if (tempAddress != MISSING_SPAN_ADDRESS) {
         setEmptySpanMember(tempAddress, previousByDegree, MISSING_SPAN_ADDRESS);
     }
-    heapMemOffset_t nextSpanAddress = getSpanMember(spanAddress1, nextByNeighbor);
     cleanUpEmptySpan(spanAddress1);
     
     // Split span if enough space is left over.
@@ -84,12 +84,12 @@ allocPointer_t createAlloc(int8_t type, heapMemOffset_t size) {
     if (spanSize2 > MINIMUM_SPAN_SIZE) {
         setSpanMember(spanAddress2, previousByNeighbor, spanAddress1);
         setSpanMember(spanAddress2, nextByNeighbor, nextSpanAddress);
-        if (nextSpanAddress != MISSING_SPAN_ADDRESS) {
-            setSpanMember(nextSpanAddress, previousByNeighbor, spanAddress2);
-        }
         setSpanMember(spanAddress2, size, spanSize2);
         setSpanMember(spanAddress2, allocType, NONE_ALLOC_TYPE);
         initializeEmptySpan(spanAddress2, spanSize2);
+        if (nextSpanAddress != MISSING_SPAN_ADDRESS) {
+            setSpanMember(nextSpanAddress, previousByNeighbor, spanAddress2);
+        }
         spanSize1 = (spanAddress2 - spanAddress1) - sizeof(spanHeader_t);
         setSpanMember(spanAddress1, nextByNeighbor, spanAddress2);
     } else {
@@ -104,11 +104,11 @@ allocPointer_t createAlloc(int8_t type, heapMemOffset_t size) {
     setSpanMember(spanAddress1, size, spanSize1);
     setSpanMember(spanAddress1, allocType, type);
     allocPointer_t output = getSpanAllocPointer(spanAddress1);
-    setAllocMember(output, size, size);
     setAllocMember(output, previousByType, NULL_ALLOC_POINTER);
     allocPointer_t nextAlloc = allocsByType[type];
     allocsByType[type] = output;
     setAllocMember(output, nextByType, nextAlloc);
+    setAllocMember(output, size, size);
     if (nextAlloc != NULL_ALLOC_POINTER) {
         setAllocMember(nextAlloc, previousByType, output);
     }
@@ -138,10 +138,10 @@ void deleteAlloc(allocPointer_t pointer) {
     
     // Retrieve span members.
     heapMemOffset_t address = getAllocSpanAddress(pointer);
-    heapMemOffset_t size = getSpanMember(address, size);
-    heapMemSizeLeft += sizeof(spanHeader_t) + size;
     heapMemOffset_t previousAddress = getSpanMember(address, previousByNeighbor);
     heapMemOffset_t nextAddress = getSpanMember(address, nextByNeighbor);
+    heapMemOffset_t size = getSpanMember(address, size);
+    heapMemSizeLeft += sizeof(spanHeader_t) + size;
     heapMemOffset_t linkAddress1 = address;
     heapMemOffset_t linkAddress2 = nextAddress;
     
@@ -177,10 +177,10 @@ void deleteAlloc(allocPointer_t pointer) {
     }
     if (!addressIsEqual || linkAddress2 != nextAddress) {
         setSpanMember(linkAddress1, nextByNeighbor, linkAddress2);
+        setSpanMember(linkAddress1, size, newSize);
         if (linkAddress2 != MISSING_SPAN_ADDRESS) {
             setSpanMember(linkAddress2, previousByNeighbor, linkAddress1);
         }
-        setSpanMember(linkAddress1, size, newSize);
     }
     initializeEmptySpan(linkAddress1, newSize);
     
@@ -457,13 +457,13 @@ allocPointer_t openFile(heapMemOffset_t nameAddress, heapMemOffset_t nameSize) {
     setFileHandleMember(output, contentSize, contentSize);
     setFileHandleMember(output, previous, NULL_ALLOC_POINTER);
     setFileHandleMember(output, next, firstFileHandle);
+    setFileHandleMember(output, runningApp, NULL_ALLOC_POINTER);
+    setFileHandleMember(output, initErr, NONE_ERR_CODE);
+    setFileHandleMember(output, openDepth, 1);
     if (firstFileHandle != NULL_ALLOC_POINTER) {
         setFileHandleMember(firstFileHandle, previous, output);
     }
     firstFileHandle = output;
-    setFileHandleMember(output, runningApp, NULL_ALLOC_POINTER);
-    setFileHandleMember(output, initErr, NONE_ERR_CODE);
-    setFileHandleMember(output, openDepth, 1);
     return output;
 }
 
@@ -568,15 +568,15 @@ allocPointer_t openFileByStringAlloc(allocPointer_t stringAlloc) {
 
 int8_t allocIsFileHandle(allocPointer_t pointer) {
     return (getAllocType(pointer) == DYNAMIC_ALLOC_TYPE
-        && getDynamicAllocMember(pointer, creator) == NULL_ALLOC_POINTER
-        && (getDynamicAllocMember(pointer, attributes) & SENTRY_ALLOC_ATTR));
+        && (getDynamicAllocMember(pointer, attributes) & SENTRY_ALLOC_ATTR)
+        && getDynamicAllocMember(pointer, creator) == NULL_ALLOC_POINTER);
 }
 
 void validateFileHandle(int32_t fileHandle) {
     validateDynamicAlloc(fileHandle);
     checkUnhandledError();
-    if (getDynamicAllocMember(fileHandle, creator) != NULL_ALLOC_POINTER
-            || !(getDynamicAllocMember(fileHandle, attributes) & SENTRY_ALLOC_ATTR)) {
+    if (!(getDynamicAllocMember(fileHandle, attributes) & SENTRY_ALLOC_ATTR)
+            || getDynamicAllocMember(fileHandle, creator) != NULL_ALLOC_POINTER) {
         throw(TYPE_ERR_CODE);
     }
 }
