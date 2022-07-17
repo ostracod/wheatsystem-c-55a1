@@ -255,12 +255,24 @@ int8_t heapMemNameEqualsStorageName(
     if (heapMemNameSize != storageNameSize) {
         return false;
     }
-    for (uint8_t index = 0; index < heapMemNameSize; index++) {
-        int8_t character1 = readHeapMem(heapMemNameAddress + index, int8_t);
-        int8_t character2 = readStorage(storageNameAddress + index, int8_t);
-        if (character1 != character2) {
-            return false;
+    uint8_t index = 0;
+    while (index < heapMemNameSize) {
+        int8_t buffer1[NAME_COMPARISON_STRIDE];
+        int8_t buffer2[NAME_COMPARISON_STRIDE];
+        uint8_t sizeToCompare = heapMemNameSize - index;
+        if (sizeToCompare > NAME_COMPARISON_STRIDE) {
+            sizeToCompare = NAME_COMPARISON_STRIDE;
         }
+        readHeapMemRange(buffer1, heapMemNameAddress + index, sizeToCompare);
+        readStorageRange(buffer2, storageNameAddress + index, sizeToCompare);
+        for (uint8_t offset = 0; offset < sizeToCompare; offset++) {
+            int8_t character1 = buffer1[offset];
+            int8_t character2 = buffer2[offset];
+            if (character1 != character2) {
+                return false;
+            }
+        }
+        index += sizeToCompare;
     }
     return true;
 }
