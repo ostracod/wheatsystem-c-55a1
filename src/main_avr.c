@@ -2,13 +2,13 @@
 #include "./headers.h"
 
 int main(void) {
-    resetSystemState();
     initializePinModes();
     initializeSpi();
     initializeUart();
     initializeSram();
     initializeStorage();
     initializeLcd();
+    resetSystemState();
     int8_t button = getPressedButton();
     if (button == ACTION_BUTTON) {
         runTransferMode();
