@@ -52,6 +52,11 @@
 #define GUARDED_FILE_ATTR 0x04
 #define ADMIN_FILE_ATTR 0x08
 
+// The number of bytes to copy at a time between memory or storage locations.
+#define BUFFER_COPY_STRIDE 10
+// The number of characters to compare at a time from memory or storage.
+#define NAME_COMPARISON_STRIDE 4
+
 #define NONE_ERR_CODE 0x00
 #define GENERIC_ERR_CODE 0x01
 #define NO_IMPL_ERR_CODE 0x02

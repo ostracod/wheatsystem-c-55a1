@@ -270,9 +270,16 @@ void copyStorageNameToHeapMem(
     heapMemOffset_t heapMemNameAddress,
     uint8_t nameSize
 ) {
-    for (uint8_t index = 0; index < nameSize; index++) {
-        int8_t character = readStorage(storageNameAddress + index, int8_t);
-        writeHeapMem(heapMemNameAddress + index, int8_t, character);
+    uint8_t index = 0;
+    while (index < nameSize) {
+        int8_t buffer[BUFFER_COPY_STRIDE];
+        uint8_t sizeToCopy = nameSize - index;
+        if (sizeToCopy > BUFFER_COPY_STRIDE) {
+            sizeToCopy = BUFFER_COPY_STRIDE;
+        }
+        readStorageRange(buffer, storageNameAddress + index, sizeToCopy);
+        writeHeapMemRange(heapMemNameAddress + index, buffer, sizeToCopy);
+        index += sizeToCopy;
     }
 }
 
@@ -350,12 +357,20 @@ void createFile(
     setFileHeaderMember(newFileAddress, nameSize, nameSize);
     setFileHeaderMember(newFileAddress, contentSize, contentSize);
     setFileHeaderMember(newFileAddress, next, nextFileAddress);
-    storageOffset_t nameAddress = newFileAddress + sizeof(fileHeader_t);
-    for (uint8_t offset = 0; offset < nameSize; offset++) {
-        int8_t character = readDynamicAlloc(name, offset, int8_t);
-        writeStorage(nameAddress + offset, int8_t, character);
+    heapMemOffset_t nameHeapMemAddress = getDynamicAllocDataAddress(name);
+    storageOffset_t nameStorageAddress = newFileAddress + sizeof(fileHeader_t);
+    uint8_t offset = 0;
+    while (offset < nameSize) {
+        int8_t buffer[BUFFER_COPY_STRIDE];
+        uint8_t sizeToCopy = nameSize - offset;
+        if (sizeToCopy > BUFFER_COPY_STRIDE) {
+            sizeToCopy = BUFFER_COPY_STRIDE;
+        }
+        readHeapMemRange(buffer, nameHeapMemAddress + offset, sizeToCopy);
+        writeStorageRange(nameStorageAddress + offset, buffer, sizeToCopy);
+        offset += sizeToCopy;
     }
-    storageOffset_t contentAddress = nameAddress + nameSize;
+    storageOffset_t contentAddress = nameStorageAddress + nameSize;
     for (storageOffset_t offset = 0; offset < contentSize; offset++) {
         writeStorage(contentAddress + offset, int8_t, 0);
     }
@@ -1356,7 +1371,9 @@ void validateArgBounds(instructionArg_t *arg, int32_t size) {
     int32_t index;
     int32_t regionSize;
     if (referenceType == CONSTANT_REF_TYPE) {
-        return;
+        index = 0;
+        uint8_t dataType = getArgPrefixDataType(arg->prefix);
+        regionSize = getArgDataTypeSize(dataType);
     } else if (referenceType == APP_DATA_REF_TYPE) {
         index = arg->appDataIndex;
         regionSize = getBytecodeGlobalFrameMember(currentImplementer, appDataSize);
@@ -1372,65 +1389,69 @@ void validateArgBounds(instructionArg_t *arg, int32_t size) {
     }
 }
 
-int32_t readArgIntHelper2(instructionArg_t *arg, int32_t offset, int8_t dataType) {
+void readArgRange(
+    int8_t *destination,
+    instructionArg_t *arg,
+    int32_t offset,
+    uint8_t amount
+) {
     uint8_t referenceType = getArgPrefixReferenceType(arg->prefix);
     if (referenceType == CONSTANT_REF_TYPE) {
-        return arg->constantValue;
+        // This only works because int8_t and int32_t representations
+        // of the same integer have the same first byte.
+        for (uint8_t index = 0; index < amount; index++) {
+            destination[index] = ((int8_t *)&(arg->constantValue))[index];
+        }
     } else if (referenceType == APP_DATA_REF_TYPE) {
         int32_t filePos = getBytecodeGlobalFrameMember(
             currentImplementer,
             appDataFilePos
         ) + arg->appDataIndex + offset;
-        if (dataType == SIGNED_INT_8_TYPE) {
-            return readFile(currentImplementerFileHandle, filePos, int8_t);
-        } else {
-            return readFile(currentImplementerFileHandle, filePos, int32_t);
-        }
+        readFileRange(destination, currentImplementerFileHandle, filePos, amount);
     } else {
         heapMemOffset_t address = arg->startAddress + arg->index + offset;
-        if (dataType == SIGNED_INT_8_TYPE) {
-            return readHeapMem(address, int8_t);
-        } else {
-            return readHeapMem(address, int32_t);
-        }
+        readHeapMemRange(destination, address, amount);
     }
 }
 
-void writeArgIntHelper2(
+void writeArgRange(
     instructionArg_t *arg,
     int32_t offset,
-    int8_t dataType,
-    int32_t value
+    int8_t *source,
+    uint8_t amount
 ) {
     uint8_t referenceType = getArgPrefixReferenceType(arg->prefix);
     if (referenceType == HEAP_MEM_REF_TYPE) {
         heapMemOffset_t address = arg->startAddress + arg->index + offset;
-        if (dataType == SIGNED_INT_8_TYPE) {
-            writeHeapMem(address, int8_t, (int8_t)value);
-        } else {
-            writeHeapMem(address, int32_t, value);
-        }
+        writeHeapMemRange(address, source, amount);
     } else {
         throw(TYPE_ERR_CODE);
     }
 }
 
-int32_t readArgIntHelper1(instructionArg_t *arg) {
-    uint8_t prefix = arg->prefix;
-    uint8_t dataType = getArgPrefixDataType(prefix);
-    int8_t dataTypeSize = getArgDataTypeSize(dataType);
-    validateArgBounds(arg, dataTypeSize);
-    checkUnhandledError(0);
-    return readArgIntHelper2(arg, 0, dataType);
+int32_t readArgIntHelper(instructionArg_t *arg) {
+    uint8_t dataType = getArgPrefixDataType(arg->prefix);
+    if (dataType == SIGNED_INT_8_TYPE) {
+        int8_t output;
+        validateArgBounds(arg, sizeof(output));
+        checkUnhandledError(0);
+        readArgRange(&output, arg, 0, sizeof(output));
+        return output;
+    } else {
+        int32_t output;
+        validateArgBounds(arg, sizeof(output));
+        checkUnhandledError(0);
+        readArgRange((int8_t *)&output, arg, 0, sizeof(output));
+        return output;
+    }
 }
 
-void writeArgIntHelper1(instructionArg_t *arg, int32_t value) {
-    uint8_t prefix = arg->prefix;
-    uint8_t dataType = getArgPrefixDataType(prefix);
+void writeArgIntHelper(instructionArg_t *arg, int32_t value) {
+    uint8_t dataType = getArgPrefixDataType(arg->prefix);
     int8_t dataTypeSize = getArgDataTypeSize(dataType);
     validateArgBounds(arg, dataTypeSize);
     checkUnhandledError();
-    writeArgIntHelper2(arg, 0, dataType, value);
+    writeArgRange(arg, 0, (int8_t *)&value, dataTypeSize);
 }
 
 int32_t readArgConstantIntHelper(int8_t index) {
@@ -1485,7 +1506,7 @@ void parseInstructionArg(instructionArg_t *destination) {
         instructionArg_t arg1;
         parseInstructionArg(&arg1);
         checkUnhandledError();
-        int32_t argValue1 = readArgIntHelper1(&arg1);
+        int32_t argValue1 = readArgIntHelper(&arg1);
         checkUnhandledError();
         if (referenceType == APP_DATA_REF_TYPE) {
             destination->prefix = argPrefix;
@@ -1504,7 +1525,7 @@ void parseInstructionArg(instructionArg_t *destination) {
                 instructionArg_t arg2;
                 parseInstructionArg(&arg2);
                 checkUnhandledError();
-                index = (heapMemOffset_t)readArgIntHelper1(&arg2);
+                index = (heapMemOffset_t)readArgIntHelper(&arg2);
                 checkUnhandledError();
                 size = getDynamicAllocSize(argValue1);
             } else {
@@ -1566,23 +1587,32 @@ void evaluateWrtBuffInstruction() {
     } else {
         shouldCopyBackward = false;
     }
-    int8_t direction;
-    int32_t startOffset;
-    int32_t endOffset;
     if (shouldCopyBackward) {
-        direction = -1;
-        startOffset = size - 1;
-        endOffset = -1;
+        heapMemOffset_t offset = size;
+        while (offset > 0) {
+            int8_t buffer[BUFFER_COPY_STRIDE];
+            heapMemOffset_t sizeToCopy = offset;
+            if (sizeToCopy > BUFFER_COPY_STRIDE) {
+                sizeToCopy = BUFFER_COPY_STRIDE;
+            }
+            offset -= sizeToCopy;
+            readArgRange(buffer, source, offset, sizeToCopy);
+            writeArgRange(destination, offset, buffer, sizeToCopy);
+            checkUnhandledError();
+        }
     } else {
-        direction = 1;
-        startOffset = 0;
-        endOffset = size;
-    }
-    for (int32_t offset = startOffset; offset != endOffset; offset += direction) {
-        int8_t value = readArgIntHelper2(source, offset, SIGNED_INT_8_TYPE);
-        checkUnhandledError();
-        writeArgIntHelper2(destination, offset, SIGNED_INT_8_TYPE, value);
-        checkUnhandledError();
+        heapMemOffset_t offset = 0;
+        while (offset < size) {
+            int8_t buffer[BUFFER_COPY_STRIDE];
+            heapMemOffset_t sizeToCopy = size - offset;
+            if (sizeToCopy > BUFFER_COPY_STRIDE) {
+                sizeToCopy = BUFFER_COPY_STRIDE;
+            }
+            readArgRange(buffer, source, offset, sizeToCopy);
+            writeArgRange(destination, offset, buffer, sizeToCopy);
+            checkUnhandledError();
+            offset += sizeToCopy;
+        }
     }
 }
 
@@ -1957,10 +1987,17 @@ void evaluateBytecodeInstruction() {
             checkUnhandledError();
             validateFileRange(fileHandle, pos, size);
             storageOffset_t contentAddress = getFileHandleDataAddress(fileHandle) + pos;
-            for (storageOffset_t offset = 0; offset < size; offset++) {
-                int8_t value = readStorage(contentAddress + offset, int8_t);
-                writeArgIntHelper2(destination, offset, SIGNED_INT_8_TYPE, value);
+            heapMemOffset_t offset = 0;
+            while (offset < size) {
+                int8_t buffer[BUFFER_COPY_STRIDE];
+                heapMemOffset_t sizeToCopy = size - offset;
+                if (sizeToCopy > BUFFER_COPY_STRIDE) {
+                    sizeToCopy = BUFFER_COPY_STRIDE;
+                }
+                readStorageRange(buffer, contentAddress + offset, sizeToCopy);
+                writeArgRange(destination, offset, buffer, sizeToCopy);
                 checkUnhandledError();
+                offset += sizeToCopy;
             }
         } else if (opcodeOffset == 0x5) {
             // wrtFile.
@@ -1975,10 +2012,16 @@ void evaluateBytecodeInstruction() {
             checkUnhandledError();
             validateFileRange(fileHandle, pos, size);
             storageOffset_t contentAddress = getFileHandleDataAddress(fileHandle) + pos;
-            for (storageOffset_t offset = 0; offset < size; offset++) {
-                int8_t value = readArgIntHelper2(source, offset, SIGNED_INT_8_TYPE);
-                checkUnhandledError();
-                writeStorage(contentAddress + offset, int8_t, value);
+            heapMemOffset_t offset = 0;
+            while (offset < size) {
+                int8_t buffer[BUFFER_COPY_STRIDE];
+                heapMemOffset_t sizeToCopy = size - offset;
+                if (sizeToCopy > BUFFER_COPY_STRIDE) {
+                    sizeToCopy = BUFFER_COPY_STRIDE;
+                }
+                readArgRange(buffer, source, offset, sizeToCopy);
+                writeStorageRange(contentAddress + offset, buffer, sizeToCopy);
+                offset += sizeToCopy;
             }
         }
     } else if (opcodeCategory == 0x9) {

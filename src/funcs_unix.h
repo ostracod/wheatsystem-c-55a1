@@ -7,6 +7,13 @@
 // "index" is the offset of byte from which to start reading.
 #define readFixedArrayValue(name, index, type) *(type *)((int8_t *)name + index)
 
+// Reads an interval of data from heap memory.
+// "address" is the offset of first byte to read.
+#define readHeapMemRange(destination, address, amount) memcpy(destination, heapMem + address, amount)
+// Writes an interval of data to heap memory.
+// "address" is the offset of first byte to write.
+#define writeHeapMemRange(address, source, amount) memcpy(heapMem + address, source, amount)
+
 // Reads a value from heap memory.
 // "address" is the address of first byte to read.
 #define readHeapMem(address, type) (*(type *)(heapMem + address))
