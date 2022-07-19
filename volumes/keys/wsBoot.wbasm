@@ -1,0 +1,91 @@
+
+# Create a text allocation from application data.
+MACRO newTextAlloc, dest, startLbl, endLbl
+    newAlloc dest, 0, ?endLbl - ?startLbl
+    wrtBuff dest[0]:s8, startLbl, ?endLbl - ?startLbl
+END
+
+VAR key, s8
+
+FUNC init, init_ID
+    
+    VAR termName, s32
+    VAR termHandle, s32
+    VAR wrtTermIndex, s32
+    VAR listenTermIndex, s32
+    newTextAlloc termName, termNameStart, termNameEnd
+    openFile termHandle, termName
+    launch termHandle
+    findFunc wrtTermIndex, termHandle, wrtTerm_ID
+    findFunc listenTermIndex, termHandle, listenTerm_ID
+    callRemote termHandle, listenTermIndex
+    
+    VAR termText, s32
+    newAlloc termText, 0, 6
+    wrt termText[4]:s8, 32
+    
+    LBL loop
+    wait
+    
+    VAR termTextIndex, s8
+    VAR unitPlace, s32
+    VAR tempNumber, s32
+    VAR termDigit, s8
+    VAR condition, s8
+    
+    gre condition, 0, key
+    jmpZ skip1, condition
+    sub tempNumber, 0, key
+    wrt termText[0]:s8, 45
+    wrt termText[5]:s8, 32
+    jmp skip2
+    LBL skip1
+    wrt tempNumber, key
+    wrt termText[0]:s8, 32
+    wrt termText[5]:s8, key
+    LBL skip2
+    
+    gre condition, 32, key
+    jmpNZ skip3, condition
+    gre condition, key, 126
+    jmpNZ skip3, condition
+    wrt termText[5]:s8, key
+    jmp skip4
+    LBL skip3
+    wrt termText[5]:s8, 32
+    LBL skip4
+    
+    wrt termTextIndex, 1
+    wrt unitPlace, 100
+    
+    LBL digitLoop
+    div termDigit, tempNumber, unitPlace
+    add termText[termTextIndex]:s8, 48, termDigit
+    mod tempNumber, tempNumber, unitPlace
+    div unitPlace, unitPlace, 10
+    add termTextIndex, termTextIndex, 1
+    gre condition, 4, termTextIndex
+    jmpNZ digitLoop, condition
+    
+    newArgFrame 12
+    wrt nextArgFrame[0]:s32, 0
+    wrt nextArgFrame[4]:s32, 0
+    wrt nextArgFrame[8]:s32, termText
+    callRemote termHandle, wrtTermIndex
+    
+    jmp loop
+END
+
+FUNC termInput, termInput_ID
+    ARG inputKey, s8
+    wrt key, inputKey
+    resume
+END
+
+APP_DATA
+    LBL termNameStart
+    DATA "wsTerm"
+    LBL termNameEnd
+END
+
+

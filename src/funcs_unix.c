@@ -87,9 +87,11 @@ void initializeTermApp() {
             key = -3;
         } else if (key == KEY_DOWN) {
             key = -4;
-        } else if (key == 263) {
-            key = 127;
-        } else if (key != 10 && key != 27) {
+        } else if (key == KEY_BTAB) {
+            key = -5;
+        } else if (key == KEY_HOME) {
+            key = -6;
+        } else if (key != 9 && key != 10 && key != 27) {
             return;
         }
     }
