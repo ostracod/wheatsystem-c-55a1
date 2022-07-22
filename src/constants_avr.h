@@ -20,9 +20,13 @@
 #define BAUD_RATE 9600
 #define BAUD_RATE_NUMBER (F_CPU / (16 * (int32_t)BAUD_RATE) - 1)
 
-#define CHARACTERS_BUTTON 4
-#define ACTION_BUTTON 8
+#define CHARS_BUTTON 4
+#define ACTIONS_BUTTON 8
 
+#define CHARS_BUTTON_MODE 1
+#define ACTIONS_BUTTON_MODE 2
+
+#define KEY_CODE_BUFFER_SIZE 5
 #define TRANSFER_MODE_BUFFER_SIZE 128
 
 // Fixed array of values.
@@ -30,5 +34,9 @@ const int8_t lcdInitCommands[9];
 
 // Fixed array of characters.
 const int8_t transferModeStringConstant[25];
+
+// Fixed arrays of keycodes.
+const int8_t charsModeKeyCodes[100];
+const int8_t actionsModeKeyCodes[10];
 
 

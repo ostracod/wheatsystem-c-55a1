@@ -1,6 +1,7 @@
 
 #include "./headers.h"
 #include <avr/io.h>
+#include <avr/interrupt.h>
 #include <util/delay.h>
 
 void initializePinModes() {
@@ -304,6 +305,68 @@ int8_t getPressedButton() {
         }
     }
     return output;
+}
+
+int8_t getKeyCodeOffset(int8_t button) {
+    if (button < CHARS_BUTTON) {
+        return button;
+    } else if (button < ACTIONS_BUTTON) {
+        return button - 1;
+    } else {
+        return button - 2;
+    }
+}
+
+void registerKeyCode(int8_t keyCode) {
+    keyCodeIndex += 1;
+    if (keyCodeIndex >= KEY_CODE_BUFFER_SIZE) {
+        keyCodeIndex = 0;
+    }
+    keyCodeBuffer[keyCodeIndex] = keyCode;
+}
+
+void registerPressedButton(int8_t button) {
+    if (button == CHARS_BUTTON) {
+        buttonMode = CHARS_BUTTON_MODE;
+        firstButtonInPair = 0;
+    } else if (button == ACTIONS_BUTTON) {
+        buttonMode = ACTIONS_BUTTON_MODE;
+    } else if (buttonMode == ACTIONS_BUTTON_MODE) {
+        int8_t index = getKeyCodeOffset(button);
+        int8_t keyCode = pgm_read_byte(actionsModeKeyCodes + index);
+        registerKeyCode(keyCode);
+    } else if (firstButtonInPair == 0) {
+        firstButtonInPair = button;
+    } else {
+        int8_t index = getKeyCodeOffset(firstButtonInPair) * 10 + getKeyCodeOffset(button);
+        int8_t keyCode = pgm_read_byte(charsModeKeyCodes + index);
+        registerKeyCode(keyCode);
+        firstButtonInPair = 0;
+    }
+}
+
+void initializeButtonTimer() {
+    // Enable CTC timer mode, and use clock divided by 1024.
+    TCCR1B |= (1 << WGM12) | (1 << CS02) | (1 << CS00);
+    // Set maximum timer value to be 5 ms.
+    OCR1A = 390;
+    // Set initial timer value.
+    TCNT1 = 0;
+    // Configure interrupt to run when timer reaches maximum value.
+    TIMSK1 |= (1 << OCIE1A);
+    // Enable interrupts.
+    sei();
+}
+
+// Interrupt triggered by timer.
+ISR(TIMER1_COMPA_vect) {
+    int8_t button = getPressedButton();
+    if (button >= 0 && button != lastPressedButton) {
+        if (button > 0) {
+            registerPressedButton(button);
+        }
+        lastPressedButton = button;
+    }
 }
 
 void runTransferMode() {

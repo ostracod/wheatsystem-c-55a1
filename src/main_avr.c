@@ -8,9 +8,10 @@ int main(void) {
     initializeSram();
     initializeStorage();
     initializeLcd();
-    resetSystemState();
     int8_t button = getPressedButton();
-    if (button == ACTION_BUTTON) {
+    initializeButtonTimer();
+    resetSystemState();
+    if (button == ACTIONS_BUTTON) {
         runTransferMode();
     } else {
         runAppSystem();

@@ -72,7 +72,6 @@
 #define resetHaltFlag()
 #define checkHaltFlag()
 
-
 // Sets the initial mode of each AVR GPIO pin.
 void initializePinModes();
 
@@ -146,6 +145,11 @@ int8_t getPressedButtonColumn(int8_t row);
 // | 9  | 10 | 11 | 12 |
 // +----+----+----+----+
 int8_t getPressedButton();
+
+int8_t getKeyCodeOffset(int8_t button);
+void registerKeyCode(int8_t keyCode);
+void registerPressedButton(int8_t button);
+void initializeButtonTimer();
 
 // Runs a mode where EEPROM data may be written and read over UART.
 void runTransferMode();
