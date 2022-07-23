@@ -9,5 +9,6 @@ int8_t firstButtonInPair;
 
 volatile int8_t keyCodeBuffer[KEY_CODE_BUFFER_SIZE];
 volatile int8_t keyCodeIndex;
+int8_t lastKeyCodeIndex;
 
 

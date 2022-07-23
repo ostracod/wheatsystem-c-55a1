@@ -266,6 +266,9 @@ int8_t getPressedButtonColumn(int8_t row) {
     } else if (row == 2) {
         buttonRow3PinOutput();
     }
+    // Believe it or not, a delay is required so that the
+    // electronic signal can propagate through the buttons.
+    _delay_us(10);
     int8_t column = 0;
     int8_t columnCount = 0;
     if (!buttonColumn1PinRead()) {
@@ -309,11 +312,11 @@ int8_t getPressedButton() {
 
 int8_t getKeyCodeOffset(int8_t button) {
     if (button < CHARS_BUTTON) {
-        return button;
-    } else if (button < ACTIONS_BUTTON) {
         return button - 1;
-    } else {
+    } else if (button < ACTIONS_BUTTON) {
         return button - 2;
+    } else {
+        return button - 3;
     }
 }
 
@@ -416,15 +419,36 @@ void runTransferMode() {
 }
 
 void initializeTermApp() {
-    // TODO: Implement.
-}
-
-void setTermObserver() {
-    // TODO: Implement.
+    allocPointer_t observer = readTermAppGlobalVar(observer);
+    if (observer == NULL_ALLOC_POINTER) {
+        return;
+    }
+    allocPointer_t runningApp = getFileHandleRunningApp(observer);
+    if (runningApp == NULL_ALLOC_POINTER) {
+        return;
+    }
+    int8_t tempIndex = keyCodeIndex;
+    if (lastKeyCodeIndex == tempIndex) {
+        return;
+    }
+    lastKeyCodeIndex += 1;
+    if (lastKeyCodeIndex >= KEY_CODE_BUFFER_SIZE) {
+        lastKeyCodeIndex = 0;
+    }
+    int8_t key = keyCodeBuffer[lastKeyCodeIndex];
+    allocPointer_t nextArgFrame = createNextArgFrame(1);
+    checkErrorInSystemApp();
+    writeArgFrame(nextArgFrame, 0, int8_t, key);
+    int32_t termInputIndex = readTermAppGlobalVar(termInputIndex);
+    callFunc(currentThread, runningApp, termInputIndex, true);
+    checkErrorInSystemApp();
 }
 
 void getTermSize() {
-    // TODO: Implement.
+    allocPointer_t previousArgFrame = getPreviousArgFrame();
+    writeArgFrame(previousArgFrame, 0, int32_t, LCD_WIDTH);
+    writeArgFrame(previousArgFrame, 4, int32_t, LCD_HEIGHT);
+    returnFromFunc();
 }
 
 void writeTermText() {
@@ -432,11 +456,11 @@ void writeTermText() {
     int32_t posX = readArgFrame(previousArgFrame, 0, int32_t);
     int32_t posY = readArgFrame(previousArgFrame, 4, int32_t);
     allocPointer_t textAlloc = readArgFrame(previousArgFrame, 8, int32_t);
+    validateDynamicAlloc(textAlloc);
+    checkErrorInSystemApp();
     if (!runningAppMayAccessAlloc(getCurrentCaller(), textAlloc)
             || !currentImplementerMayAccessAlloc(textAlloc)) {
-        unhandledErrorCode = PERM_ERR_CODE;
-        returnFromFunc();
-        return;
+        throwInSystemApp(PERM_ERR_CODE);
     }
     heapMemOffset_t textSize = getDynamicAllocSize(textAlloc);
     sendLcdCommand(0x80 | (posX + posY * 0x40));
@@ -445,10 +469,6 @@ void writeTermText() {
         sendLcdCharacter(character);
     }
     returnFromFunc();
-}
-
-void killTermApp() {
-    // TODO: Implement.
 }
 
 

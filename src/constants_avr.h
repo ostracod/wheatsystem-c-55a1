@@ -20,6 +20,9 @@
 #define BAUD_RATE 9600
 #define BAUD_RATE_NUMBER (F_CPU / (16 * (int32_t)BAUD_RATE) - 1)
 
+#define LCD_WIDTH 16
+#define LCD_HEIGHT 2
+
 #define CHARS_BUTTON 4
 #define ACTIONS_BUTTON 8
 

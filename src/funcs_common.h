@@ -7,6 +7,16 @@
         return __VA_ARGS__; \
     }
 
+#define throwInSystemApp(errorCode) \
+    unhandledErrorCode = errorCode; \
+    returnFromFunc(); \
+    return;
+#define checkErrorInSystemApp() \
+    if (unhandledErrorCode != NONE_ERR_CODE) { \
+        returnFromFunc(); \
+        return; \
+    }
+
 #define getMaximum(value1, value2) ((value1 > value2) ? value1 : value2)
 
 // Retrieves the number of elements in the given array.

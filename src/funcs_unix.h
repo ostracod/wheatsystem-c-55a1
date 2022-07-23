@@ -49,8 +49,6 @@ void writeStorageRange(storageOffset_t address, void *source, storageOffset_t am
 // Persists any pending changes to non-volatile storage.
 void flushStorage();
 
-void handleWindowResize();
-
 void sleepMilliseconds(int32_t milliseconds);
 
 void printUnixUsage();

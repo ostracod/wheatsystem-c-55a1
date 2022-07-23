@@ -2143,6 +2143,31 @@ void evaluateBytecodeInstruction() {
     }
 }
 
+void setTermObserver() {
+    allocPointer_t caller = getCurrentCaller();
+    int32_t termInputIndex = findFuncById(caller, TERM_INPUT_FUNC_ID);
+    if (termInputIndex < 0) {
+        throwInSystemApp(MISSING_ERR_CODE);
+    }
+    allocPointer_t observer = readTermAppGlobalVar(observer);
+    if (observer != NULL_ALLOC_POINTER) {
+        closeFile(observer);
+    }
+    observer = getRunningAppMember(caller, fileHandle);
+    incrementFileOpenDepth(observer);
+    writeTermAppGlobalVar(observer, observer);
+    writeTermAppGlobalVar(termInputIndex, termInputIndex);
+    returnFromFunc();
+}
+
+void killTermApp() {
+    allocPointer_t observer = readTermAppGlobalVar(observer);
+    if (observer != NULL_ALLOC_POINTER) {
+        closeFile(observer);
+    }
+    hardKillApp(currentImplementer, NONE_ERR_CODE);
+}
+
 void resetSystemState() {
     firstFileHandle = NULL_ALLOC_POINTER;
     heapMemSizeLeft = HEAP_MEM_SIZE;

@@ -53,14 +53,6 @@ void flushStorage() {
     storageIsDirty = false;
 }
 
-void handleWindowResize() {
-    int32_t width;
-    int32_t height;
-    getmaxyx(window, height, width);
-    writeTermAppGlobalVar(width, width);
-    writeTermAppGlobalVar(height, height);
-}
-
 void initializeTermApp() {
     if (window == NULL) {
         window = initscr();
@@ -69,7 +61,11 @@ void initializeTermApp() {
         keypad(window, true);
         ESCDELAY = 50;
         timeout(0);
-        handleWindowResize();
+        int32_t width;
+        int32_t height;
+        getmaxyx(window, height, width);
+        writeTermAppGlobalVar(width, width);
+        writeTermAppGlobalVar(height, height);
     }
     allocPointer_t observer = readTermAppGlobalVar(observer);
     if (observer == NULL_ALLOC_POINTER) {
@@ -99,28 +95,11 @@ void initializeTermApp() {
         }
     }
     allocPointer_t nextArgFrame = createNextArgFrame(1);
-    checkUnhandledError();
+    checkErrorInSystemApp();
     writeArgFrame(nextArgFrame, 0, int8_t, (int8_t)key);
     int32_t termInputIndex = readTermAppGlobalVar(termInputIndex);
     callFunc(currentThread, runningApp, termInputIndex, true);
-}
-
-void setTermObserver() {
-    allocPointer_t caller = getCurrentCaller();
-    int32_t termInputIndex = findFuncById(caller, TERM_INPUT_FUNC_ID);
-    if (termInputIndex < 0) {
-        unhandledErrorCode = MISSING_ERR_CODE;
-    } else {
-        allocPointer_t observer = readTermAppGlobalVar(observer);
-        if (observer != NULL_ALLOC_POINTER) {
-            closeFile(observer);
-        }
-        observer = getRunningAppMember(caller, fileHandle);
-        incrementFileOpenDepth(observer);
-        writeTermAppGlobalVar(observer, observer);
-        writeTermAppGlobalVar(termInputIndex, termInputIndex);
-    }
-    returnFromFunc();
+    checkErrorInSystemApp();
 }
 
 void getTermSize() {
@@ -137,11 +116,11 @@ void writeTermText() {
     int32_t posX = readArgFrame(previousArgFrame, 0, int32_t);
     int32_t posY = readArgFrame(previousArgFrame, 4, int32_t);
     allocPointer_t textAlloc = readArgFrame(previousArgFrame, 8, int32_t);
+    validateDynamicAlloc(textAlloc);
+    checkErrorInSystemApp();
     if (!runningAppMayAccessAlloc(getCurrentCaller(), textAlloc)
             || !currentImplementerMayAccessAlloc(textAlloc)) {
-        unhandledErrorCode = PERM_ERR_CODE;
-        returnFromFunc();
-        return;
+        throwInSystemApp(PERM_ERR_CODE);
     }
     heapMemOffset_t textSize = getDynamicAllocSize(textAlloc);
     wmove(window, posY, posX);
@@ -151,14 +130,6 @@ void writeTermText() {
     }
     refresh();
     returnFromFunc();
-}
-
-void killTermApp() {
-    allocPointer_t observer = readTermAppGlobalVar(observer);
-    if (observer != NULL_ALLOC_POINTER) {
-        closeFile(observer);
-    }
-    hardKillApp(currentImplementer, NONE_ERR_CODE);
 }
 
 void sleepMilliseconds(int32_t milliseconds) {
