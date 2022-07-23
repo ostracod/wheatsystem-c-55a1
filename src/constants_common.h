@@ -125,7 +125,7 @@ const int8_t argAmountOffsetArray[14];
 const int8_t argAmountArray[67];
 
 // List of functions which the term driver implements. Fixed array of values.
-const systemAppFunc_t termAppFuncArray[4];
+const systemAppFunc_t termAppFuncArray[5];
 
 // Determines the system apps which are available on the current platform. Fixed array of values.
 const systemApp_t systemAppArray[1];

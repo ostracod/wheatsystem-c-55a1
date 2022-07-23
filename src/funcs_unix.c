@@ -75,7 +75,10 @@ void initializeTermApp() {
     if (observer == NULL_ALLOC_POINTER) {
         return;
     }
-    // TODO: Check whether observer is still running.
+    allocPointer_t runningApp = getFileHandleRunningApp(observer);
+    if (runningApp == NULL_ALLOC_POINTER) {
+        return;
+    }
     
     int32_t key = getch();
     if (key < 32 || key > 127) {
@@ -99,7 +102,7 @@ void initializeTermApp() {
     checkUnhandledError();
     writeArgFrame(nextArgFrame, 0, int8_t, (int8_t)key);
     int32_t termInputIndex = readTermAppGlobalVar(termInputIndex);
-    callFunc(currentThread, observer, termInputIndex, true);
+    callFunc(currentThread, runningApp, termInputIndex, true);
 }
 
 void setTermObserver() {
@@ -108,7 +111,13 @@ void setTermObserver() {
     if (termInputIndex < 0) {
         unhandledErrorCode = MISSING_ERR_CODE;
     } else {
-        writeTermAppGlobalVar(observer, caller);
+        allocPointer_t observer = readTermAppGlobalVar(observer);
+        if (observer != NULL_ALLOC_POINTER) {
+            closeFile(observer);
+        }
+        observer = getRunningAppMember(caller, fileHandle);
+        incrementFileOpenDepth(observer);
+        writeTermAppGlobalVar(observer, observer);
         writeTermAppGlobalVar(termInputIndex, termInputIndex);
     }
     returnFromFunc();
@@ -142,6 +151,14 @@ void writeTermText() {
     }
     refresh();
     returnFromFunc();
+}
+
+void killTermApp() {
+    allocPointer_t observer = readTermAppGlobalVar(observer);
+    if (observer != NULL_ALLOC_POINTER) {
+        closeFile(observer);
+    }
+    hardKillApp(currentImplementer, NONE_ERR_CODE);
 }
 
 void sleepMilliseconds(int32_t milliseconds) {

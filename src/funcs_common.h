@@ -649,6 +649,9 @@ storageOffset_t getFileAddressByName(
 );
 // Determines the total amount of storage space which the given file occupies.
 storageOffset_t getFileStorageSize(storageOffset_t fileAddress);
+// Increments the open depth of the given file handle.
+// "fileHandle" is a pointer to a dynamicAlloc_t.
+void incrementFileOpenDepth(allocPointer_t fileHandle);
 // Opens the file with the given name, returning a file handle. If the file has already been opened, this function returns the existing file handle and increments its open depth. If the file is missing, this function returns NULL_ALLOC_POINTER.
 allocPointer_t openFile(heapMemOffset_t nameAddress, heapMemOffset_t nameSize);
 // Deletes the given file handle, and kills any running app launched from the file.
@@ -829,6 +832,8 @@ void setTermObserver();
 void getTermSize();
 // Implements the "wrtTerm" WheatSystem function.
 void writeTermText();
+// Implements the "kill" WheatSystem function.
+void killTermApp();
 
 // Resets global variables in the system.
 void resetSystemState();

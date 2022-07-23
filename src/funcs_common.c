@@ -443,6 +443,11 @@ storageOffset_t getFileStorageSize(storageOffset_t fileAddress) {
     return getFileStorageSizeHelper(nameSize, contentSize);
 }
 
+void incrementFileOpenDepth(allocPointer_t fileHandle) {
+    int8_t depth = getFileHandleMember(fileHandle, openDepth);
+    setFileHandleMember(fileHandle, openDepth, depth + 1);
+}
+
 allocPointer_t openFile(heapMemOffset_t nameAddress, heapMemOffset_t nameSize) {
     
     // Return matching file handle if it already exists.
@@ -454,8 +459,7 @@ allocPointer_t openFile(heapMemOffset_t nameAddress, heapMemOffset_t nameSize) {
             getFileNameAddress(getFileHandleMember(fileHandle, address)),
             getFileHandleMember(fileHandle, nameSize)
         )) {
-            int8_t depth = getFileHandleMember(fileHandle, openDepth);
-            setFileHandleMember(fileHandle, openDepth, depth + 1);
+            incrementFileOpenDepth(fileHandle);
             return fileHandle;
         }
         fileHandle = getFileHandleMember(fileHandle, next);

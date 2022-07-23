@@ -416,7 +416,7 @@ void runTransferMode() {
 }
 
 void initializeTermApp() {
-    // Do nothing.
+    // TODO: Implement.
 }
 
 void setTermObserver() {
@@ -445,6 +445,10 @@ void writeTermText() {
         sendLcdCharacter(character);
     }
     returnFromFunc();
+}
+
+void killTermApp() {
+    // TODO: Implement.
 }
 
 
