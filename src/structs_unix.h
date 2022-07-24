@@ -1,5 +1,5 @@
 
-// Stores the global variables of a terminal driver.
+// Stores the global variables of the terminal driver.
 typedef struct termAppGlobalFrame_t {
     int32_t width;
     int32_t height;

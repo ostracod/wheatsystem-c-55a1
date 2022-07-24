@@ -44,8 +44,4 @@ const systemAppFunc_t termAppFuncArray[] PROGMEM = {
     (systemAppFunc_t){KILL_FUNC_ID, true, 0, 0, killTermApp}
 };
 
-const systemApp_t systemAppArray[] PROGMEM = {
-    createSystemApp(TERM_APP_GLOBAL_FRAME_SIZE, termAppFuncArray)
-};
-
 

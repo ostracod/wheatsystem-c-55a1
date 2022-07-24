@@ -113,7 +113,7 @@
 // The maximum number of arguments which any bytecode instruction accepts.
 #define MAXIMUM_ARG_AMOUNT 4
 
-// Global frame size of a terminal driver.
+// Global frame size of the terminal driver.
 #define TERM_APP_GLOBAL_FRAME_SIZE sizeof(termAppGlobalFrame_t)
 
 // Fixed array of characters.
@@ -126,8 +126,5 @@ const int8_t argAmountArray[67];
 
 // List of functions which the term driver implements. Fixed array of values.
 const systemAppFunc_t termAppFuncArray[5];
-
-// Determines the system apps which are available on the current platform. Fixed array of values.
-const systemApp_t systemAppArray[1];
 
 

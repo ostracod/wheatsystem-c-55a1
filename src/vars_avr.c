@@ -13,4 +13,8 @@ volatile int8_t keyCodeBuffer[KEY_CODE_BUFFER_SIZE];
 volatile int8_t keyCodeIndex = 0;
 int8_t lastKeyCodeIndex = 0;
 
+volatile int8_t uartBuffer[UART_BUFFER_SIZE];
+volatile int8_t uartBufferIndex = 0;
+int8_t lastUartIndex = 0;
+
 

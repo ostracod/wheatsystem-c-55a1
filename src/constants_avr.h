@@ -30,7 +30,11 @@
 #define ACTIONS_BUTTON_MODE 2
 
 #define KEY_CODE_BUFFER_SIZE 5
+#define UART_BUFFER_SIZE 64
 #define TRANSFER_MODE_BUFFER_SIZE 128
+
+// Global frame size of the serial driver.
+#define SERIAL_APP_GLOBAL_FRAME_SIZE sizeof(serialAppGlobalFrame_t)
 
 // Fixed array of values.
 const int8_t lcdInitCommands[9];
@@ -41,5 +45,11 @@ const int8_t transferModeStringConstant[25];
 // Fixed arrays of keycodes.
 const int8_t charsModeKeyCodes[100];
 const int8_t actionsModeKeyCodes[10];
+
+// List of functions which the serial driver implements. Fixed array of values.
+const systemAppFunc_t serialAppFuncArray[5];
+
+// Determines the system apps which are available on the AVR platform. Fixed array of values.
+const systemApp_t systemAppArray[2];
 
 

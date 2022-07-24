@@ -16,4 +16,7 @@
 #define VALIDATE_ALLOC_TEST_PACKET_TYPE 12
 #define VALIDATED_ALLOC_TEST_PACKET_TYPE 13
 
+// Determines the system apps which are available on the Unix platform. Fixed array of values.
+const systemApp_t systemAppArray[1];
+
 

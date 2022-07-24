@@ -24,4 +24,17 @@ const int8_t actionsModeKeyCodes[] PROGMEM = {
     9,   -3,  -5,  -1,  10,  -2,  -6,  -4,  127, 27
 };
 
+const systemAppFunc_t serialAppFuncArray[] PROGMEM = {
+    (systemAppFunc_t){INIT_FUNC_ID, true, 0, 0, initializeSerialApp},
+    (systemAppFunc_t){START_SERIAL_FUNC_ID, true, 5, 0, startSerialApp},
+    (systemAppFunc_t){STOP_SERIAL_FUNC_ID, true, 1, 0, stopSerialApp},
+    (systemAppFunc_t){WRT_SERIAL_FUNC_ID, true, 5, 0, writeSerialApp},
+    (systemAppFunc_t){KILL_FUNC_ID, true, 0, 0, killSerialApp}
+};
+
+const systemApp_t systemAppArray[] PROGMEM = {
+    createSystemApp(TERM_APP_GLOBAL_FRAME_SIZE, termAppFuncArray),
+    createSystemApp(SERIAL_APP_GLOBAL_FRAME_SIZE, serialAppFuncArray)
+};
+
 

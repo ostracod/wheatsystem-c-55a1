@@ -746,8 +746,11 @@ void launchApp(allocPointer_t fileHandle) {
         if (fileSize != 1) {
             throw(DATA_ERR_CODE);
         }
-        
         systemAppId = readFile(fileHandle, 0, int8_t);
+        if (systemAppId < 0 || systemAppId >= getArrayLength(systemAppArray)) {
+            throw(DATA_ERR_CODE);
+        }
+        
         globalFrameSize = sizeof(systemGlobalFrameHeader_t) + getSystemAppMember(systemAppId, globalFrameSize);
     } else {
         throw(TYPE_ERR_CODE);

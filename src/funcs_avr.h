@@ -154,4 +154,15 @@ void initializeButtonTimer();
 // Runs a mode where EEPROM data may be written and read over UART.
 void runTransferMode();
 
+// Implements the "init" WheatSystem function.
+void initializeSerialApp();
+// Implements the "startSerial" WheatSystem function.
+void startSerialApp();
+// Implements the "stopSerial" WheatSystem function.
+void stopSerialApp();
+// Implements the "wrtSerial" WheatSystem function.
+void writeSerialApp();
+// Implements the "kill" WheatSystem function.
+void killSerialApp();
+
 

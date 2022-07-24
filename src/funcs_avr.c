@@ -78,17 +78,31 @@ void initializeUart() {
     // Set UART baud rate.
     UBRR0L = BAUD_RATE_NUMBER & 0xFF;
     UBRR0H = BAUD_RATE_NUMBER >> 8;
-    // Enable UART transmitter and receiver.
-    UCSR0B |= (1 << RXEN0) | (1 << TXEN0);
+    // Enable UART receiver, transmitter, and interrupt.
+    UCSR0B |= (1 << RXEN0) | (1 << TXEN0) | (1 << RXCIE0);
+}
+
+// Interrupt triggered when receiving UART data.
+ISR(USART_RX_vect) {
+    int8_t value = UDR0;
+    uartBufferIndex += 1;
+    if (uartBufferIndex >= UART_BUFFER_SIZE) {
+        uartBufferIndex = 0;
+    }
+    uartBuffer[uartBufferIndex] = value;
 }
 
 int8_t receiveUartInt8() {
-    // Wait for receive buffer to be full.
-    while (!(UCSR0A & (1 << RXC0))) {
-        
+    while (true) {
+        int8_t tempIndex = uartBufferIndex;
+        if (lastUartIndex != tempIndex) {
+            lastUartIndex += 1;
+            if (lastUartIndex >= UART_BUFFER_SIZE) {
+                lastUartIndex = 0;
+            }
+            return uartBuffer[lastUartIndex];
+        }
     }
-    // Read character from receive register.
-    return UDR0;
 }
 
 void sendUartInt8(int8_t character) {
@@ -469,6 +483,26 @@ void writeTermText() {
         sendLcdCharacter(character);
     }
     returnFromFunc();
+}
+
+void initializeSerialApp() {
+    // TODO: Implement.
+}
+
+void startSerialApp() {
+    // TODO: Implement.
+}
+
+void stopSerialApp() {
+    // TODO: Implement.
+}
+
+void writeSerialApp() {
+    // TODO: Implement.
+}
+
+void killSerialApp() {
+    // TODO: Implement.
 }
 
 
