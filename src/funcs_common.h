@@ -581,11 +581,11 @@
     getSystemAppFuncMember(systemAppId, funcIndex, memberName); \
 })
 
-// Retrieves a global variable of a term driver.
+// Retrieves a global variable of the term driver.
 // "memberName" is the name of a member in termAppGlobalFrame_t.
 #define readTermAppGlobalVar(memberName) \
     readSystemAppGlobalVar(termAppGlobalFrame_t, memberName)
-// Modifies a global variable of a term driver.
+// Modifies a global variable of the term driver.
 // "memberName" is the name of a member in termAppGlobalFrame_t.
 #define writeTermAppGlobalVar(memberName, value) \
     writeSystemAppGlobalVar(termAppGlobalFrame_t, memberName, value)

@@ -74,10 +74,14 @@ void sendSpiInt8(int8_t value) {
     }
 }
 
+void setUartBaudRate(int32_t rate) {
+    int32_t ratio = F_CPU / (16 * rate) - 1;
+    UBRR0L = ratio & 0xFF;
+    UBRR0H = ratio >> 8;
+}
+
 void initializeUart() {
-    // Set UART baud rate.
-    UBRR0L = BAUD_RATE_NUMBER & 0xFF;
-    UBRR0H = BAUD_RATE_NUMBER >> 8;
+    setUartBaudRate(9600);
     // Enable UART receiver, transmitter, and interrupt.
     UCSR0B |= (1 << RXEN0) | (1 << TXEN0) | (1 << RXCIE0);
 }
@@ -85,22 +89,26 @@ void initializeUart() {
 // Interrupt triggered when receiving UART data.
 ISR(USART_RX_vect) {
     int8_t value = UDR0;
-    uartBufferIndex += 1;
-    if (uartBufferIndex >= UART_BUFFER_SIZE) {
-        uartBufferIndex = 0;
+    uartIndex += 1;
+    if (uartIndex >= UART_BUFFER_SIZE) {
+        uartIndex = 0;
     }
-    uartBuffer[uartBufferIndex] = value;
+    uartBuffer[uartIndex] = value;
+}
+
+int8_t receiveUartInt8Helper() {
+    lastUartIndex += 1;
+    if (lastUartIndex >= UART_BUFFER_SIZE) {
+        lastUartIndex = 0;
+    }
+    return uartBuffer[lastUartIndex];
 }
 
 int8_t receiveUartInt8() {
     while (true) {
-        int8_t tempIndex = uartBufferIndex;
+        int8_t tempIndex = uartIndex;
         if (lastUartIndex != tempIndex) {
-            lastUartIndex += 1;
-            if (lastUartIndex >= UART_BUFFER_SIZE) {
-                lastUartIndex = 0;
-            }
-            return uartBuffer[lastUartIndex];
+            return receiveUartInt8Helper();
         }
     }
 }
@@ -486,23 +494,95 @@ void writeTermText() {
 }
 
 void initializeSerialApp() {
-    // TODO: Implement.
+    allocPointer_t observer = readSerialAppGlobalVar(observer);
+    if (observer == NULL_ALLOC_POINTER) {
+        return;
+    }
+    allocPointer_t runningApp = getFileHandleRunningApp(observer);
+    if (runningApp == NULL_ALLOC_POINTER) {
+        return;
+    }
+    int8_t tempIndex = uartIndex;
+    if (lastUartIndex == tempIndex) {
+        return;
+    }
+    int8_t value = receiveUartInt8Helper();
+    allocPointer_t nextArgFrame = createNextArgFrame(2);
+    checkErrorInSystemApp();
+    writeArgFrame(nextArgFrame, 0, int8_t, 0);
+    writeArgFrame(nextArgFrame, 1, int8_t, value);
+    int32_t serialInputIndex = readSerialAppGlobalVar(serialInputIndex);
+    callFunc(currentThread, runningApp, serialInputIndex, true);
+    checkErrorInSystemApp();
 }
 
 void startSerialApp() {
-    // TODO: Implement.
+    allocPointer_t previousArgFrame = getPreviousArgFrame();
+    int8_t port = readArgFrame(previousArgFrame, 0, int8_t);
+    if (port != 0) {
+        throwInSystemApp(INDEX_ERR_CODE);
+    }
+    int32_t rate = readArgFrame(previousArgFrame, 1, int32_t);
+    allocPointer_t caller = getCurrentCaller();
+    int32_t serialInputIndex = findFuncById(caller, SERIAL_INPUT_FUNC_ID);
+    if (serialInputIndex < 0) {
+        throwInSystemApp(MISSING_ERR_CODE);
+    }
+    allocPointer_t observer = readSerialAppGlobalVar(observer);
+    if (observer != NULL_ALLOC_POINTER) {
+        closeFile(observer);
+    }
+    observer = getRunningAppMember(caller, fileHandle);
+    incrementFileOpenDepth(observer);
+    writeSerialAppGlobalVar(observer, observer);
+    writeSerialAppGlobalVar(serialInputIndex, serialInputIndex);
+    setUartBaudRate(rate);
+    lastUartIndex = uartIndex;
+    returnFromFunc();
 }
 
 void stopSerialApp() {
-    // TODO: Implement.
+    allocPointer_t previousArgFrame = getPreviousArgFrame();
+    int8_t port = readArgFrame(previousArgFrame, 0, int8_t);
+    if (port != 0) {
+        throwInSystemApp(INDEX_ERR_CODE);
+    }
+    allocPointer_t observer = readSerialAppGlobalVar(observer);
+    if (observer != NULL_ALLOC_POINTER) {
+        closeFile(observer);
+        writeSerialAppGlobalVar(observer, NULL_ALLOC_POINTER);
+    }
+    returnFromFunc();
 }
 
 void writeSerialApp() {
-    // TODO: Implement.
+    allocPointer_t observer = readSerialAppGlobalVar(observer);
+    if (observer == NULL_ALLOC_POINTER) {
+        throwInSystemApp(STATE_ERR_CODE);
+    }
+    allocPointer_t previousArgFrame = getPreviousArgFrame();
+    int8_t port = readArgFrame(previousArgFrame, 0, int8_t);
+    allocPointer_t bufferAlloc = readArgFrame(previousArgFrame, 1, int32_t);
+    validateDynamicAlloc(bufferAlloc);
+    checkErrorInSystemApp();
+    if (!runningAppMayAccessAlloc(getCurrentCaller(), bufferAlloc)
+            || !currentImplementerMayAccessAlloc(bufferAlloc)) {
+        throwInSystemApp(PERM_ERR_CODE);
+    }
+    heapMemOffset_t bufferSize = getDynamicAllocSize(bufferAlloc);
+    for (heapMemOffset_t index = 0; index < bufferSize; index++) {
+        int8_t value = readDynamicAlloc(bufferAlloc, index, int8_t);
+        sendUartInt8(value);
+    }
+    returnFromFunc();
 }
 
 void killSerialApp() {
-    // TODO: Implement.
+    allocPointer_t observer = readSerialAppGlobalVar(observer);
+    if (observer != NULL_ALLOC_POINTER) {
+        closeFile(observer);
+    }
+    hardKillApp(currentImplementer, NONE_ERR_CODE);
 }
 
 

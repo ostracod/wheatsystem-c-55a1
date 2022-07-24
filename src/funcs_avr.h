@@ -67,6 +67,15 @@
 // External EEPROM does not require any initialization beyond setting pin modes.
 #define initializeStorage() true
 
+// Retrieves a global variable of the serial driver.
+// "memberName" is the name of a member in serialAppGlobalFrame_t.
+#define readSerialAppGlobalVar(memberName) \
+    readSystemAppGlobalVar(serialAppGlobalFrame_t, memberName)
+// Modifies a global variable of the serial driver.
+// "memberName" is the name of a member in serialAppGlobalFrame_t.
+#define writeSerialAppGlobalVar(memberName, value) \
+    writeSystemAppGlobalVar(serialAppGlobalFrame_t, memberName, value)
+
 // We do not support integration tests on the AVR platform yet.
 #define handleTestInstruction()
 #define resetHaltFlag()
@@ -84,6 +93,7 @@ void sendSpiInt8(int8_t value);
 
 // Sets up serial UART communication.
 void initializeUart();
+int8_t receiveUartInt8Helper();
 // Blocks execution until UART receives one byte. Returns the byte received over UART.
 int8_t receiveUartInt8();
 // Sends a byte over UART.
