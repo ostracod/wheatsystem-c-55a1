@@ -1,0 +1,99 @@
+
+# Create a text allocation from application data.
+MACRO newTextAlloc, dest, startLbl, endLbl
+    newAlloc dest, 0, ?endLbl - ?startLbl
+    wrtBuff dest[0]:s8, startLbl, ?endLbl - ?startLbl
+END
+
+VAR serialData, s8
+
+FUNC init, init_ID
+    
+    VAR name, s32
+    
+    VAR termHandle, s32
+    VAR wrtTermIndex, s32
+    newTextAlloc name, termNameStart, termNameEnd
+    openFile termHandle, name
+    delAlloc name
+    launch termHandle
+    findFunc wrtTermIndex, termHandle, wrtTerm_ID
+    
+    VAR termText, s32
+    newAlloc termText, 0, 3
+    wrt termText[0]:s8, 115
+    wrt termText[1]:s8, 101
+    wrt termText[2]:s8, 114
+    newArgFrame 12
+    wrt nextArgFrame[0]:s32, 0
+    wrt nextArgFrame[4]:s32, 0
+    wrt nextArgFrame[8]:s32, termText
+    callRemote termHandle, wrtTermIndex
+    
+    VAR serialHandle, s32
+    VAR wrtSerialIndex, s32
+    VAR startSerialIndex, s32
+    newTextAlloc name, serialNameStart, serialNameEnd
+    openFile serialHandle, name
+    delAlloc name
+    launch serialHandle
+    findFunc wrtSerialIndex, serialHandle, wrtSerial_ID
+    findFunc startSerialIndex, serialHandle, startSerial_ID
+    newArgFrame 5
+    wrt nextArgFrame[0]:s8, 0
+    wrt nextArgFrame[1]:s32, 9600
+    callRemote serialHandle, startSerialIndex
+    
+    LBL loop
+    wait
+    
+    VAR termTextIndex, s8
+    VAR unitPlace, s32
+    VAR tempNumber, s32
+    VAR termDigit, s8
+    VAR condition, s8
+    
+    wrt termTextIndex, 0
+    wrt unitPlace, 100
+    wrt tempNumber, serialData
+    
+    LBL digitLoop
+    div termDigit, tempNumber, unitPlace
+    add termText[termTextIndex]:s8, 48, termDigit
+    mod tempNumber, tempNumber, unitPlace
+    div unitPlace, unitPlace, 10
+    add termTextIndex, termTextIndex, 1
+    gre condition, 3, termTextIndex
+    jmpNZ digitLoop, condition
+    
+    newArgFrame 12
+    wrt nextArgFrame[0]:s32, 0
+    wrt nextArgFrame[4]:s32, 0
+    wrt nextArgFrame[8]:s32, termText
+    callRemote termHandle, wrtTermIndex
+    
+    newArgFrame 5
+    wrt nextArgFrame[0]:s8, 0
+    wrt nextArgFrame[1]:s32, termText
+    callRemote serialHandle, wrtSerialIndex
+    
+    jmp loop
+END
+
+FUNC serialInput, serialInput_ID
+    ARG port, s8
+    ARG value, s8
+    wrt serialData, value
+    resume
+END
+
+APP_DATA
+    LBL termNameStart
+    DATA "wsTerm"
+    LBL termNameEnd
+    LBL serialNameStart
+    DATA "wsSerial"
+    LBL serialNameEnd
+END
+
+

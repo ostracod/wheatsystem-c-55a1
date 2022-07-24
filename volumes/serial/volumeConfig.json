@@ -1,0 +1,22 @@
+{
+    "files": [
+        {
+            "name": "wsBoot",
+            "type": "bytecodeApp",
+            "hasAdminPerm": true,
+            "isGuarded": false
+        },
+        {
+            "name": "wsTerm",
+            "type": "systemApp",
+            "hasAdminPerm": true,
+            "isGuarded": false
+        },
+        {
+            "name": "wsSerial",
+            "type": "systemApp",
+            "hasAdminPerm": true,
+            "isGuarded": false
+        }
+    ]
+}
