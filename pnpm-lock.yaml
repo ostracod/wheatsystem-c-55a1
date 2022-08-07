@@ -2,7 +2,7 @@ lockfileVersion: 5.4
 
 specifiers:
   serialport: ^10.4.0
-  wheatbytecode-asm: github:ostracod/wheatbytecode-asm#dev
+  wheatbytecode-asm: github:ostracod/wheatbytecode-asm#master
 
 dependencies:
   serialport: 10.4.0
