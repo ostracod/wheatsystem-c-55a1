@@ -32,7 +32,7 @@ FUNC isPrime
     jmp checkFactorLoop
 END
 
-FUNC init, init_ID
+FUNC init, wsInit.id
     
     VAR termName, s32
     VAR termHandle, s32
@@ -40,7 +40,7 @@ FUNC init, init_ID
     newTextAlloc termName, termNameStart, termNameEnd
     openFile termHandle, termName
     launch termHandle
-    findFunc wrtTermIndex, termHandle, wrtTerm_ID
+    findFunc wrtTermIndex, termHandle, wsWrtTerm.id
     
     VAR number, s32
     VAR termText, s32
@@ -50,9 +50,9 @@ FUNC init, init_ID
     LBL loop
     
     newArgFrame 5
-    wrt nextArgFrame[1]:s32, number
+    wrt isPrime.args.number, number
     call isPrime
-    jmpZ printSkip, nextArgFrame[0]:s8
+    jmpZ printSkip, isPrime.args.isPrime
     
     VAR termTextIndex, s8
     VAR unitPlace, s32
@@ -74,9 +74,9 @@ FUNC init, init_ID
     jmpNZ digitLoop, condition
     
     newArgFrame 12
-    wrt nextArgFrame[0]:s32, 0
-    wrt nextArgFrame[4]:s32, 0
-    wrt nextArgFrame[8]:s32, termText
+    wrt wsWrtTerm.args.x, 0
+    wrt wsWrtTerm.args.y, 0
+    wrt wsWrtTerm.args.text, termText
     callRemote termHandle, wrtTermIndex
     
     LBL printSkip

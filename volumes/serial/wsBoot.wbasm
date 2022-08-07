@@ -7,7 +7,7 @@ END
 
 VAR serialData, s8
 
-FUNC init, init_ID
+FUNC init, wsInit.id
     
     VAR name, s32
     
@@ -17,7 +17,7 @@ FUNC init, init_ID
     openFile termHandle, name
     delAlloc name
     launch termHandle
-    findFunc wrtTermIndex, termHandle, wrtTerm_ID
+    findFunc wrtTermIndex, termHandle, wsWrtTerm.id
     
     VAR termText, s32
     newAlloc termText, 0, 3
@@ -25,9 +25,9 @@ FUNC init, init_ID
     wrt termText[1]:s8, 101
     wrt termText[2]:s8, 114
     newArgFrame 12
-    wrt nextArgFrame[0]:s32, 0
-    wrt nextArgFrame[4]:s32, 0
-    wrt nextArgFrame[8]:s32, termText
+    wrt wsWrtTerm.args.x, 0
+    wrt wsWrtTerm.args.y, 0
+    wrt wsWrtTerm.args.text, termText
     callRemote termHandle, wrtTermIndex
     
     VAR serialHandle, s32
@@ -37,11 +37,11 @@ FUNC init, init_ID
     openFile serialHandle, name
     delAlloc name
     launch serialHandle
-    findFunc wrtSerialIndex, serialHandle, wrtSerial_ID
-    findFunc startSerialIndex, serialHandle, startSerial_ID
+    findFunc wrtSerialIndex, serialHandle, wsWrtSerial.id
+    findFunc startSerialIndex, serialHandle, wsStartSerial.id
     newArgFrame 5
-    wrt nextArgFrame[0]:s8, 0
-    wrt nextArgFrame[1]:s32, 9600
+    wrt wsStartSerial.args.port, 0
+    wrt wsStartSerial.args.baudRate, 9600
     callRemote serialHandle, startSerialIndex
     
     LBL loop
@@ -67,20 +67,20 @@ FUNC init, init_ID
     jmpNZ digitLoop, condition
     
     newArgFrame 12
-    wrt nextArgFrame[0]:s32, 0
-    wrt nextArgFrame[4]:s32, 0
-    wrt nextArgFrame[8]:s32, termText
+    wrt wsWrtTerm.args.x, 0
+    wrt wsWrtTerm.args.y, 0
+    wrt wsWrtTerm.args.text, termText
     callRemote termHandle, wrtTermIndex
     
     newArgFrame 5
-    wrt nextArgFrame[0]:s8, 0
-    wrt nextArgFrame[1]:s32, termText
+    wrt wsWrtSerial.args.port, 0
+    wrt wsWrtSerial.args.buff, termText
     callRemote serialHandle, wrtSerialIndex
     
     jmp loop
 END
 
-FUNC serialInput, serialInput_ID
+FUNC serialInput, wsSerialInput.id
     ARG port, s8
     ARG value, s8
     wrt serialData, value

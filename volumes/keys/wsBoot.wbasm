@@ -7,7 +7,7 @@ END
 
 VAR key, s8
 
-FUNC init, init_ID
+FUNC init, wsInit.id
     
     VAR termName, s32
     VAR termHandle, s32
@@ -16,8 +16,8 @@ FUNC init, init_ID
     newTextAlloc termName, termNameStart, termNameEnd
     openFile termHandle, termName
     launch termHandle
-    findFunc wrtTermIndex, termHandle, wrtTerm_ID
-    findFunc listenTermIndex, termHandle, listenTerm_ID
+    findFunc wrtTermIndex, termHandle, wsWrtTerm.id
+    findFunc listenTermIndex, termHandle, wsListenTerm.id
     callRemote termHandle, listenTermIndex
     
     VAR termText, s32
@@ -67,16 +67,16 @@ FUNC init, init_ID
     gre condition, 4, termTextIndex
     jmpNZ digitLoop, condition
     
-    newArgFrame 12
-    wrt nextArgFrame[0]:s32, 0
-    wrt nextArgFrame[4]:s32, 0
-    wrt nextArgFrame[8]:s32, termText
+    newArgFrame wsWrtTerm.argsSize
+    wrt wsWrtTerm.args.x, 0
+    wrt wsWrtTerm.args.y, 0
+    wrt wsWrtTerm.args.text, termText
     callRemote termHandle, wrtTermIndex
     
     jmp loop
 END
 
-FUNC termInput, termInput_ID
+FUNC termInput, wsTermInput.id
     ARG inputKey, s8
     wrt key, inputKey
     resume

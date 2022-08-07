@@ -1,5 +1,5 @@
 
-FUNC init, init_ID
+FUNC init, wsInit.id
     VAR myNumber, s8
     add myNumber, 1, 2
 END
