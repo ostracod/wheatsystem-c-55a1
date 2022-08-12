@@ -1,0 +1,128 @@
+
+INCLUDE "../macros.wbasm"
+
+DEF none_MODE, 0
+DEF displayMessage_MODE, 1
+DEF promptOption_MODE, 2
+DEF promptText_MODE, 3
+
+DEF owner_OFFSET, 0
+DEF hasReqDel_OFFSET, 4
+DEF title_OFFSET, 5
+DEF mode_OFFSET, 9
+DEF termBuff_OFFSET, 10
+DEF verticalScroll_OFFSET, 14
+DEF message_OFFSET, 18
+DEF messageLineAmount_OFFSET, 22
+DEF input_OFFSET, 26
+DEF inputLen_OFFSET, 30
+DEF inputHorizontalScroll_OFFSET, 34
+DEF inputCursorIndex_OFFSET, 38
+
+VAR termHandle, s32
+VAR wrtTermIndex, s32
+VAR termWidth, s32
+VAR termHeight, s32
+
+FUNC init, wsInit.id, guarded
+    VAR termName, s32
+    newTextAlloc termName, termNameStart, termNameEnd
+    openFile termHandle, termName
+    delAlloc termName
+    launch termHandle
+    findFunc wrtTermIndex, termHandle, wsWrtTerm.id
+    VAR funcIndex, s32
+    findFunc funcIndex, termHandle, wsTermSize.id
+    newArgFrame wsTermSize.argsSize
+    callRemote termHandle, funcIndex
+    wrt termWidth, wsTermSize.args.widthDest
+    wrt termHeight, wsTermSize.args.heightDest
+    findFunc funcIndex, termHandle, wsListenTerm.id
+    callRemote termHandle, funcIndex
+END
+
+FUNC termInput, wsTermInput.id, guarded
+    ARG key, s8
+    # TODO: Implement.
+    
+END
+
+FUNC newWindow, wsNewWindow.id
+    ARG dest, s32
+    ARG title, s32
+    # TODO: Implement.
+    
+END
+
+FUNC delWindow, wsDelWindow.id
+    ARG window, s32
+    # TODO: Implement.
+    
+END
+
+FUNC displayWindowMessage, wsDisplayWindowMessage.id
+    ARG dest, s8
+    ARG window, s32
+    ARG message, s32
+    # TODO: Implement.
+    
+END
+
+FUNC promptWindowOption, wsPromptWindowOption.id
+    ARG dest, s32
+    ARG window, s32
+    ARG message, s32
+    ARG options, s32
+    # TODO: Implement.
+    
+END
+
+FUNC promptWindowText, wsPromptWindowText.id
+    ARG dest, s32
+    ARG window, s32
+    ARG message, s32
+    ARG startText, s32
+    # TODO: Implement.
+    
+END
+
+FUNC clrWindow, wsClrWindow.id
+    ARG window, s32
+    # TODO: Implement.
+    
+END
+
+FUNC windowTermSize, wsWindowTermSize.id
+    ARG widthDest, s32
+    ARG heightDest, s32
+    ARG window, s32
+    # TODO: Implement.
+    
+END
+
+FUNC readWindowTerm, wsReadWindowTerm.id
+    ARG dest, s32
+    ARG window, s32
+    ARG x, s32
+    ARG y, s32
+    ARG length, s32
+    # TODO: Implement.
+    
+END
+
+FUNC wrtWindowTerm, wsWrtWindowTerm.id
+    ARG window, s32
+    ARG x, s32
+    ARG y, s32
+    ARG text, s32
+    # TODO: Implement.
+    
+END
+
+APP_DATA
+    LBL termNameStart
+    DATA "wsTerm"
+    LBL termNameEnd
+END
+
+

@@ -4,6 +4,7 @@
 *.su
 build
 wsBoot
+wsShell
 *.dat
 node_modules
 dist

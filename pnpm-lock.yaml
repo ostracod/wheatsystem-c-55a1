@@ -159,11 +159,11 @@ packages:
     version: 1.0.0
     requiresBuild: true
     dependencies:
-      wheatsystem-spec: github.com/ostracod/wheatsystem-spec/d4e29b4a857e280b7a733a3fae0d2c83ec1bb3a8
+      wheatsystem-spec: github.com/ostracod/wheatsystem-spec/9ad299242b40556c0c00ec2e38d3d4acc09d39d6
     dev: false
 
-  github.com/ostracod/wheatsystem-spec/d4e29b4a857e280b7a733a3fae0d2c83ec1bb3a8:
-    resolution: {tarball: https://codeload.github.com/ostracod/wheatsystem-spec/tar.gz/d4e29b4a857e280b7a733a3fae0d2c83ec1bb3a8}
+  github.com/ostracod/wheatsystem-spec/9ad299242b40556c0c00ec2e38d3d4acc09d39d6:
+    resolution: {tarball: https://codeload.github.com/ostracod/wheatsystem-spec/tar.gz/9ad299242b40556c0c00ec2e38d3d4acc09d39d6}
     name: wheatsystem-spec
     version: 1.0.0
     requiresBuild: true

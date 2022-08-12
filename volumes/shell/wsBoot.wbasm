@@ -1,0 +1,19 @@
+
+INCLUDE "../macros.wbasm"
+
+FUNC init, wsInit.id, guarded
+    VAR shellName, s32
+    VAR shellHandle, s32
+    newTextAlloc shellName, shellNameStart, shellNameEnd
+    openFile shellHandle, shellName
+    launch shellHandle
+    quitApp
+END
+
+APP_DATA
+    LBL shellNameStart
+    DATA "wsShell"
+    LBL shellNameEnd
+END
+
+
