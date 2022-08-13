@@ -18,13 +18,23 @@ DEF input_OFFSET, 26
 DEF inputLen_OFFSET, 30
 DEF inputHorizontalScroll_OFFSET, 34
 DEF inputCursorIndex_OFFSET, 38
+DEF window_SIZE, 42
 
+VAR thisApp, s32
+VAR windows, s32
+VAR windowCount, s8
+VAR focusedWindow, s32
+VAR shellWindow, s32
 VAR termHandle, s32
 VAR wrtTermIndex, s32
 VAR termWidth, s32
 VAR termHeight, s32
+VAR termBuffSize, s32
 
 FUNC init, wsInit.id, guarded
+    thisApp thisApp
+    newAlloc windows, guardedAllocAttr, 20
+    wrt windowCount, 0
     VAR termName, s32
     newTextAlloc termName, termNameStart, termNameEnd
     openFile termHandle, termName
@@ -37,6 +47,10 @@ FUNC init, wsInit.id, guarded
     callRemote termHandle, funcIndex
     wrt termWidth, wsTermSize.args.widthDest
     wrt termHeight, wsTermSize.args.heightDest
+    mul termBuffSize, termWidth, termHeight
+    newArgFrame newWindow.argsSize
+    call newWindow
+    wrt shellWindow, newWindow.args.dest
     findFunc funcIndex, termHandle, wsListenTerm.id
     callRemote termHandle, funcIndex
 END
@@ -47,15 +61,88 @@ FUNC termInput, wsTermInput.id, guarded
     
 END
 
+FUNC checkPerm, 0, guarded
+    ARG app, s32
+    ARG window, s32
+    
+    VAR cond, s8
+    equ cond, app, window[owner_OFFSET]:s32
+    jmpNZ return, cond
+    equ cond, app, thisApp
+    jmpNZ return, cond
+    hasAdminPerm cond, app
+    jmpNZ return, cond
+    throw permErr
+    LBL return
+END
+
+FUNC drawFocusedWindow, 0, guarded
+    VAR mode, s8
+    wrt mode, focusedWindow[mode_OFFSET]:s8
+    VAR cond, s8
+    equ cond, mode, none_MODE
+    jmpNZ noneMode, cond
+    throw stateErr
+    
+    LBL noneMode
+    newArgFrame wsWrtTerm.argsSize
+    wrt wsWrtTerm.args.text, focusedWindow[termBuff_OFFSET]:s32
+    callRemote termHandle, wrtTermIndex
+END
+
 FUNC newWindow, wsNewWindow.id
     ARG dest, s32
     ARG title, s32
-    # TODO: Implement.
     
+    VAR windowIndex, s8
+    VAR size, s8
+    VAR cond, s8
+    VAR ptr, s32
+    
+    mul windowIndex, windowCount, 4
+    allocSize size, windows
+    gre cond, size, windowIndex
+    jmpNZ skipResize, cond
+    
+    VAR newSize, s8
+    mul newSize, size, 2
+    newAlloc ptr, guardedAllocAttr, newSize
+    wrtBuff ptr[0]:s8, windows[0]:s8, size
+    delAlloc windows
+    wrt windows, ptr
+    
+    LBL skipResize
+    newAlloc dest, guardedAllocAttr | sentryAllocAttr, window_SIZE
+    caller ptr
+    wrt dest[owner_OFFSET]:s32, ptr
+    jmpNZ skipCreateTitle, title
+    fileName title, ptr
+    LBL skipCreateTitle
+    wrt dest[title_OFFSET]:s32, title
+    newAlloc ptr, guardedAllocAttr, termBuffSize
+    VAR index, s32
+    wrt index, 0
+    LBL clrBuffLoop
+    wrt ptr[index]:s8, 32
+    add index, index, 1
+    gre cond, termBuffSize, index
+    jmpNZ clrBuffLoop, cond
+    wrt dest[termBuff_OFFSET]:s32, ptr
+    
+    wrt windows[windowIndex]:s32, dest
+    add windowCount, windowCount, 1
+    wrt focusedWindow, dest
+    call drawFocusedWindow
 END
 
 FUNC delWindow, wsDelWindow.id
     ARG window, s32
+    
+    newArgFrame checkPerm.argsSize
+    caller checkPerm.args.app
+    wrt checkPerm.args.window, window
+    call checkPerm
+    
     # TODO: Implement.
     
 END
