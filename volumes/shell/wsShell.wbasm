@@ -1,6 +1,13 @@
 
 INCLUDE "../macros.wbasm"
 
+MACRO callCheckPerm, window
+    newArgFrame checkPerm.argsSize
+    caller checkPerm.args.app
+    wrt checkPerm.args.window, window
+    call checkPerm
+END
+
 DEF none_MODE, 0
 DEF displayMessage_MODE, 1
 DEF promptOption_MODE, 2
@@ -35,6 +42,7 @@ FUNC init, wsInit.id, guarded
     thisApp thisApp
     newAlloc windows, guardedAllocAttr, 20
     wrt windowCount, 0
+    
     VAR termName, s32
     newTextAlloc termName, termNameStart, termNameEnd
     openFile termHandle, termName
@@ -48,9 +56,22 @@ FUNC init, wsInit.id, guarded
     wrt termWidth, wsTermSize.args.widthDest
     wrt termHeight, wsTermSize.args.heightDest
     mul termBuffSize, termWidth, termHeight
+    
     newArgFrame newWindow.argsSize
     call newWindow
     wrt shellWindow, newWindow.args.dest
+    VAR testText, s32
+    newAlloc testText, guardedAllocAttr, 3
+    wrt testText[0]:s8, 87
+    wrt testText[1]:s8, 111
+    wrt testText[2]:s8, 119
+    newArgFrame wrtWindowTerm.argsSize
+    wrt wrtWindowTerm.args.window, shellWindow
+    wrt wrtWindowTerm.args.x, 2
+    wrt wrtWindowTerm.args.y, 1
+    wrt wrtWindowTerm.args.text, testText
+    call wrtWindowTerm
+    
     findFunc funcIndex, termHandle, wsListenTerm.id
     callRemote termHandle, funcIndex
 END
@@ -74,6 +95,19 @@ FUNC checkPerm, 0, guarded
     jmpNZ return, cond
     throw permErr
     LBL return
+END
+
+FUNC clrTermBuff, 0, guarded
+    ARG termBuff, s32
+    
+    VAR cond, s8
+    VAR index, s32
+    wrt index, 0
+    LBL loop
+    wrt termBuff[index]:s8, 32
+    add index, index, 1
+    gre cond, termBuffSize, index
+    jmpNZ loop, cond
 END
 
 FUNC drawFocusedWindow, 0, guarded
@@ -120,13 +154,9 @@ FUNC newWindow, wsNewWindow.id
     LBL skipCreateTitle
     wrt dest[title_OFFSET]:s32, title
     newAlloc ptr, guardedAllocAttr, termBuffSize
-    VAR index, s32
-    wrt index, 0
-    LBL clrBuffLoop
-    wrt ptr[index]:s8, 32
-    add index, index, 1
-    gre cond, termBuffSize, index
-    jmpNZ clrBuffLoop, cond
+    newArgFrame clrTermBuff.argsSize
+    wrt clrTermBuff.args.termBuff, ptr
+    call clrTermBuff
     wrt dest[termBuff_OFFSET]:s32, ptr
     
     wrt windows[windowIndex]:s32, dest
@@ -137,14 +167,40 @@ END
 
 FUNC delWindow, wsDelWindow.id
     ARG window, s32
+    callCheckPerm window
     
-    newArgFrame checkPerm.argsSize
-    caller checkPerm.args.app
-    wrt checkPerm.args.window, window
-    call checkPerm
+    VAR cond, s8
+    VAR index, s8
     
-    # TODO: Implement.
+    wrt index, 0
+    LBL findLoop
+    equ cond, window, windows[index]:s32
+    jmpNZ breakFind, cond
+    add index, index, 4
+    jmp findLoop
     
+    LBL breakFind
+    VAR nextIndex, s8
+    add index, nextIndex, 4
+    VAR size, s8
+    allocSize size, windows
+    VAR sizeToMove, s8
+    sub sizeToMove, size, nextIndex
+    wrtBuff windows[index]:s8, windows[nextIndex]:s8, sizeToMove
+    sub index, size, 4
+    wrt windows[index]:s8, null
+    sub windowCount, windowCount, 1
+    
+    delAlloc window[title_OFFSET]:s32
+    delAlloc window[termBuff_OFFSET]:s32
+    # TODO: Clean up resources associated with current window mode.
+    delAlloc window
+    
+    equ cond, window, focusedWindow
+    jmpZ skipFocus, cond
+    wrt focusedWindow, windows[0]:s32
+    call drawFocusedWindow
+    LBL skipFocus
 END
 
 FUNC displayWindowMessage, wsDisplayWindowMessage.id
@@ -175,8 +231,16 @@ END
 
 FUNC clrWindow, wsClrWindow.id
     ARG window, s32
-    # TODO: Implement.
+    callCheckPerm window
     
+    newArgFrame clrTermBuff.argsSize
+    wrt clrTermBuff.args.termBuff, window[termBuff_OFFSET]:s32
+    call clrTermBuff
+    VAR cond, s8
+    equ cond, window, focusedWindow
+    jmpZ skipDraw, cond
+    call drawFocusedWindow
+    LBL skipDraw
 END
 
 FUNC windowTermSize, wsWindowTermSize.id
@@ -193,8 +257,23 @@ FUNC readWindowTerm, wsReadWindowTerm.id
     ARG x, s32
     ARG y, s32
     ARG length, s32
-    # TODO: Implement.
+    callCheckPerm window
     
+    VAR index, s32
+    mul index, y, termWidth
+    add index, index, x
+    VAR termBuff, s32
+    wrt termBuff, window[termBuff_OFFSET]:s32
+    newAlloc dest, 0, length
+    setErrJmp cleanUpAlloc
+    wrtBuff dest[0]:s8, termBuff[index]:s8, length
+    ret
+    
+    LBL cleanUpAlloc
+    delAlloc dest
+    VAR err, s8
+    err err
+    throw err
 END
 
 FUNC wrtWindowTerm, wsWrtWindowTerm.id
@@ -202,8 +281,22 @@ FUNC wrtWindowTerm, wsWrtWindowTerm.id
     ARG x, s32
     ARG y, s32
     ARG text, s32
-    # TODO: Implement.
+    callCheckPerm window
     
+    VAR index, s32
+    mul index, y, termWidth
+    add index, index, x
+    VAR termBuff, s32
+    wrt termBuff, window[termBuff_OFFSET]:s32
+    VAR size, s32
+    allocSize size, text
+    wrtBuff termBuff[index]:s8, text[0]:s8, size
+    
+    newArgFrame wsWrtTerm.argsSize
+    wrt wsWrtTerm.args.x, x
+    wrt wsWrtTerm.args.y, y
+    wrt wsWrtTerm.args.text, text
+    callRemote termHandle, wrtTermIndex
 END
 
 APP_DATA
