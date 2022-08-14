@@ -396,6 +396,7 @@ ISR(TIMER1_COMPA_vect) {
 
 void runTransferMode() {
     
+    setLcdCursorPos(0, 0);
     sendLcdCommand(0x80);
     int8_t index = 0;
     while (true) {
@@ -403,7 +404,7 @@ void runTransferMode() {
         if (character == 0) {
             break;
         } else if (character == '\n') {
-            sendLcdCommand(0xC0);
+            setLcdCursorPos(0, 1);
         } else {
             sendLcdCharacter(character);
         }
@@ -485,10 +486,16 @@ void writeTermText() {
         throwInSystemApp(PERM_ERR_CODE);
     }
     heapMemOffset_t textSize = getDynamicAllocSize(textAlloc);
-    sendLcdCommand(0x80 | (posX + posY * 0x40));
+    setLcdCursorPos(posX, posY);
     for (heapMemOffset_t index = 0; index < textSize; index++) {
         int8_t character = readDynamicAlloc(textAlloc, index, int8_t);
         sendLcdCharacter(character);
+        posX += 1;
+        if (posX >= LCD_WIDTH) {
+            posX = 0;
+            posY += 1;
+            setLcdCursorPos(posX, posY);
+        }
     }
     returnFromFunc();
 }

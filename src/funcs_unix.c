@@ -53,6 +53,26 @@ void flushStorage() {
     storageIsDirty = false;
 }
 
+void drawTermMargin() {
+    int32_t width;
+    int32_t height;
+    getmaxyx(window, height, width);
+    for (int16_t posY = 0; posY < height; posY++) {
+        for (int16_t posX = 0; posX < width; posX++) {
+            int8_t pairIndex;
+            if (posX < TERM_WIDTH && posY < TERM_HEIGHT) {
+                pairIndex = BLACK_ON_WHITE_PAIR;
+            } else {
+                pairIndex = CYAN_PAIR;
+            }
+            attron(COLOR_PAIR(pairIndex));
+            mvwaddch(window, posY, posX, ' ');
+            attroff(COLOR_PAIR(pairIndex));
+        }
+    }
+    refresh();
+}
+
 void initializeTermApp() {
     if (window == NULL) {
         window = initscr();
@@ -61,11 +81,11 @@ void initializeTermApp() {
         keypad(window, true);
         ESCDELAY = 50;
         timeout(0);
-        int32_t width;
-        int32_t height;
-        getmaxyx(window, height, width);
-        writeTermAppGlobalVar(width, width);
-        writeTermAppGlobalVar(height, height);
+        start_color();
+        init_pair(BLACK_ON_WHITE_PAIR, COLOR_BLACK, COLOR_WHITE);
+        init_pair(CYAN_PAIR, COLOR_CYAN, COLOR_CYAN);
+        drawTermMargin();
+        attron(COLOR_PAIR(BLACK_ON_WHITE_PAIR));
     }
     allocPointer_t observer = readTermAppGlobalVar(observer);
     if (observer == NULL_ALLOC_POINTER) {
@@ -103,11 +123,9 @@ void initializeTermApp() {
 }
 
 void getTermSize() {
-    int32_t width = readTermAppGlobalVar(width);
-    int32_t height = readTermAppGlobalVar(height);
     allocPointer_t previousArgFrame = getPreviousArgFrame();
-    writeArgFrame(previousArgFrame, 0, int32_t, width);
-    writeArgFrame(previousArgFrame, 4, int32_t, height);
+    writeArgFrame(previousArgFrame, 0, int32_t, TERM_WIDTH);
+    writeArgFrame(previousArgFrame, 4, int32_t, TERM_HEIGHT);
     returnFromFunc();
 }
 
@@ -123,10 +141,14 @@ void writeTermText() {
         throwInSystemApp(PERM_ERR_CODE);
     }
     heapMemOffset_t textSize = getDynamicAllocSize(textAlloc);
-    wmove(window, posY, posX);
     for (heapMemOffset_t index = 0; index < textSize; index++) {
         int8_t character = readDynamicAlloc(textAlloc, index, int8_t);
-        waddch(window, (char)character);
+        mvwaddch(window, posY, posX, (char)character);
+        posX += 1;
+        if (posX >= TERM_WIDTH) {
+            posX = 0;
+            posY += 1;
+        }
     }
     refresh();
     returnFromFunc();

@@ -2,6 +2,12 @@
 // This statement provides NULL.
 #include <stdlib.h>
 
+#define TERM_WIDTH 32
+#define TERM_HEIGHT 8
+
+#define BLACK_ON_WHITE_PAIR 1
+#define CYAN_PAIR 2
+
 #define LAUNCHED_TEST_PACKET_TYPE 1
 #define LOGGED_TEST_PACKET_TYPE 2
 #define HALTED_TEST_PACKET_TYPE 3

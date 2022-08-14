@@ -67,6 +67,9 @@
 // External EEPROM does not require any initialization beyond setting pin modes.
 #define initializeStorage() true
 
+// Determines the next location where characters will be added to the LCD.
+#define setLcdCursorPos(posX, posY) sendLcdCommand(0x80 | (posX + posY * 0x40))
+
 // Retrieves a global variable of the serial driver.
 // "memberName" is the name of a member in serialAppGlobalFrame_t.
 #define readSerialAppGlobalVar(memberName) \

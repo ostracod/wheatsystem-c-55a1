@@ -128,8 +128,8 @@ FUNC newWindow, wsNewWindow.id
     ARG dest, s32
     ARG title, s32
     
-    VAR windowIndex, s8
-    VAR size, s8
+    VAR windowIndex, s32
+    VAR size, s32
     VAR cond, s8
     VAR ptr, s32
     
@@ -138,7 +138,7 @@ FUNC newWindow, wsNewWindow.id
     gre cond, size, windowIndex
     jmpNZ skipResize, cond
     
-    VAR newSize, s8
+    VAR newSize, s32
     mul newSize, size, 2
     newAlloc ptr, guardedAllocAttr, newSize
     wrtBuff ptr[0]:s8, windows[0]:s8, size
@@ -170,7 +170,7 @@ FUNC delWindow, wsDelWindow.id
     callCheckPerm window
     
     VAR cond, s8
-    VAR index, s8
+    VAR index, s32
     
     wrt index, 0
     LBL findLoop
@@ -180,11 +180,11 @@ FUNC delWindow, wsDelWindow.id
     jmp findLoop
     
     LBL breakFind
-    VAR nextIndex, s8
+    VAR nextIndex, s32
     add index, nextIndex, 4
-    VAR size, s8
+    VAR size, s32
     allocSize size, windows
-    VAR sizeToMove, s8
+    VAR sizeToMove, s32
     sub sizeToMove, size, nextIndex
     wrtBuff windows[index]:s8, windows[nextIndex]:s8, sizeToMove
     sub index, size, 4
@@ -247,8 +247,10 @@ FUNC windowTermSize, wsWindowTermSize.id
     ARG widthDest, s32
     ARG heightDest, s32
     ARG window, s32
-    # TODO: Implement.
+    callCheckPerm window
     
+    wrt widthDest, termWidth
+    wrt heightDest, termHeight
 END
 
 FUNC readWindowTerm, wsReadWindowTerm.id
