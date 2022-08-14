@@ -1,6 +1,10 @@
 
 INCLUDE "../macros.wbasm"
 
+MACRO releaseMutex
+    wrt mutexFlag, 0
+END
+
 MACRO callCheckPerm, window
     newArgFrame checkPerm.argsSize
     caller checkPerm.args.app
@@ -28,6 +32,7 @@ DEF inputCursorIndex_OFFSET, 38
 DEF window_SIZE, 42
 
 VAR thisApp, s32
+VAR mutexFlag, s8
 VAR windows, s32
 VAR windowCount, s8
 VAR focusedWindow, s32
@@ -40,6 +45,7 @@ VAR termBuffSize, s32
 
 FUNC init, wsInit.id, guarded
     thisApp thisApp
+    wrt mutexFlag, 0
     newAlloc windows, guardedAllocAttr, 20
     wrt windowCount, 0
     
@@ -82,6 +88,14 @@ FUNC termInput, wsTermInput.id, guarded
     
 END
 
+# Must be called when accessing `windows`, `windowCount`, or `focusedWindow`.
+FUNC acquireMutex, 0, guarded
+    VAR oldValue, s8
+    LBL loop
+    testAndSet oldValue, mutexFlag
+    jmpNZ loop, oldValue
+END
+
 FUNC checkPerm, 0, guarded
     ARG app, s32
     ARG window, s32
@@ -110,6 +124,7 @@ FUNC clrTermBuff, 0, guarded
     jmpNZ loop, cond
 END
 
+# Must be called between `acquireMutex` and `releaseMutex`.
 FUNC drawFocusedWindow, 0, guarded
     VAR mode, s8
     wrt mode, focusedWindow[mode_OFFSET]:s8
@@ -133,19 +148,6 @@ FUNC newWindow, wsNewWindow.id
     VAR cond, s8
     VAR ptr, s32
     
-    mul windowIndex, windowCount, 4
-    allocSize size, windows
-    gre cond, size, windowIndex
-    jmpNZ skipResize, cond
-    
-    VAR newSize, s32
-    mul newSize, size, 2
-    newAlloc ptr, guardedAllocAttr, newSize
-    wrtBuff ptr[0]:s8, windows[0]:s8, size
-    delAlloc windows
-    wrt windows, ptr
-    
-    LBL skipResize
     newAlloc dest, guardedAllocAttr | sentryAllocAttr, window_SIZE
     caller ptr
     wrt dest[owner_OFFSET]:s32, ptr
@@ -159,10 +161,25 @@ FUNC newWindow, wsNewWindow.id
     call clrTermBuff
     wrt dest[termBuff_OFFSET]:s32, ptr
     
+    call acquireMutex
+    mul windowIndex, windowCount, 4
+    allocSize size, windows
+    gre cond, size, windowIndex
+    jmpNZ skipResize, cond
+    
+    VAR newSize, s32
+    mul newSize, size, 2
+    newAlloc ptr, guardedAllocAttr, newSize
+    wrtBuff ptr[0]:s8, windows[0]:s8, size
+    delAlloc windows
+    wrt windows, ptr
+    
+    LBL skipResize
     wrt windows[windowIndex]:s32, dest
     add windowCount, windowCount, 1
     wrt focusedWindow, dest
     call drawFocusedWindow
+    releaseMutex
 END
 
 FUNC delWindow, wsDelWindow.id
@@ -172,6 +189,7 @@ FUNC delWindow, wsDelWindow.id
     VAR cond, s8
     VAR index, s32
     
+    call acquireMutex
     wrt index, 0
     LBL findLoop
     equ cond, window, windows[index]:s32
@@ -191,16 +209,17 @@ FUNC delWindow, wsDelWindow.id
     wrt windows[index]:s8, null
     sub windowCount, windowCount, 1
     
-    delAlloc window[title_OFFSET]:s32
-    delAlloc window[termBuff_OFFSET]:s32
-    # TODO: Clean up resources associated with current window mode.
-    delAlloc window
-    
     equ cond, window, focusedWindow
     jmpZ skipFocus, cond
     wrt focusedWindow, windows[0]:s32
     call drawFocusedWindow
     LBL skipFocus
+    releaseMutex
+    
+    delAlloc window[title_OFFSET]:s32
+    delAlloc window[termBuff_OFFSET]:s32
+    # TODO: Clean up resources associated with current window mode.
+    delAlloc window
 END
 
 FUNC displayWindowMessage, wsDisplayWindowMessage.id
@@ -236,11 +255,14 @@ FUNC clrWindow, wsClrWindow.id
     newArgFrame clrTermBuff.argsSize
     wrt clrTermBuff.args.termBuff, window[termBuff_OFFSET]:s32
     call clrTermBuff
+    
+    call acquireMutex
     VAR cond, s8
     equ cond, window, focusedWindow
     jmpZ skipDraw, cond
     call drawFocusedWindow
     LBL skipDraw
+    releaseMutex
 END
 
 FUNC windowTermSize, wsWindowTermSize.id
@@ -294,11 +316,17 @@ FUNC wrtWindowTerm, wsWrtWindowTerm.id
     allocSize size, text
     wrtBuff termBuff[index]:s8, text[0]:s8, size
     
+    call acquireMutex
+    VAR cond, s8
+    equ cond, window, focusedWindow
+    jmpZ skipDraw, cond
     newArgFrame wsWrtTerm.argsSize
     wrt wsWrtTerm.args.x, x
     wrt wsWrtTerm.args.y, y
     wrt wsWrtTerm.args.text, text
     callRemote termHandle, wrtTermIndex
+    LBL skipDraw
+    releaseMutex
 END
 
 APP_DATA
