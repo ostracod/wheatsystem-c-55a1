@@ -122,7 +122,7 @@ const int8_t bootStringConstant[7];
 // Mapping from more significant opcode nybble to offset in argAmountArray. Fixed array of values.
 const int8_t argAmountOffsetArray[14];
 // Expected number of arguments for each bytecode instruction. Fixed array of values.
-const int8_t argAmountArray[67];
+const int8_t argAmountArray[68];
 
 // List of functions which the term driver implements. Fixed array of values.
 const systemAppFunc_t termAppFuncArray[5];

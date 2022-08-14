@@ -1742,6 +1742,11 @@ void evaluateBytecodeInstruction() {
             }
             int8_t attributes = readArgInt(1) & ALLOC_ATTR_MASK;
             setDynamicAllocMember(alloc, attributes, attributes);
+        } else if (opcodeOffset == 0x9) {
+            // testAndSet.
+            int32_t oldValue = readArgInt(1);
+            writeArgInt(1, 1);
+            writeArgInt(0, oldValue);
         }
     } else if (opcodeCategory == 0x1) {
         // Control flow instructions.
