@@ -12,6 +12,16 @@ MACRO callCheckPerm, window
     call checkPerm
 END
 
+MACRO callCreateLine, dest, lines, lineCount
+    newArgFrame createLine.argsSize
+    wrt createLine.args.lines, lines
+    wrt createLine.args.lineCount, lineCount
+    call createLine
+    wrt dest, createLine.args.dest
+    wrt lines, createLine.args.lines
+    wrt lineCount, createLine.args.lineCount
+END
+
 DEF none_MODE, 0
 DEF displayMessage_MODE, 1
 DEF promptOption_MODE, 2
@@ -23,7 +33,7 @@ DEF title_OFFSET, 5
 DEF mode_OFFSET, 9
 DEF termBuff_OFFSET, 10
 DEF verticalScroll_OFFSET, 14
-DEF message_OFFSET, 18
+DEF messageLines_OFFSET, 18
 DEF messageLineAmount_OFFSET, 22
 DEF input_OFFSET, 26
 DEF inputLen_OFFSET, 30
@@ -37,13 +47,16 @@ VAR windows, s32
 VAR windowCount, s8
 VAR focusedWindow, s32
 VAR shellWindow, s32
+
 VAR termHandle, s32
 VAR wrtTermIndex, s32
 VAR termWidth, s32
 VAR termHeight, s32
 VAR termBuffSize, s32
+VAR emptyLine, s32
 
 FUNC init, wsInit.id, guarded
+    
     thisApp thisApp
     wrt mutexFlag, 0
     newAlloc windows, guardedAllocAttr, 20
@@ -63,20 +76,25 @@ FUNC init, wsInit.id, guarded
     wrt termHeight, wsTermSize.args.heightDest
     mul termBuffSize, termWidth, termHeight
     
+    newAlloc emptyLine, guardedAllocAttr, termWidth
+    VAR cond, s8
+    VAR index, s32
+    wrt index, 0
+    LBL emptyLineLoop
+    wrt emptyLine[index]:s8, 32
+    add index, index, 1
+    gre cond, termWidth, index
+    jmpNZ emptyLineLoop, cond
+    
     newArgFrame newWindow.argsSize
     call newWindow
     wrt shellWindow, newWindow.args.dest
-    VAR testText, s32
-    newAlloc testText, guardedAllocAttr, 3
-    wrt testText[0]:s8, 87
-    wrt testText[1]:s8, 111
-    wrt testText[2]:s8, 119
-    newArgFrame wrtWindowTerm.argsSize
-    wrt wrtWindowTerm.args.window, shellWindow
-    wrt wrtWindowTerm.args.x, 2
-    wrt wrtWindowTerm.args.y, 1
-    wrt wrtWindowTerm.args.text, testText
-    call wrtWindowTerm
+    VAR testMessage, s32
+    newTextAlloc testMessage, testMessageStart, testMessageEnd
+    newArgFrame displayWindowMessage.argsSize
+    wrt displayWindowMessage.args.window, shellWindow
+    wrt displayWindowMessage.args.message, testMessage
+    call displayWindowMessage
     
     findFunc funcIndex, termHandle, wsListenTerm.id
     callRemote termHandle, funcIndex
@@ -124,19 +142,158 @@ FUNC clrTermBuff, 0, guarded
     jmpNZ loop, cond
 END
 
+FUNC createLine, 0, guarded
+    ARG dest, s32
+    ARG lines, s32
+    ARG lineCount, s32
+    
+    VAR index, s32
+    VAR size, s32
+    newAlloc dest, guardedAllocAttr, termWidth
+    wrtBuff dest[0]:s8, emptyLine[0]:s8, termWidth
+    mul index, lineCount, 4
+    allocSize size, lines
+    VAR cond, s8
+    gre cond, size, index
+    jmpNZ skipResize, cond
+    
+    VAR newSize, s32
+    mul newSize, size, 2
+    VAR newLines, s32
+    newAlloc newLines, guardedAllocAttr, newSize
+    wrtBuff newLines[0]:s8, lines[0]:s8, size
+    delAlloc lines
+    wrt lines, newLines
+    
+    LBL skipResize
+    wrt lines[index]:s32, dest
+    add lineCount, lineCount, 1
+END
+
+FUNC splitMessage, 0, guarded
+    ARG window, s32
+    ARG message, s32
+    
+    VAR cond, s8
+    VAR char, s8
+    
+    VAR messageSize, s32
+    VAR messageIndex, s32
+    allocSize messageSize, message
+    wrt messageIndex, 0
+    
+    VAR lines, s32
+    VAR lineCount, s32
+    VAR line, s32
+    VAR lineIndex, s32
+    newAlloc lines, guardedAllocAttr, 20
+    wrt lineCount, 0
+    callCreateLine line, lines, lineCount
+    wrt lineIndex, 0
+    
+    LBL splitLoop
+    gre cond, messageSize, messageIndex
+    jmpZ breakSplit, cond
+    
+    VAR wordStartIndex, s32
+    wrt wordStartIndex, messageIndex
+    LBL spaceLoop
+    gre cond, messageSize, wordStartIndex
+    jmpZ breakSpace, cond
+    equ cond, message[wordStartIndex]:s8, 32
+    jmpZ breakSpace, cond
+    add wordStartIndex, wordStartIndex, 1
+    jmp spaceLoop
+    LBL breakSpace
+    
+    VAR wordEndIndex, s32
+    wrt wordEndIndex, wordStartIndex
+    LBL wordLoop
+    gre cond, messageSize, wordEndIndex
+    jmpZ breakWord, cond
+    wrt char, message[wordEndIndex]:s8
+    gre cond, 33, char
+    jmpNZ breakWord, cond
+    gre cond, char, 126
+    jmpNZ breakWord, cond
+    add wordEndIndex, wordEndIndex, 1
+    equ cond, char, 45
+    jmpNZ breakWord, cond
+    equ cond, char, 47
+    jmpZ wordLoop, cond
+    LBL breakWord
+    
+    VAR size, s32
+    sub size, wordEndIndex, messageIndex
+    VAR lineEndIndex, s32
+    add lineEndIndex, lineIndex, size
+    gre cond, lineEndIndex, termWidth
+    jmpZ skipCreateLine, cond
+    
+    callCreateLine line, lines, lineCount
+    wrt lineIndex, 0
+    wrt messageIndex, wordStartIndex
+    sub size, wordEndIndex, messageIndex
+    
+    LBL skipCreateLine
+    wrtBuff line[lineIndex]:s8, message[messageIndex]:s8, size
+    add lineIndex, lineIndex, size
+    wrt messageIndex, wordEndIndex
+    
+    jmp splitLoop
+    LBL breakSplit
+    
+    wrt window[messageLines_OFFSET]:s32, lines
+    wrt window[messageLineAmount_OFFSET]:s32, lineCount
+END
+
 # Must be called between `acquireMutex` and `releaseMutex`.
 FUNC drawFocusedWindow, 0, guarded
+    VAR cond, s8
+    VAR offset, s32
+    
     VAR mode, s8
     wrt mode, focusedWindow[mode_OFFSET]:s8
-    VAR cond, s8
     equ cond, mode, none_MODE
     jmpNZ noneMode, cond
-    throw stateErr
+    
+    VAR line, s32
+    VAR messageLines, s32
+    VAR messageLineAmount, s32
+    VAR index, s32
+    wrt messageLines, focusedWindow[messageLines_OFFSET]:s32
+    wrt messageLineAmount, focusedWindow[messageLineAmount_OFFSET]:s32
+    wrt index, 0
+    LBL messageLoop
+    gre cond, messageLineAmount, index
+    jmpZ breakMessage, cond
+    mul offset, index, 4
+    wrt line, messageLines[offset]:s32
+    newArgFrame wsWrtTerm.argsSize
+    wrt wsWrtTerm.args.y, index
+    wrt wsWrtTerm.args.text, line
+    callRemote termHandle, wrtTermIndex
+    add index, index, 1
+    jmp messageLoop
+    LBL breakMessage
+    ret
     
     LBL noneMode
     newArgFrame wsWrtTerm.argsSize
     wrt wsWrtTerm.args.text, focusedWindow[termBuff_OFFSET]:s32
     callRemote termHandle, wrtTermIndex
+END
+
+FUNC drawWindowIfFocused, 0, guarded
+    ARG window, s32
+    
+    call acquireMutex
+    VAR cond, s8
+    equ cond, window, focusedWindow
+    jmpZ skipDraw, cond
+    call drawFocusedWindow
+    LBL skipDraw
+    releaseMutex
 END
 
 FUNC newWindow, wsNewWindow.id
@@ -226,8 +383,16 @@ FUNC displayWindowMessage, wsDisplayWindowMessage.id
     ARG dest, s8
     ARG window, s32
     ARG message, s32
-    # TODO: Implement.
     
+    newArgFrame splitMessage.argsSize
+    wrt splitMessage.args.window, window
+    wrt splitMessage.args.message, message
+    call splitMessage
+    wrt window[mode_OFFSET]:s8, displayMessage_MODE
+    
+    newArgFrame drawWindowIfFocused.argsSize
+    wrt drawWindowIfFocused.args.window, window
+    call drawWindowIfFocused
 END
 
 FUNC promptWindowOption, wsPromptWindowOption.id
@@ -256,13 +421,9 @@ FUNC clrWindow, wsClrWindow.id
     wrt clrTermBuff.args.termBuff, window[termBuff_OFFSET]:s32
     call clrTermBuff
     
-    call acquireMutex
-    VAR cond, s8
-    equ cond, window, focusedWindow
-    jmpZ skipDraw, cond
-    call drawFocusedWindow
-    LBL skipDraw
-    releaseMutex
+    newArgFrame drawWindowIfFocused.argsSize
+    wrt drawWindowIfFocused.args.window, window
+    call drawWindowIfFocused
 END
 
 FUNC windowTermSize, wsWindowTermSize.id
@@ -333,6 +494,9 @@ APP_DATA
     LBL termNameStart
     DATA "wsTerm"
     LBL termNameEnd
+    LBL testMessageStart
+    DATA "  Hello world! This is a very long message!"
+    LBL testMessageEnd
 END
 
 

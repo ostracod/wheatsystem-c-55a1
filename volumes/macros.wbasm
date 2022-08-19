@@ -1,7 +1,7 @@
 
 # Create a text allocation from application data.
 MACRO newTextAlloc, dest, startLbl, endLbl
-    newAlloc dest, 0, ?endLbl - ?startLbl
+    newAlloc dest, guardedAllocAttr, ?endLbl - ?startLbl
     wrtBuff dest[0]:s8, startLbl, ?endLbl - ?startLbl
 END
 
