@@ -12,7 +12,7 @@ MACRO callCheckPerm, window
     call checkPerm
 END
 
-MACRO callCreateLine, dest, lines, lineCount
+MACRO callCreateLine, dest, lineIndex, lines, lineCount
     newArgFrame createLine.argsSize
     wrt createLine.args.lines, lines
     wrt createLine.args.lineCount, lineCount
@@ -20,6 +20,7 @@ MACRO callCreateLine, dest, lines, lineCount
     wrt dest, createLine.args.dest
     wrt lines, createLine.args.lines
     wrt lineCount, createLine.args.lineCount
+    wrt lineIndex, 0
 END
 
 DEF none_MODE, 0
@@ -39,7 +40,8 @@ DEF input_OFFSET, 26
 DEF inputLen_OFFSET, 30
 DEF inputHorizontalScroll_OFFSET, 34
 DEF inputCursorIndex_OFFSET, 38
-DEF window_SIZE, 42
+DEF key_OFFSET, 42
+DEF window_SIZE, 43
 
 VAR thisApp, s32
 VAR mutexFlag, s8
@@ -86,6 +88,9 @@ FUNC init, wsInit.id, guarded
     gre cond, termWidth, index
     jmpNZ emptyLineLoop, cond
     
+    findFunc funcIndex, termHandle, wsListenTerm.id
+    callRemote termHandle, funcIndex
+    
     newArgFrame newWindow.argsSize
     call newWindow
     wrt shellWindow, newWindow.args.dest
@@ -95,15 +100,35 @@ FUNC init, wsInit.id, guarded
     wrt displayWindowMessage.args.window, shellWindow
     wrt displayWindowMessage.args.message, testMessage
     call displayWindowMessage
-    
-    findFunc funcIndex, termHandle, wsListenTerm.id
-    callRemote termHandle, funcIndex
+    newArgFrame clrWindow.argsSize
+    wrt clrWindow.args.window, shellWindow
+    call clrWindow
 END
 
 FUNC termInput, wsTermInput.id, guarded
     ARG key, s8
-    # TODO: Implement.
     
+    VAR cond, s8
+    
+    VAR window, s32
+    wrt window, focusedWindow
+    equ cond, window[mode_OFFSET]:s8, none_MODE
+    jmpZ resumeWithKey, cond
+    newArgFrame wsWindowKeyPressed.argsSize
+    wrt wsWindowKeyPressed.args.window, window
+    wrt wsWindowKeyPressed.args.key, key
+    callRemote window[owner_OFFSET]:s32, wsWindowKeyPressed.id
+    ret
+    
+    LBL resumeWithKey
+    wrt window[key_OFFSET]:s8, key
+    LBL resumeLoop
+    resume
+    jmpZ breakResume, window[key_OFFSET]:s8
+    equ cond, window[mode_OFFSET]:s8, none_MODE
+    jmpZ resumeLoop, cond
+    wrt window[key_OFFSET]:s8, 0
+    LBL breakResume
 END
 
 # Must be called when accessing `windows`, `windowCount`, or `focusedWindow`.
@@ -188,8 +213,7 @@ FUNC splitMessage, 0, guarded
     VAR lineIndex, s32
     newAlloc lines, guardedAllocAttr, 20
     wrt lineCount, 0
-    callCreateLine line, lines, lineCount
-    wrt lineIndex, 0
+    callCreateLine line, lineIndex, lines, lineCount
     
     LBL splitLoop
     gre cond, messageSize, messageIndex
@@ -230,8 +254,7 @@ FUNC splitMessage, 0, guarded
     gre cond, lineEndIndex, termWidth
     jmpZ skipCreateLine, cond
     
-    callCreateLine line, lines, lineCount
-    wrt lineIndex, 0
+    callCreateLine line, lineIndex, lines, lineCount
     wrt messageIndex, wordStartIndex
     sub size, wordEndIndex, messageIndex
     
@@ -239,6 +262,19 @@ FUNC splitMessage, 0, guarded
     wrtBuff line[lineIndex]:s8, message[messageIndex]:s8, size
     add lineIndex, lineIndex, size
     wrt messageIndex, wordEndIndex
+    
+    LBL specialLoop
+    gre cond, messageSize, messageIndex
+    jmpZ breakSpecial, cond
+    wrt char, message[messageIndex]:s8
+    gre cond, char, 31
+    jmpNZ breakSpecial, cond
+    add messageIndex, messageIndex, 1
+    equ cond, char, 10
+    jmpZ specialLoop, cond
+    callCreateLine line, lineIndex, lines, lineCount
+    jmp specialLoop
+    LBL breakSpecial
     
     jmp splitLoop
     LBL breakSplit
@@ -294,6 +330,18 @@ FUNC drawWindowIfFocused, 0, guarded
     call drawFocusedWindow
     LBL skipDraw
     releaseMutex
+END
+
+FUNC waitForKey, 0, guarded
+    ARG dest, s8
+    ARG window, s32
+    
+    LBL waitLoop
+    wait
+    wrt dest, window[key_OFFSET]:s8
+    jmpZ waitLoop, dest
+    
+    wrt window[key_OFFSET]:s8, 0
 END
 
 FUNC newWindow, wsNewWindow.id
@@ -393,6 +441,18 @@ FUNC displayWindowMessage, wsDisplayWindowMessage.id
     newArgFrame drawWindowIfFocused.argsSize
     wrt drawWindowIfFocused.args.window, window
     call drawWindowIfFocused
+    
+    LBL keyLoop
+    newArgFrame waitForKey.argsSize
+    wrt waitForKey.args.window, window
+    call waitForKey
+    VAR key, s8
+    wrt key, waitForKey.args.dest
+    VAR cond, s8
+    equ cond, key, 27
+    jmpZ keyLoop, cond
+    
+    wrt window[mode_OFFSET]:s8, none_MODE
 END
 
 FUNC promptWindowOption, wsPromptWindowOption.id
@@ -495,7 +555,7 @@ APP_DATA
     DATA "wsTerm"
     LBL termNameEnd
     LBL testMessageStart
-    DATA "  Hello world! This is a very long message!"
+    DATA "Hello world!\nThis is an extremely long message!"
     LBL testMessageEnd
 END
 
