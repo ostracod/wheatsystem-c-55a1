@@ -41,7 +41,8 @@ DEF inputLen_OFFSET, 30
 DEF inputHorizontalScroll_OFFSET, 34
 DEF inputCursorIndex_OFFSET, 38
 DEF key_OFFSET, 42
-DEF window_SIZE, 43
+DEF keyPressedIndex_OFFSET, 43
+DEF window_SIZE, 47
 
 VAR thisApp, s32
 VAR mutexFlag, s8
@@ -95,11 +96,17 @@ FUNC init, wsInit.id, guarded
     call newWindow
     wrt shellWindow, newWindow.args.dest
     VAR testMessage, s32
-    newTextAlloc testMessage, testMessageStart, testMessageEnd
-    newArgFrame displayWindowMessage.argsSize
-    wrt displayWindowMessage.args.window, shellWindow
-    wrt displayWindowMessage.args.message, testMessage
-    call displayWindowMessage
+    newTextAlloc testMessage, testMessage2Start, testMessage2End
+    VAR testOptions, s32
+    newAlloc testOptions, 0, 12
+    newTextAlloc testOptions[0]:s32, testOption1Start, testOption1End
+    newTextAlloc testOptions[4]:s32, testOption2Start, testOption2End
+    newTextAlloc testOptions[8]:s32, testOption3Start, testOption3End
+    newArgFrame promptWindowOption.argsSize
+    wrt promptWindowOption.args.window, shellWindow
+    wrt promptWindowOption.args.message, testMessage
+    wrt promptWindowOption.args.options, testOptions
+    call promptWindowOption
     newArgFrame clrWindow.argsSize
     wrt clrWindow.args.window, shellWindow
     call clrWindow
@@ -114,10 +121,15 @@ FUNC termInput, wsTermInput.id, guarded
     wrt window, focusedWindow
     equ cond, window[mode_OFFSET]:s8, none_MODE
     jmpZ resumeWithKey, cond
+    
+    VAR keyPressedIndex, s32
+    wrt keyPressedIndex, window[keyPressedIndex_OFFSET]:s32
+    jmpZ skipKeyPressed, keyPressedIndex
     newArgFrame wsWindowKeyPressed.argsSize
     wrt wsWindowKeyPressed.args.window, window
     wrt wsWindowKeyPressed.args.key, key
-    callRemote window[owner_OFFSET]:s32, wsWindowKeyPressed.id
+    callRemote window[owner_OFFSET]:s32, keyPressedIndex
+    LBL skipKeyPressed
     ret
     
     LBL resumeWithKey
@@ -288,40 +300,84 @@ FUNC drawFocusedWindow, 0, guarded
     VAR cond, s8
     VAR index, s32
     VAR offset, s32
+    VAR size, s32
+    VAR ptr, s32
+    VAR line, s32
     
     VAR mode, s8
     wrt mode, focusedWindow[mode_OFFSET]:s8
     equ cond, mode, none_MODE
     jmpNZ noneMode, cond
     
-    VAR line, s32
+    VAR posY, s32
+    wrt posY, 0
+    
     VAR messageLines, s32
     VAR messageLineAmount, s32
-    VAR posY, s32
     wrt messageLines, focusedWindow[messageLines_OFFSET]:s32
     wrt messageLineAmount, focusedWindow[messageLineAmount_OFFSET]:s32
-    wrt posY, 0
-    LBL lineLoop
+    LBL messageLoop
     gre cond, termHeight, posY
-    jmpZ breakLine, cond
+    jmpZ stopDraw, cond
     add index, focusedWindow[verticalScroll_OFFSET]:s32, posY
-    gre cond, index, -1
-    jmpZ useEmptyLine, cond
     gre cond, messageLineAmount, index
-    jmpZ useEmptyLine, cond
+    jmpZ breakMessage, cond
     mul offset, index, 4
     wrt line, messageLines[offset]:s32
-    jmp skipEmptyLine
-    LBL useEmptyLine
-    wrt line, emptyLine
-    LBL skipEmptyLine
     newArgFrame wsWrtTerm.argsSize
     wrt wsWrtTerm.args.y, posY
     wrt wsWrtTerm.args.text, line
     callRemote termHandle, wrtTermIndex
     add posY, posY, 1
-    jmp lineLoop
-    LBL breakLine
+    jmp messageLoop
+    LBL breakMessage
+    
+    equ cond, mode, displayMessage_MODE
+    jmpNZ emptyLineLoop, cond
+    
+    VAR input, s32
+    VAR inputLen, s32
+    VAR cursorIndex, s32
+    wrt input, focusedWindow[input_OFFSET]:s32
+    wrt inputLen, focusedWindow[inputLen_OFFSET]:s32
+    wrt cursorIndex, focusedWindow[inputCursorIndex_OFFSET]:s32
+    wrt index, 0
+    
+    newAlloc line, guardedAllocAttr, termWidth
+    LBL optionLoop
+    gre cond, termHeight, posY
+    jmpZ stopDraw, cond
+    gre cond, inputLen, index
+    jmpZ breakOption, cond
+    wrtBuff line[0]:s8, emptyLine[0]:s8, termWidth
+    equ cond, index, cursorIndex
+    jmpZ skipCursor, cond
+    wrt line[0]:s8, 62
+    LBL skipCursor
+    mul offset, index, 4
+    wrt ptr, input[offset]:s32
+    allocSize size, ptr
+    wrtBuff line[1]:s8, ptr[0]:s8, size
+    newArgFrame wsWrtTerm.argsSize
+    wrt wsWrtTerm.args.y, posY
+    wrt wsWrtTerm.args.text, line
+    callRemote termHandle, wrtTermIndex
+    add index, index, 1
+    add posY, posY, 1
+    jmp optionLoop
+    LBL breakOption
+    delAlloc line
+    
+    LBL emptyLineLoop
+    gre cond, termHeight, posY
+    jmpZ stopDraw, cond
+    wrt wsWrtTerm.args.y, posY
+    wrt wsWrtTerm.args.text, emptyLine
+    callRemote termHandle, wrtTermIndex
+    add posY, posY, 1
+    jmp emptyLineLoop
+    
+    LBL stopDraw
     ret
     
     LBL noneMode
@@ -366,6 +422,7 @@ FUNC newWindow, wsNewWindow.id
     newAlloc dest, guardedAllocAttr | sentryAllocAttr, window_SIZE
     caller ptr
     wrt dest[owner_OFFSET]:s32, ptr
+    findFunc dest[keyPressedIndex_OFFSET]:s32, ptr, wsWindowKeyPressed.id
     jmpNZ skipCreateTitle, title
     fileName title, ptr
     LBL skipCreateTitle
@@ -458,6 +515,7 @@ FUNC displayWindowMessage, wsDisplayWindowMessage.id
     newArgFrame drawWindowIfFocused.argsSize
     wrt drawWindowIfFocused.args.window, window
     call drawWindowIfFocused
+    
     LBL keyLoop
     newArgFrame waitForKey.argsSize
     wrt waitForKey.args.window, window
@@ -516,8 +574,80 @@ FUNC promptWindowOption, wsPromptWindowOption.id
     ARG window, s32
     ARG message, s32
     ARG options, s32
-    # TODO: Implement.
     
+    VAR verticalScroll, s32
+    VAR horizontalScroll, s32
+    VAR cursorIndex, s32
+    VAR optionAmount, s32
+    VAR cond, s32
+    
+    jmpNZ handleMessage, message
+    wrt window[messageLineAmount_OFFSET]:s32, 0
+    jmp skipMessage
+    
+    LBL handleMessage
+    newArgFrame splitMessage.argsSize
+    wrt splitMessage.args.window, window
+    wrt splitMessage.args.message, message
+    call splitMessage
+    
+    LBL skipMessage
+    wrt verticalScroll, 0
+    wrt horizontalScroll, 0
+    wrt cursorIndex, 0
+    allocSize optionAmount, options
+    div optionAmount, optionAmount, 4
+    wrt window[input_OFFSET]:s32, options
+    wrt window[inputLen_OFFSET]:s32, optionAmount
+    wrt window[mode_OFFSET]:s8, promptOption_MODE
+    
+    LBL drawLoop
+    wrt window[verticalScroll_OFFSET]:s32, verticalScroll
+    wrt window[inputHorizontalScroll_OFFSET]:s32, horizontalScroll
+    wrt window[inputCursorIndex_OFFSET]:s32, cursorIndex
+    newArgFrame drawWindowIfFocused.argsSize
+    wrt drawWindowIfFocused.args.window, window
+    call drawWindowIfFocused
+    
+    LBL keyLoop
+    newArgFrame waitForKey.argsSize
+    wrt waitForKey.args.window, window
+    call waitForKey
+    VAR key, s8
+    wrt key, waitForKey.args.dest
+    equ cond, key, 10
+    jmpNZ enterPressed, cond
+    equ cond, key, 27
+    jmpNZ escapePressed, cond
+    equ cond, key, -3
+    jmpNZ upPressed, cond
+    equ cond, key, -4
+    jmpNZ downPressed, cond
+    equ cond, key, 9
+    jmpNZ tabPressed, cond
+    equ cond, key, -5
+    jmpNZ rtabPressed, cond
+    jmp keyLoop
+    
+    LBL upPressed
+    sub cursorIndex, cursorIndex, 1
+    jmp drawLoop
+    
+    LBL downPressed
+    add cursorIndex, cursorIndex, 1
+    jmp drawLoop
+    
+    LBL tabPressed
+    
+    LBL rtabPressed
+    
+    LBL enterPressed
+    wrt dest, cursorIndex
+    jmp skipEscape
+    LBL escapePressed
+    wrt dest, -1
+    LBL skipEscape
+    wrt window[mode_OFFSET]:s8, none_MODE
 END
 
 FUNC promptWindowText, wsPromptWindowText.id
@@ -610,9 +740,21 @@ APP_DATA
     LBL termNameStart
     DATA "wsTerm"
     LBL termNameEnd
-    LBL testMessageStart
+    LBL testMessage1Start
     DATA "Milk\nEggs\nSugar\nButter\nFlour\nVanilla\nChocolate\nBaking powder\nSalt\nVegetable oil\nMustard"
-    LBL testMessageEnd
+    LBL testMessage1End
+    LBL testMessage2Start
+    DATA "Select an option:"
+    LBL testMessage2End
+    LBL testOption1Start
+    DATA "Buy"
+    LBL testOption1End
+    LBL testOption2Start
+    DATA "Sell"
+    LBL testOption2End
+    LBL testOption3Start
+    DATA "Surrender"
+    LBL testOption3End
 END
 
 
