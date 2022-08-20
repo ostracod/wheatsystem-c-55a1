@@ -96,7 +96,7 @@ FUNC init, wsInit.id, guarded
     call newWindow
     wrt shellWindow, newWindow.args.dest
     VAR testMessage, s32
-    newTextAlloc testMessage, testMessage2Start, testMessage2End
+    newTextAlloc testMessage, testMessage1Start, testMessage1End
     VAR testOptions, s32
     newAlloc testOptions, 0, 12
     newTextAlloc testOptions[0]:s32, testOption1Start, testOption1End
@@ -312,6 +312,9 @@ FUNC drawFocusedWindow, 0, guarded
     VAR posY, s32
     wrt posY, 0
     
+    VAR verticalScroll, s32
+    wrt verticalScroll, focusedWindow[verticalScroll_OFFSET]:s32
+    
     VAR messageLines, s32
     VAR messageLineAmount, s32
     wrt messageLines, focusedWindow[messageLines_OFFSET]:s32
@@ -319,7 +322,7 @@ FUNC drawFocusedWindow, 0, guarded
     LBL messageLoop
     gre cond, termHeight, posY
     jmpZ stopDraw, cond
-    add index, focusedWindow[verticalScroll_OFFSET]:s32, posY
+    add index, verticalScroll, posY
     gre cond, messageLineAmount, index
     jmpZ breakMessage, cond
     mul offset, index, 4
@@ -341,8 +344,13 @@ FUNC drawFocusedWindow, 0, guarded
     wrt input, focusedWindow[input_OFFSET]:s32
     wrt inputLen, focusedWindow[inputLen_OFFSET]:s32
     wrt cursorIndex, focusedWindow[inputCursorIndex_OFFSET]:s32
-    wrt index, 0
     
+    add index, verticalScroll, posY
+    sub index, index, messageLineAmount
+    gre cond, 0, index
+    jmpZ skipUnderflow, cond
+    wrt index, 0
+    LBL skipUnderflow
     newAlloc line, guardedAllocAttr, termWidth
     LBL optionLoop
     gre cond, termHeight, posY
@@ -575,14 +583,19 @@ FUNC promptWindowOption, wsPromptWindowOption.id
     ARG message, s32
     ARG options, s32
     
+    VAR messageLineAmount, s32
     VAR verticalScroll, s32
     VAR horizontalScroll, s32
     VAR cursorIndex, s32
+    VAR cursorPosY, s32
     VAR optionAmount, s32
+    VAR totalLineAmount, s32
     VAR cond, s32
+    VAR index, s32
     
     jmpNZ handleMessage, message
-    wrt window[messageLineAmount_OFFSET]:s32, 0
+    wrt messageLineAmount, 0
+    wrt window[messageLineAmount_OFFSET]:s32, messageLineAmount
     jmp skipMessage
     
     LBL handleMessage
@@ -590,6 +603,7 @@ FUNC promptWindowOption, wsPromptWindowOption.id
     wrt splitMessage.args.window, window
     wrt splitMessage.args.message, message
     call splitMessage
+    wrt messageLineAmount, window[messageLineAmount_OFFSET]:s32
     
     LBL skipMessage
     wrt verticalScroll, 0
@@ -597,6 +611,7 @@ FUNC promptWindowOption, wsPromptWindowOption.id
     wrt cursorIndex, 0
     allocSize optionAmount, options
     div optionAmount, optionAmount, 4
+    add totalLineAmount, messageLineAmount, optionAmount
     wrt window[input_OFFSET]:s32, options
     wrt window[inputLen_OFFSET]:s32, optionAmount
     wrt window[mode_OFFSET]:s8, promptOption_MODE
@@ -615,6 +630,8 @@ FUNC promptWindowOption, wsPromptWindowOption.id
     call waitForKey
     VAR key, s8
     wrt key, waitForKey.args.dest
+    add cursorPosY, messageLineAmount, cursorIndex
+    sub cursorPosY, cursorPosY, verticalScroll
     equ cond, key, 10
     jmpNZ enterPressed, cond
     equ cond, key, 27
@@ -630,16 +647,78 @@ FUNC promptWindowOption, wsPromptWindowOption.id
     jmp keyLoop
     
     LBL upPressed
+    
+    gre cond, verticalScroll, 0
+    jmpZ skipScroll1, cond
+    gre cond, cursorIndex, 0
+    jmpZ scroll1, cond
+    gre cond, cursorPosY, 0
+    jmpNZ skipScroll1, cond
+    LBL scroll1
+    sub verticalScroll, verticalScroll, 1
+    LBL skipScroll1
+    
+    gre cond, cursorIndex, 0
+    jmpZ skipCursor1, cond
+    gre cond, termHeight, cursorPosY
+    jmpZ skipCursor1, cond
     sub cursorIndex, cursorIndex, 1
+    LBL skipCursor1
+    
     jmp drawLoop
     
     LBL downPressed
+    
+    add index, verticalScroll, termHeight
+    gre cond, totalLineAmount, index
+    jmpZ skipScroll2, cond
+    sub index, termHeight, 1
+    gre cond, index, cursorPosY
+    jmpNZ skipScroll2, cond
+    add verticalScroll, verticalScroll, 1
+    LBL skipScroll2
+    
+    sub index, optionAmount, 1
+    gre cond, index, cursorIndex
+    jmpZ skipCursor2, cond
+    gre cond, termHeight, cursorPosY
+    jmpZ skipCursor2, cond
     add cursorIndex, cursorIndex, 1
+    LBL skipCursor2
+    
     jmp drawLoop
     
     LBL tabPressed
+    gre cond, termHeight, cursorPosY
+    jmpNZ skipTab, cond
+    wrt verticalScroll, messageLineAmount
+    wrt cursorIndex, 0
+    jmp alignBounds
+    LBL skipTab
+    sub verticalScroll, totalLineAmount, termHeight
+    sub cursorIndex, optionAmount, 1
+    jmp alignBounds
     
     LBL rtabPressed
+    gre cond, cursorIndex, 0
+    jmpZ skipRtab, cond
+    wrt verticalScroll, messageLineAmount
+    wrt cursorIndex, 0
+    jmp alignBounds
+    LBL skipRtab
+    wrt verticalScroll, 0
+    jmp drawLoop
+    
+    LBL alignBounds
+    sub index, totalLineAmount, termHeight
+    gre cond, verticalScroll, index
+    jmpZ skipAlign, cond
+    wrt verticalScroll, index
+    LBL skipAlign
+    gre cond, 0, verticalScroll
+    jmpZ drawLoop, cond
+    wrt verticalScroll, 0
+    jmp drawLoop
     
     LBL enterPressed
     wrt dest, cursorIndex
