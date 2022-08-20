@@ -286,6 +286,7 @@ END
 # Must be called between `acquireMutex` and `releaseMutex`.
 FUNC drawFocusedWindow, 0, guarded
     VAR cond, s8
+    VAR index, s32
     VAR offset, s32
     
     VAR mode, s8
@@ -296,22 +297,31 @@ FUNC drawFocusedWindow, 0, guarded
     VAR line, s32
     VAR messageLines, s32
     VAR messageLineAmount, s32
-    VAR index, s32
+    VAR posY, s32
     wrt messageLines, focusedWindow[messageLines_OFFSET]:s32
     wrt messageLineAmount, focusedWindow[messageLineAmount_OFFSET]:s32
-    wrt index, 0
-    LBL messageLoop
+    wrt posY, 0
+    LBL lineLoop
+    gre cond, termHeight, posY
+    jmpZ breakLine, cond
+    add index, focusedWindow[verticalScroll_OFFSET]:s32, posY
+    gre cond, index, -1
+    jmpZ useEmptyLine, cond
     gre cond, messageLineAmount, index
-    jmpZ breakMessage, cond
+    jmpZ useEmptyLine, cond
     mul offset, index, 4
     wrt line, messageLines[offset]:s32
+    jmp skipEmptyLine
+    LBL useEmptyLine
+    wrt line, emptyLine
+    LBL skipEmptyLine
     newArgFrame wsWrtTerm.argsSize
-    wrt wsWrtTerm.args.y, index
+    wrt wsWrtTerm.args.y, posY
     wrt wsWrtTerm.args.text, line
     callRemote termHandle, wrtTermIndex
-    add index, index, 1
-    jmp messageLoop
-    LBL breakMessage
+    add posY, posY, 1
+    jmp lineLoop
+    LBL breakLine
     ret
     
     LBL noneMode
@@ -432,26 +442,72 @@ FUNC displayWindowMessage, wsDisplayWindowMessage.id
     ARG window, s32
     ARG message, s32
     
+    VAR verticalScroll, s32
+    VAR cond, s8
+    VAR index, s32
+    
     newArgFrame splitMessage.argsSize
     wrt splitMessage.args.window, window
     wrt splitMessage.args.message, message
     call splitMessage
+    wrt verticalScroll, 0
     wrt window[mode_OFFSET]:s8, displayMessage_MODE
     
+    LBL drawLoop
+    wrt window[verticalScroll_OFFSET]:s32, verticalScroll
     newArgFrame drawWindowIfFocused.argsSize
     wrt drawWindowIfFocused.args.window, window
     call drawWindowIfFocused
-    
     LBL keyLoop
     newArgFrame waitForKey.argsSize
     wrt waitForKey.args.window, window
     call waitForKey
     VAR key, s8
     wrt key, waitForKey.args.dest
-    VAR cond, s8
+    equ cond, key, 10
+    jmpNZ enterPressed, cond
     equ cond, key, 27
-    jmpZ keyLoop, cond
+    jmpNZ escapePressed, cond
+    equ cond, key, -3
+    jmpNZ upPressed, cond
+    equ cond, key, -4
+    jmpNZ downPressed, cond
+    equ cond, key, 9
+    jmpNZ tabPressed, cond
+    equ cond, key, -5
+    jmpNZ rtabPressed, cond
+    jmp keyLoop
     
+    LBL upPressed
+    gre cond, verticalScroll, 0
+    jmpZ keyLoop, cond
+    sub verticalScroll, verticalScroll, 1
+    jmp drawLoop
+    
+    LBL downPressed
+    add index, verticalScroll, termHeight
+    gre cond, window[messageLineAmount_OFFSET]:s32, index
+    jmpZ keyLoop, cond
+    add verticalScroll, verticalScroll, 1
+    jmp drawLoop
+    
+    LBL tabPressed
+    sub verticalScroll, window[messageLineAmount_OFFSET]:s32, termHeight
+    gre cond, 0, verticalScroll
+    jmpZ drawLoop, cond
+    wrt verticalScroll, 0
+    jmp drawLoop
+    
+    LBL rtabPressed
+    wrt verticalScroll, 0
+    jmp drawLoop
+    
+    LBL enterPressed
+    wrt dest, 0
+    jmp skipEscape
+    LBL escapePressed
+    wrt dest, 1
+    LBL skipEscape
     wrt window[mode_OFFSET]:s8, none_MODE
 END
 
@@ -555,7 +611,7 @@ APP_DATA
     DATA "wsTerm"
     LBL termNameEnd
     LBL testMessageStart
-    DATA "Hello world!\nThis is an extremely long message!"
+    DATA "Milk\nEggs\nSugar\nButter\nFlour\nVanilla\nChocolate\nBaking powder\nSalt\nVegetable oil\nMustard"
     LBL testMessageEnd
 END
 
