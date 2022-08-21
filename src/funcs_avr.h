@@ -79,6 +79,8 @@
 #define writeSerialAppGlobalVar(memberName, value) \
     writeSystemAppGlobalVar(serialAppGlobalFrame_t, memberName, value)
 
+#define sleepAfterSchedule()
+
 // We do not support integration tests on the AVR platform yet.
 #define handleTestInstruction()
 #define resetHaltFlag()

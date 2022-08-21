@@ -1176,6 +1176,7 @@ void runAppSystem() {
                 deleteThread(currentThread);
             } else {
                 scheduleCurrentThread();
+                sleepAfterSchedule();
             }
         }
     }

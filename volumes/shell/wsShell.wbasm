@@ -345,6 +345,8 @@ FUNC drawFocusedWindow, 0, guarded
     wrt inputLen, focusedWindow[inputLen_OFFSET]:s32
     wrt cursorIndex, focusedWindow[inputCursorIndex_OFFSET]:s32
     
+    VAR tempSize, s32
+    sub tempSize, termWidth, 1
     add index, verticalScroll, posY
     sub index, index, messageLineAmount
     gre cond, 0, index
@@ -358,14 +360,23 @@ FUNC drawFocusedWindow, 0, guarded
     gre cond, inputLen, index
     jmpZ breakOption, cond
     wrtBuff line[0]:s8, emptyLine[0]:s8, termWidth
-    equ cond, index, cursorIndex
-    jmpZ skipCursor, cond
-    wrt line[0]:s8, 62
-    LBL skipCursor
     mul offset, index, 4
     wrt ptr, input[offset]:s32
     allocSize size, ptr
-    wrtBuff line[1]:s8, ptr[0]:s8, size
+    equ cond, index, cursorIndex
+    jmpNZ handleCursor, cond
+    wrt offset, 0
+    jmp skipCursor
+    LBL handleCursor
+    wrt line[0]:s8, 62
+    wrt offset, focusedWindow[inputHorizontalScroll_OFFSET]:s32
+    LBL skipCursor
+    sub size, size, offset
+    gre cond, size, tempSize
+    jmpZ skipResize, cond
+    wrt size, tempSize
+    LBL skipResize
+    wrtBuff line[1]:s8, ptr[offset]:s8, size
     newArgFrame wsWrtTerm.argsSize
     wrt wsWrtTerm.args.y, posY
     wrt wsWrtTerm.args.text, line
@@ -640,6 +651,10 @@ FUNC promptWindowOption, wsPromptWindowOption.id
     jmpNZ upPressed, cond
     equ cond, key, -4
     jmpNZ downPressed, cond
+    equ cond, key, -1
+    jmpNZ leftPressed, cond
+    equ cond, key, -2
+    jmpNZ rightPressed, cond
     equ cond, key, 9
     jmpNZ tabPressed, cond
     equ cond, key, -5
@@ -647,9 +662,6 @@ FUNC promptWindowOption, wsPromptWindowOption.id
     jmp keyLoop
     
     LBL upPressed
-    
-    gre cond, verticalScroll, 0
-    jmpZ skipScroll1, cond
     gre cond, cursorIndex, 0
     jmpZ scroll1, cond
     gre cond, cursorPosY, 0
@@ -657,27 +669,20 @@ FUNC promptWindowOption, wsPromptWindowOption.id
     LBL scroll1
     sub verticalScroll, verticalScroll, 1
     LBL skipScroll1
-    
     gre cond, cursorIndex, 0
     jmpZ skipCursor1, cond
     gre cond, termHeight, cursorPosY
     jmpZ skipCursor1, cond
     sub cursorIndex, cursorIndex, 1
     LBL skipCursor1
-    
-    jmp drawLoop
+    jmp alignBounds
     
     LBL downPressed
-    
-    add index, verticalScroll, termHeight
-    gre cond, totalLineAmount, index
-    jmpZ skipScroll2, cond
     sub index, termHeight, 1
     gre cond, index, cursorPosY
     jmpNZ skipScroll2, cond
     add verticalScroll, verticalScroll, 1
     LBL skipScroll2
-    
     sub index, optionAmount, 1
     gre cond, index, cursorIndex
     jmpZ skipCursor2, cond
@@ -685,7 +690,27 @@ FUNC promptWindowOption, wsPromptWindowOption.id
     jmpZ skipCursor2, cond
     add cursorIndex, cursorIndex, 1
     LBL skipCursor2
+    jmp alignBounds
     
+    LBL leftPressed
+    sub horizontalScroll, horizontalScroll, 4
+    gre cond, 0, horizontalScroll
+    jmpZ drawLoop, cond
+    wrt horizontalScroll, 0
+    jmp drawLoop
+    
+    LBL rightPressed
+    add horizontalScroll, horizontalScroll, 4
+    mul index, cursorIndex, 4
+    allocSize index, options[index]:s32
+    sub index, index, termWidth
+    add index, index, 1
+    gre cond, horizontalScroll, index
+    jmpZ drawLoop, cond
+    wrt horizontalScroll, index
+    gre cond, 0, horizontalScroll
+    jmpZ drawLoop, cond
+    wrt horizontalScroll, 0
     jmp drawLoop
     
     LBL tabPressed
@@ -707,9 +732,10 @@ FUNC promptWindowOption, wsPromptWindowOption.id
     jmp alignBounds
     LBL skipRtab
     wrt verticalScroll, 0
-    jmp drawLoop
+    jmp alignBounds
     
     LBL alignBounds
+    wrt horizontalScroll, 0
     sub index, totalLineAmount, termHeight
     gre cond, verticalScroll, index
     jmpZ skipAlign, cond
@@ -721,6 +747,12 @@ FUNC promptWindowOption, wsPromptWindowOption.id
     jmp drawLoop
     
     LBL enterPressed
+    gre cond, termHeight, cursorPosY
+    jmpNZ acceptOption, cond
+    wrt verticalScroll, messageLineAmount
+    wrt cursorIndex, 0
+    jmp alignBounds
+    LBL acceptOption
     wrt dest, cursorIndex
     jmp skipEscape
     LBL escapePressed
@@ -829,10 +861,10 @@ APP_DATA
     DATA "Buy"
     LBL testOption1End
     LBL testOption2Start
-    DATA "Sell"
+    DATA "This is a really long option which requires horizontal scroll"
     LBL testOption2End
     LBL testOption3Start
-    DATA "Surrender"
+    DATA "Sell"
     LBL testOption3End
 END
 

@@ -161,6 +161,13 @@ void sleepMilliseconds(int32_t milliseconds) {
     nanosleep(&ts, NULL);
 }
 
+void sleepMicroseconds(int32_t microseconds) {
+    struct timespec ts;
+    ts.tv_sec = microseconds / 1000000;
+    ts.tv_nsec = (microseconds % 1000000) * 1000;
+    nanosleep(&ts, NULL);
+}
+
 void printUnixUsage() {
     printf("Usage:\n./main_unix [volume path]\n./main_unix --integration-test [socket path]\n");
 }

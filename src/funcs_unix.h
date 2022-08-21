@@ -26,6 +26,8 @@
 #define readStorageRange(destination, address, amount) \
     memcpy(destination, storageSpace + address, amount);
 
+#define sleepAfterSchedule() sleepMicroseconds(100);
+
 #define resetHaltFlag() (systemShouldHalt = false)
 #define checkHaltFlag() if (systemShouldHalt) { \
     break; \
@@ -52,6 +54,7 @@ void flushStorage();
 void drawTermMargin();
 
 void sleepMilliseconds(int32_t milliseconds);
+void sleepMicroseconds(int32_t microseconds);
 
 void printUnixUsage();
 int8_t connectToTestSocket(int8_t *path);

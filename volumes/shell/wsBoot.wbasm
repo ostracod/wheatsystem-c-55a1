@@ -2,6 +2,19 @@
 INCLUDE "../macros.wbasm"
 
 FUNC init, wsInit.id, guarded
+    VAR termName, s32
+    VAR termHandle, s32
+    VAR wrtTermIndex, s32
+    newTextAlloc termName, termNameStart, termNameEnd
+    openFile termHandle, termName
+    launch termHandle
+    findFunc wrtTermIndex, termHandle, wsWrtTerm.id
+    VAR bootText, s32
+    newTextAlloc bootText, bootTextStart, bootTextEnd
+    newArgFrame wsWrtTerm.argsSize
+    wrt wsWrtTerm.args.text, bootText
+    callRemote termHandle, wrtTermIndex
+    
     VAR shellName, s32
     VAR shellHandle, s32
     newTextAlloc shellName, shellNameStart, shellNameEnd
@@ -11,6 +24,12 @@ FUNC init, wsInit.id, guarded
 END
 
 APP_DATA
+    LBL termNameStart
+    DATA "wsTerm"
+    LBL termNameEnd
+    LBL bootTextStart
+    DATA "Booting..."
+    LBL bootTextEnd
     LBL shellNameStart
     DATA "wsShell"
     LBL shellNameEnd
