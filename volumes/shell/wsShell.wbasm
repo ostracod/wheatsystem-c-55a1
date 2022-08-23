@@ -96,17 +96,22 @@ FUNC init, wsInit.id, guarded
     call newWindow
     wrt shellWindow, newWindow.args.dest
     VAR testMessage, s32
-    newTextAlloc testMessage, testMessage1Start, testMessage1End
-    VAR testOptions, s32
-    newAlloc testOptions, 0, 12
-    newTextAlloc testOptions[0]:s32, testOption1Start, testOption1End
-    newTextAlloc testOptions[4]:s32, testOption2Start, testOption2End
-    newTextAlloc testOptions[8]:s32, testOption3Start, testOption3End
-    newArgFrame promptWindowOption.argsSize
-    wrt promptWindowOption.args.window, shellWindow
-    wrt promptWindowOption.args.message, testMessage
-    wrt promptWindowOption.args.options, testOptions
-    call promptWindowOption
+    newTextAlloc testMessage, testMessage2Start, testMessage2End
+    #VAR testOptions, s32
+    #newAlloc testOptions, 0, 12
+    #newTextAlloc testOptions[0]:s32, testOption1Start, testOption1End
+    #newTextAlloc testOptions[4]:s32, testOption2Start, testOption2End
+    #newTextAlloc testOptions[8]:s32, testOption3Start, testOption3End
+    #newArgFrame promptWindowOption.argsSize
+    #wrt promptWindowOption.args.window, shellWindow
+    #wrt promptWindowOption.args.message, testMessage
+    #wrt promptWindowOption.args.options, testOptions
+    #call promptWindowOption
+    newArgFrame promptWindowText.argsSize
+    wrt promptWindowText.args.window, shellWindow
+    wrt promptWindowText.args.message, testMessage
+    wrt promptWindowText.args.startText, null
+    call promptWindowText
     newArgFrame clrWindow.argsSize
     wrt clrWindow.args.window, shellWindow
     call clrWindow
@@ -213,7 +218,13 @@ FUNC splitMessage, 0, guarded
     
     VAR cond, s8
     VAR char, s8
+    VAR size, s32
     
+    jmpNZ skipNull, message
+    wrt window[messageLineAmount_OFFSET]:s32, 0
+    ret
+    
+    LBL skipNull
     VAR messageSize, s32
     VAR messageIndex, s32
     allocSize messageSize, message
@@ -244,8 +255,11 @@ FUNC splitMessage, 0, guarded
     
     VAR wordEndIndex, s32
     wrt wordEndIndex, wordStartIndex
+    wrt size, 0
     LBL wordLoop
     gre cond, messageSize, wordEndIndex
+    jmpZ breakWord, cond
+    gre cond, termWidth, size
     jmpZ breakWord, cond
     wrt char, message[wordEndIndex]:s8
     gre cond, 33, char
@@ -253,13 +267,13 @@ FUNC splitMessage, 0, guarded
     gre cond, char, 126
     jmpNZ breakWord, cond
     add wordEndIndex, wordEndIndex, 1
+    add size, size, 1
     equ cond, char, 45
     jmpNZ breakWord, cond
     equ cond, char, 47
     jmpZ wordLoop, cond
     LBL breakWord
     
-    VAR size, s32
     sub size, wordEndIndex, messageIndex
     VAR lineEndIndex, s32
     add lineEndIndex, lineIndex, size
@@ -345,6 +359,9 @@ FUNC drawFocusedWindow, 0, guarded
     wrt inputLen, focusedWindow[inputLen_OFFSET]:s32
     wrt cursorIndex, focusedWindow[inputCursorIndex_OFFSET]:s32
     
+    equ cond, mode, promptText_MODE
+    jmpNZ handlePromptText, cond
+    
     VAR tempSize, s32
     sub tempSize, termWidth, 1
     add index, verticalScroll, posY
@@ -386,6 +403,10 @@ FUNC drawFocusedWindow, 0, guarded
     jmp optionLoop
     LBL breakOption
     delAlloc line
+    jmp emptyLineLoop
+    
+    LBL handlePromptText
+    # TODO: Draw text prompt.
     
     LBL emptyLineLoop
     gre cond, termHeight, posY
@@ -604,19 +625,12 @@ FUNC promptWindowOption, wsPromptWindowOption.id
     VAR cond, s32
     VAR index, s32
     
-    jmpNZ handleMessage, message
-    wrt messageLineAmount, 0
-    wrt window[messageLineAmount_OFFSET]:s32, messageLineAmount
-    jmp skipMessage
-    
-    LBL handleMessage
     newArgFrame splitMessage.argsSize
     wrt splitMessage.args.window, window
     wrt splitMessage.args.message, message
     call splitMessage
     wrt messageLineAmount, window[messageLineAmount_OFFSET]:s32
     
-    LBL skipMessage
     wrt verticalScroll, 0
     wrt horizontalScroll, 0
     wrt cursorIndex, 0
@@ -766,8 +780,75 @@ FUNC promptWindowText, wsPromptWindowText.id
     ARG window, s32
     ARG message, s32
     ARG startText, s32
-    # TODO: Implement.
     
+    VAR messageLineAmount, s32
+    VAR verticalScroll, s32
+    VAR inputText, s32
+    VAR inputTextLen, s32
+    VAR cursorIndex, s32
+    VAR cond, s32
+    
+    newArgFrame splitMessage.argsSize
+    wrt splitMessage.args.window, window
+    wrt splitMessage.args.message, message
+    call splitMessage
+    wrt messageLineAmount, window[messageLineAmount_OFFSET]:s32
+    
+    jmpNZ handleStartText, startText
+    wrt inputTextLen, 10
+    newAlloc inputText, guardedAllocAttr, inputTextLen
+    jmp skipStartText
+    LBL handleStartText
+    allocSize inputTextLen, startText
+    newAlloc inputText, guardedAllocAttr, inputTextLen
+    wrtBuff inputText[0]:s8, startText[0]:s8, inputTextLen
+    LBL skipStartText
+    
+    wrt verticalScroll, 0
+    wrt cursorIndex, 0
+    wrt window[input_OFFSET]:s32, inputText
+    wrt window[inputLen_OFFSET]:s32, inputTextLen
+    wrt window[mode_OFFSET]:s8, promptText_MODE
+    
+    LBL drawLoop
+    wrt window[verticalScroll_OFFSET]:s32, verticalScroll
+    wrt window[inputCursorIndex_OFFSET]:s32, cursorIndex
+    newArgFrame drawWindowIfFocused.argsSize
+    wrt drawWindowIfFocused.args.window, window
+    call drawWindowIfFocused
+    
+    LBL keyLoop
+    newArgFrame waitForKey.argsSize
+    wrt waitForKey.args.window, window
+    call waitForKey
+    VAR key, s8
+    wrt key, waitForKey.args.dest
+    equ cond, key, 10
+    jmpNZ enterPressed, cond
+    equ cond, key, 27
+    jmpNZ escapePressed, cond
+    equ cond, key, -3
+    jmpNZ upPressed, cond
+    equ cond, key, -4
+    jmpNZ downPressed, cond
+    equ cond, key, -1
+    jmpNZ leftPressed, cond
+    equ cond, key, -2
+    jmpNZ rightPressed, cond
+    equ cond, key, 9
+    jmpNZ tabPressed, cond
+    equ cond, key, -5
+    jmpNZ rtabPressed, cond
+    jmp keyLoop
+    
+    LBL upPressed
+    LBL downPressed
+    LBL leftPressed
+    LBL rightPressed
+    LBL tabPressed
+    LBL rtabPressed
+    LBL enterPressed
+    LBL escapePressed
 END
 
 FUNC clrWindow, wsClrWindow.id
@@ -855,7 +936,7 @@ APP_DATA
     DATA "Milk\nEggs\nSugar\nButter\nFlour\nVanilla\nChocolate\nBaking powder\nSalt\nVegetable oil\nMustard"
     LBL testMessage1End
     LBL testMessage2Start
-    DATA "Select an option:"
+    DATA "Enter some text:"
     LBL testMessage2End
     LBL testOption1Start
     DATA "Buy"
