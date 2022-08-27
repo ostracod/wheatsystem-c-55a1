@@ -48,7 +48,8 @@ DEF inputHorizontalScroll_OFFSET, 34
 DEF inputCursorIndex_OFFSET, 38
 DEF key_OFFSET, 42
 DEF keyPressedIndex_OFFSET, 43
-DEF window_SIZE, 47
+DEF focusChangedIndex_OFFSET, 47
+DEF window_SIZE, 51
 
 VAR thisApp, s32
 VAR mutexFlag, s8
@@ -135,7 +136,8 @@ FUNC termInput, wsTermInput.id, guarded
     
     VAR keyPressedIndex, s32
     wrt keyPressedIndex, window[keyPressedIndex_OFFSET]:s32
-    jmpZ skipKeyPressed, keyPressedIndex
+    gre cond, 0, keyPressedIndex
+    jmpNZ skipKeyPressed, cond
     newArgFrame wsWindowKeyPressed.argsSize
     wrt wsWindowKeyPressed.args.window, window
     wrt wsWindowKeyPressed.args.key, key
@@ -474,6 +476,45 @@ FUNC drawWindowIfFocused, 0, guarded
     releaseMutex
 END
 
+FUNC focusWindow, 0, guarded
+    ARG window, s32
+    
+    VAR cond, s8
+    VAR lastWindow, s32
+    VAR funcIndex, s32
+    
+    call acquireMutex
+    equ cond, window, focusedWindow
+    jmpNZ cancelFocus, cond
+    wrt lastWindow, focusedWindow
+    wrt focusedWindow, window
+    call drawFocusedWindow
+    releaseMutex
+    
+    jmpZ skipBlur, lastWindow
+    wrt funcIndex, lastWindow[focusChangedIndex_OFFSET]:s32
+    gre cond, 0, funcIndex
+    jmpNZ skipBlur, cond
+    newArgFrame wsWindowFocusChanged.argsSize
+    wrt wsWindowFocusChanged.args.window, lastWindow
+    wrt wsWindowFocusChanged.args.hasFocus, 0
+    callRemote lastWindow[owner_OFFSET]:s32, funcIndex
+    LBL skipBlur
+    
+    wrt funcIndex, window[focusChangedIndex_OFFSET]:s32
+    gre cond, 0, funcIndex
+    jmpNZ skipFocus, cond
+    newArgFrame wsWindowFocusChanged.argsSize
+    wrt wsWindowFocusChanged.args.window, window
+    wrt wsWindowFocusChanged.args.hasFocus, 1
+    callRemote window[owner_OFFSET]:s32, funcIndex
+    LBL skipFocus
+    ret
+    
+    LBL cancelFocus
+    releaseMutex
+END
+
 FUNC waitForKey, 0, guarded
     ARG dest, s8
     ARG window, s32
@@ -499,6 +540,7 @@ FUNC newWindow, wsNewWindow.id
     caller ptr
     wrt dest[owner_OFFSET]:s32, ptr
     findFunc dest[keyPressedIndex_OFFSET]:s32, ptr, wsWindowKeyPressed.id
+    findFunc dest[focusChangedIndex_OFFSET]:s32, ptr, wsWindowFocusChanged.id
     jmpNZ skipCreateTitle, title
     fileName title, ptr
     LBL skipCreateTitle
@@ -525,9 +567,11 @@ FUNC newWindow, wsNewWindow.id
     LBL skipResize
     wrt windows[windowIndex]:s32, dest
     add windowCount, windowCount, 1
-    wrt focusedWindow, dest
-    call drawFocusedWindow
     releaseMutex
+    
+    newArgFrame focusWindow.argsSize
+    wrt focusWindow.args.window, dest
+    call focusWindow
 END
 
 FUNC delWindow, wsDelWindow.id
@@ -536,6 +580,16 @@ FUNC delWindow, wsDelWindow.id
     
     VAR cond, s8
     VAR index, s32
+    
+    equ cond, window, focusedWindow
+    jmpZ skipFocus, cond
+    call acquireMutex
+    wrt focusedWindow, null
+    releaseMutex
+    newArgFrame focusWindow.argsSize
+    wrt focusWindow.args.window, shellWindow
+    call focusWindow
+    LBL skipFocus
     
     call acquireMutex
     wrt index, 0
@@ -556,12 +610,6 @@ FUNC delWindow, wsDelWindow.id
     sub index, size, 4
     wrt windows[index]:s8, null
     sub windowCount, windowCount, 1
-    
-    equ cond, window, focusedWindow
-    jmpZ skipFocus, cond
-    wrt focusedWindow, windows[0]:s32
-    call drawFocusedWindow
-    LBL skipFocus
     releaseMutex
     
     delAlloc window[title_OFFSET]:s32

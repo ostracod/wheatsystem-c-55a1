@@ -29,7 +29,7 @@ packages:
       '@serialport/parser-readline': 10.3.0
       debug: 4.3.4
       node-addon-api: 4.3.0
-      node-gyp-build: 4.4.0
+      node-gyp-build: 4.5.0
     transitivePeerDependencies:
       - supports-color
     dev: false
@@ -126,8 +126,8 @@ packages:
     resolution: {integrity: sha512-73sE9+3UaLYYFmDsFZnqCInzPyh3MqIwZO9cw58yIqAZhONrrabrYyYe3TuIqtIiOuTXVhsGau8hcrhhwSsDIQ==}
     dev: false
 
-  /node-gyp-build/4.4.0:
-    resolution: {integrity: sha512-amJnQCcgtRVw9SvoebO3BKGESClrfXGCUTX9hSn1OuGQTQBOZmVd0Z0OlecpuRksKvbsUqALE8jls/ErClAPuQ==}
+  /node-gyp-build/4.5.0:
+    resolution: {integrity: sha512-2iGbaQBV+ITgCz76ZEjmhUKAKVf7xfY1sRl4UiKQspfZMH2h06SyhNsnSVy50cwkFQDGLyif6m/6uFXHkOZ6rg==}
     hasBin: true
     dev: false
 
@@ -159,11 +159,11 @@ packages:
     version: 1.0.0
     requiresBuild: true
     dependencies:
-      wheatsystem-spec: github.com/ostracod/wheatsystem-spec/53e1058d8775c3375bb264a9214e05ec1938d980
+      wheatsystem-spec: github.com/ostracod/wheatsystem-spec/c796adf15676a7f1f440c44aefc599462eb32276
     dev: false
 
-  github.com/ostracod/wheatsystem-spec/53e1058d8775c3375bb264a9214e05ec1938d980:
-    resolution: {tarball: https://codeload.github.com/ostracod/wheatsystem-spec/tar.gz/53e1058d8775c3375bb264a9214e05ec1938d980}
+  github.com/ostracod/wheatsystem-spec/c796adf15676a7f1f440c44aefc599462eb32276:
+    resolution: {tarball: https://codeload.github.com/ostracod/wheatsystem-spec/tar.gz/c796adf15676a7f1f440c44aefc599462eb32276}
     name: wheatsystem-spec
     version: 1.0.0
     requiresBuild: true
