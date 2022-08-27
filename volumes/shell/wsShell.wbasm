@@ -23,6 +23,12 @@ MACRO callCreateLine, dest, lineIndex, lines, lineCount
     wrt lineIndex, 0
 END
 
+MACRO updateCursorPosY
+    div cursorPosY, cursorIndex, termWidth
+    add cursorPosY, cursorPosY, messageLineAmount
+    sub cursorPosY, cursorPosY, verticalScroll
+END
+
 DEF none_MODE, 0
 DEF displayMessage_MODE, 1
 DEF promptOption_MODE, 2
@@ -96,7 +102,7 @@ FUNC init, wsInit.id, guarded
     call newWindow
     wrt shellWindow, newWindow.args.dest
     VAR testMessage, s32
-    newTextAlloc testMessage, testMessage2Start, testMessage2End
+    newTextAlloc testMessage, testMessage1Start, testMessage1End
     #VAR testOptions, s32
     #newAlloc testOptions, 0, 12
     #newTextAlloc testOptions[0]:s32, testOption1Start, testOption1End
@@ -680,13 +686,13 @@ FUNC promptWindowOption, wsPromptWindowOption.id
     call drawWindowIfFocused
     
     LBL keyLoop
+    add cursorPosY, messageLineAmount, cursorIndex
+    sub cursorPosY, cursorPosY, verticalScroll
     newArgFrame waitForKey.argsSize
     wrt waitForKey.args.window, window
     call waitForKey
     VAR key, s8
     wrt key, waitForKey.args.dest
-    add cursorPosY, messageLineAmount, cursorIndex
-    sub cursorPosY, cursorPosY, verticalScroll
     equ cond, key, 10
     jmpNZ enterPressed, cond
     equ cond, key, 27
@@ -816,6 +822,7 @@ FUNC promptWindowText, wsPromptWindowText.id
     VAR inputText, s32
     VAR inputTextLen, s32
     VAR cursorIndex, s32
+    VAR cursorPosY, s32
     VAR cond, s32
     VAR index, s32
     VAR size, s32
@@ -830,16 +837,17 @@ FUNC promptWindowText, wsPromptWindowText.id
     jmpNZ handleStartText, startText
     wrt inputTextLen, 0
     newAlloc inputText, guardedAllocAttr, 10
+    wrt cursorIndex, 0
     jmp skipStartText
     LBL handleStartText
     allocSize inputTextLen, startText
     add size, inputTextLen, 10
     newAlloc inputText, guardedAllocAttr, size
     wrtBuff inputText[0]:s8, startText[0]:s8, inputTextLen
+    wrt cursorIndex, inputTextLen
     LBL skipStartText
     
     wrt verticalScroll, 0
-    wrt cursorIndex, 0
     wrt window[input_OFFSET]:s32, inputText
     wrt window[inputLen_OFFSET]:s32, inputTextLen
     wrt window[mode_OFFSET]:s8, promptText_MODE
@@ -853,6 +861,7 @@ FUNC promptWindowText, wsPromptWindowText.id
     call drawWindowIfFocused
     
     LBL keyLoop
+    updateCursorPosY
     newArgFrame waitForKey.argsSize
     wrt waitForKey.args.window, window
     call waitForKey
@@ -891,7 +900,7 @@ FUNC promptWindowText, wsPromptWindowText.id
     LBL skipCopy1
     wrt cursorIndex, index
     sub inputTextLen, inputTextLen, 1
-    jmp drawLoop
+    jmp scrollToCursor
     
     LBL charPressed
     allocSize size, inputText
@@ -914,27 +923,112 @@ FUNC promptWindowText, wsPromptWindowText.id
     wrt inputText[cursorIndex]:s8, key
     wrt cursorIndex, index
     add inputTextLen, inputTextLen, 1
-    jmp drawLoop
+    jmp scrollToCursor
     
     LBL upPressed
+    jmpZ scrollUp, cursorIndex
+    gre cond, termHeight, cursorPosY
+    jmpNZ moveCursorUp, cond
+    LBL scrollUp
+    sub verticalScroll, verticalScroll, 1
+    jmp alignBounds
+    LBL moveCursorUp
+    sub cursorIndex, cursorIndex, termWidth
+    gre cond, 0, cursorIndex
+    jmpZ scrollToCursor, cond
+    wrt cursorIndex, 0
+    jmp scrollToCursor
+    
     LBL downPressed
+    gre cond, termHeight, cursorPosY
+    jmpNZ moveCursorDown, cond
+    add verticalScroll, verticalScroll, 1
+    jmp alignBounds
+    LBL moveCursorDown
+    add cursorIndex, cursorIndex, termWidth
+    gre cond, cursorIndex, inputTextLen
+    jmpZ scrollToCursor, cond
+    wrt cursorIndex, inputTextLen
+    jmp scrollToCursor
     
     LBL leftPressed
     gre cond, cursorIndex, 0
     jmpZ keyLoop, cond
     sub cursorIndex, cursorIndex, 1
-    jmp drawLoop
+    jmp scrollToCursor
     
     LBL rightPressed
     gre cond, inputTextLen, cursorIndex
     jmpZ keyLoop, cond
     add cursorIndex, cursorIndex, 1
-    jmp drawLoop
+    jmp scrollToCursor
     
     LBL tabPressed
+    gre cond, termHeight, cursorPosY
+    jmpNZ skipTab, cond
+    wrt verticalScroll, messageLineAmount
+    wrt cursorIndex, 0
+    jmp alignBounds
+    LBL skipTab
+    div verticalScroll, inputTextLen, termWidth
+    add verticalScroll, verticalScroll, messageLineAmount
+    wrt cursorIndex, inputTextLen
+    jmp alignBounds
+    
     LBL rtabPressed
+    gre cond, cursorIndex, 0
+    jmpZ skipRtab, cond
+    wrt verticalScroll, messageLineAmount
+    wrt cursorIndex, 0
+    jmp alignBounds
+    LBL skipRtab
+    wrt verticalScroll, 0
+    jmp alignBounds
+    
+    LBL scrollToCursor
+    updateCursorPosY
+    gre cond, 0, cursorPosY
+    jmpZ skipScrollBack, cond
+    div verticalScroll, cursorIndex, termWidth
+    add verticalScroll, verticalScroll, messageLineAmount
+    jmp alignBounds
+    LBL skipScrollBack
+    gre cond, termHeight, cursorPosY
+    jmpNZ alignBounds, cond
+    div verticalScroll, cursorIndex, termWidth
+    add verticalScroll, verticalScroll, messageLineAmount
+    sub verticalScroll, verticalScroll, termHeight
+    add verticalScroll, verticalScroll, 1
+    
+    LBL alignBounds
+    VAR totalLineAmount, s32
+    div totalLineAmount, inputTextLen, termWidth
+    add totalLineAmount, totalLineAmount, 1
+    add totalLineAmount, totalLineAmount, messageLineAmount
+    sub index, totalLineAmount, termHeight
+    gre cond, verticalScroll, index
+    jmpZ skipAlign, cond
+    wrt verticalScroll, index
+    LBL skipAlign
+    gre cond, 0, verticalScroll
+    jmpZ drawLoop, cond
+    wrt verticalScroll, 0
+    jmp drawLoop
+    
     LBL enterPressed
+    gre cond, termHeight, cursorPosY
+    jmpNZ acceptText, cond
+    wrt cursorIndex, inputTextLen
+    jmp scrollToCursor
+    LBL acceptText
+    newAlloc dest, 0, inputTextLen
+    jmpZ skipEscape, inputTextLen
+    wrtBuff dest[0]:s8, inputText[0]:s8, inputTextLen
+    jmp skipEscape
     LBL escapePressed
+    wrt dest, null
+    LBL skipEscape
+    wrt window[mode_OFFSET]:s8, none_MODE
 END
 
 FUNC clrWindow, wsClrWindow.id
