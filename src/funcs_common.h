@@ -158,6 +158,36 @@
 #define createStringAllocFromFixedArray(fixedArray) \
     createStringAllocFromFixedArrayHelper(fixedArray, (heapMemOffset_t)(getArrayLength(fixedArray) - 1))
 
+// Retrieves a member of the system sentry header in the given system sentry.
+// "pointer" is an allocPointer_t to a systemSentry_t.
+// "memberName" is the name of a member in systemSentryHeader_t.
+#define getSystemSentryMember(pointer, memberName) \
+    readDynamicAlloc(pointer, getStructMemberOffset(systemSentryHeader_t, memberName), getStructMemberType(systemSentryHeader_t, memberName))
+// Modifies a member of the system sentry header in the given system sentry.
+// "pointer" is an allocPointer_t to a systemSentry_t.
+// "memberName" is the name of a member in systemSentryHeader_t.
+#define setSystemSentryMember(pointer, memberName, value) \
+    writeDynamicAlloc(pointer, getStructMemberOffset(systemSentryHeader_t, memberName), getStructMemberType(systemSentryHeader_t, memberName), value)
+
+// Retrieves the address of the data region in the given system sentry.
+// "pointer" is an allocPointer_t to a systemSentry_t.
+#define getSystemSentryDataAddress(pointer) \
+    (getDynamicAllocDataAddress(pointer) + sizeof(systemSentryHeader_t))
+// Reads a value from the data region of the given system sentry.
+// "pointer" is an allocPointer_t to a systemSentry_t.
+// "index" is the integer offset of first byte to read.
+#define readSystemSentry(pointer, index, type) \
+    readHeapMem(getSystemSentryDataAddress(pointer) + index, type)
+// Writes a value to the data region of the given system sentry.
+// "pointer" is an allocPointer_t to a systemSentry_t.
+// "index" is the integer offset of first byte to write.
+#define writeSystemSentry(pointer, index, type, value) \
+    writeHeapMem(getSystemSentryDataAddress(pointer) + index, type, value)
+
+#define dynamicAllocIsSystemSentry(pointer) \
+    ((getDynamicAllocMember(pointer, attributes) & SENTRY_ALLOC_ATTR) \
+        && getDynamicAllocMember(pointer, creator) == NULL_ALLOC_POINTER)
+
 // Reads a value from non-volatile storage.
 // "address" is the offset of first byte to read.
 #define readStorage(address, type) \
@@ -199,12 +229,12 @@
 // "fileHandle" is an allocPointer_t to a dynamicAlloc_t.
 // "memberName" is the name of a member in fileHandle_t.
 #define getFileHandleMember(fileHandle, memberName) \
-    readDynamicAlloc(fileHandle, getStructMemberOffset(fileHandle_t, memberName), getStructMemberType(fileHandle_t, memberName))
+    readSystemSentry(fileHandle, getStructMemberOffset(fileHandle_t, memberName), getStructMemberType(fileHandle_t, memberName))
 // Modifies a member of the given file handle.
 // "fileHandle" is an allocPointer_t to a dynamicAlloc_t.
 // "memberName" is the name of a member in fileHandle_t.
 #define setFileHandleMember(fileHandle, memberName, value) \
-    writeDynamicAlloc(fileHandle, getStructMemberOffset(fileHandle_t, memberName), getStructMemberType(fileHandle_t, memberName), value)
+    writeSystemSentry(fileHandle, getStructMemberOffset(fileHandle_t, memberName), getStructMemberType(fileHandle_t, memberName), value)
 
 // Retrieves the type of the given file.
 #define getFileHandleType(fileHandle) \

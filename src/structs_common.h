@@ -45,6 +45,17 @@ typedef struct dynamicAlloc_t {
     int8_t data[0];
 } dynamicAlloc_t;
 
+// Stored at the beginning of a system sentry allocation.
+typedef struct systemSentryHeader_t {
+    int8_t type;
+} systemSentryHeader_t;
+
+// A sentry allocation which is created by the system. This struct is stored in the data region of a dynamicAlloc_t.
+typedef struct systemSentry_t {
+    systemSentryHeader_t header;
+    int8_t data[0];
+} systemSentry_t;
+
 // Stored at the beginning of non-volatile storage
 typedef struct storageHeader_t {
     storageOffset_t firstFileAddress;
@@ -58,7 +69,7 @@ typedef struct fileHeader_t {
     storageOffset_t next;
 } fileHeader_t;
 
-// Represents a file which has been opened. Stored in the data region of a dynamicHeapAlloc_t.
+// Represents a file which has been opened. Stored in the data region of a systemSentry_t.
 typedef struct fileHandle_t {
     storageOffset_t address;
     uint8_t attributes;

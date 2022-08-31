@@ -482,6 +482,7 @@ allocPointer_t openFile(heapMemOffset_t nameAddress, heapMemOffset_t nameSize) {
         NULL_ALLOC_POINTER
     );
     checkUnhandledError(NULL_ALLOC_POINTER);
+    setSystemSentryMember(output, type, FILE_HANDLE_SENTRY_TYPE);
     setFileHandleMember(output, address, fileAddress);
     setFileHandleMember(output, attributes, fileAttributes);
     setFileHandleMember(output, nameSize, nameSize);
@@ -597,17 +598,11 @@ allocPointer_t openFileByStringAlloc(allocPointer_t stringAlloc) {
     return openFile(address, (uint8_t)size);
 }
 
-int8_t allocIsFileHandle(allocPointer_t pointer) {
-    return (getAllocType(pointer) == DYNAMIC_ALLOC_TYPE
-        && (getDynamicAllocMember(pointer, attributes) & SENTRY_ALLOC_ATTR)
-        && getDynamicAllocMember(pointer, creator) == NULL_ALLOC_POINTER);
-}
-
 void validateFileHandle(int32_t fileHandle) {
     validateDynamicAlloc(fileHandle);
     checkUnhandledError();
-    if (!(getDynamicAllocMember(fileHandle, attributes) & SENTRY_ALLOC_ATTR)
-            || getDynamicAllocMember(fileHandle, creator) != NULL_ALLOC_POINTER) {
+    if (!dynamicAllocIsSystemSentry(fileHandle)
+            || getSystemSentryMember(fileHandle, type) != FILE_HANDLE_SENTRY_TYPE) {
         throw(TYPE_ERR_CODE);
     }
 }
