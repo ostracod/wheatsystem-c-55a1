@@ -1738,11 +1738,6 @@ void evaluateBytecodeInstruction() {
             }
             int8_t attributes = readArgInt(1) & ALLOC_ATTR_MASK;
             setDynamicAllocMember(alloc, attributes, attributes);
-        } else if (opcodeOffset == 0x9) {
-            // testAndSet.
-            int32_t oldValue = readArgInt(1);
-            writeArgInt(1, 1);
-            writeArgInt(0, oldValue);
         }
     } else if (opcodeCategory == 0x1) {
         // Control flow instructions.
@@ -1764,35 +1759,8 @@ void evaluateBytecodeInstruction() {
                 int32_t instructionOffset = readArgConstantInt(0);
                 jumpToBytecodeInstruction(instructionOffset);
             }
-        } else if (opcodeOffset == 0x3) {
-            // wait.
-            int8_t shouldSkipWait = getRunningAppMember(currentImplementer, shouldSkipWait);
-            if (shouldSkipWait) {
-                setRunningAppMember(currentImplementer, shouldSkipWait, false);
-            } else {
-                setThreadMember(currentThread, isWaiting, true);
-            }
-        } else if (opcodeOffset == 0x4) {
-            // resume.
-            int8_t hasResumed = false;
-            allocPointer_t thread = allocsByType[THREAD_ALLOC_TYPE];
-            while (thread != NULL_ALLOC_POINTER) {
-                allocPointer_t localFrame = getThreadMember(thread, localFrame);
-                allocPointer_t implementer = getLocalFrameMember(localFrame, implementer);
-                if (implementer == currentImplementer) {
-                    int8_t isWaiting = getThreadMember(thread, isWaiting);
-                    if (isWaiting) {
-                        setThreadMember(thread, isWaiting, false);
-                        hasResumed = true;
-                    }
-                }
-                thread = getAllocNextByType(thread);
-            }
-            if (!hasResumed) {
-                setRunningAppMember(currentImplementer, shouldSkipWait, true);
-            }
         }
-    } else if (opcodeCategory == 0x2) {
+    } else if (opcodeCategory == 0x3) {
         // Error instructions.
         if (opcodeOffset == 0x0) {
             // setErrJmp.
@@ -1813,7 +1781,7 @@ void evaluateBytecodeInstruction() {
             int8_t code = getLocalFrameMember(currentLocalFrame, lastErrorCode);
             writeArgInt(0, code);
         }
-    } else if (opcodeCategory == 0x3) {
+    } else if (opcodeCategory == 0x4) {
         // Function instructions.
         if (opcodeOffset == 0x0) {
             // findFunc.
@@ -1851,7 +1819,7 @@ void evaluateBytecodeInstruction() {
             checkUnhandledError();
             writeArgInt(0, isGuarded);
         }
-    } else if (opcodeCategory == 0x4) {
+    } else if (opcodeCategory == 0x5) {
         // Bitwise instructions.
         uint32_t result = 0;
         if (opcodeOffset == 0x0) {
@@ -1879,7 +1847,7 @@ void evaluateBytecodeInstruction() {
             }
         }
         writeArgInt(0, result);
-    } else if (opcodeCategory == 0x5) {
+    } else if (opcodeCategory == 0x6) {
         // Comparison instructions.
         int32_t operand1 = readArgInt(1);
         int32_t operand2 = readArgInt(2);
@@ -1898,7 +1866,7 @@ void evaluateBytecodeInstruction() {
             result = (operand1 <= operand2);
         }
         writeArgInt(0, result);
-    } else if (opcodeCategory == 0x6) {
+    } else if (opcodeCategory == 0x7) {
         // Arithmetic instructions.
         int32_t operand1 = readArgInt(1);
         int32_t operand2 = readArgInt(2);
@@ -1926,7 +1894,7 @@ void evaluateBytecodeInstruction() {
             result = operand1 % operand2;
         }
         writeArgInt(0, result);
-    } else if (opcodeCategory == 0x7) {
+    } else if (opcodeCategory == 0x8) {
         // Application instructions.
         if (opcodeOffset == 0x0) {
             // launch.
@@ -1959,7 +1927,7 @@ void evaluateBytecodeInstruction() {
                 softKillApp(runningApp);
             }
         }
-    } else if (opcodeCategory == 0x8) {
+    } else if (opcodeCategory == 0x9) {
         // File instructions.
         if (opcodeOffset == 0x0) {
             // newFile.
@@ -2044,7 +2012,7 @@ void evaluateBytecodeInstruction() {
                 offset += sizeToCopy;
             }
         }
-    } else if (opcodeCategory == 0x9) {
+    } else if (opcodeCategory == 0xA) {
         // File metadata instructions.
         if (opcodeOffset == 0x0) {
             // allFileNames.
@@ -2095,7 +2063,7 @@ void evaluateBytecodeInstruction() {
             storageOffset_t size = getFileHandleMember(fileHandle, contentSize);
             writeArgInt(0, size);
         }
-    } else if (opcodeCategory == 0xA) {
+    } else if (opcodeCategory == 0xB) {
         // Permission instructions.
         if (opcodeOffset == 0x0) {
             // hasAdminPerm.
@@ -2118,7 +2086,7 @@ void evaluateBytecodeInstruction() {
             allocPointer_t fileHandle = readArgFileHandle(0);
             setFileHasAdminPerm(fileHandle, false);
         }
-    } else if (opcodeCategory == 0xB) {
+    } else if (opcodeCategory == 0xC) {
         // Resource instructions.
         if (opcodeOffset == 0x0) {
             // memSize.

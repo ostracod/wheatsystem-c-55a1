@@ -4,14 +4,16 @@
 const int8_t bootStringConstant[] PROGMEM = "wsBoot";
 
 const int8_t argAmountOffsetArray[] PROGMEM = {
-    0, 10, 15, 19, 25, 31, 35, 40, 46, 52, 58, 61, 66, 68
+    0, 9, 12, 17, 21, 27, 33, 37, 42, 48, 54, 60, 63, 68, 70
 };
 
 const int8_t argAmountArray[] PROGMEM = {
     // Memory instructions.
-    2, 3, 1, 3, 1, 2, 2, 2, 2, 2,
+    2, 3, 1, 3, 1, 2, 2, 2, 2,
     // Control flow instructions.
-    1, 2, 2, 0, 0,
+    1, 2, 2,
+    // Gate instructions.
+    2, 1, 1, 1, 1,
     // Error instructions.
     1, 0, 1, 1,
     // Function instructions.

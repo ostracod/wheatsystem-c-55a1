@@ -2,11 +2,11 @@ lockfileVersion: 5.4
 
 specifiers:
   serialport: ^10.4.0
-  wheatbytecode-asm: github:ostracod/wheatbytecode-asm#master
+  wheatbytecode-asm: github:ostracod/wheatbytecode-asm#dev
 
 dependencies:
   serialport: 10.4.0
-  wheatbytecode-asm: github.com/ostracod/wheatbytecode-asm/06cfb3388ed8fb351eabf84024d4712b142b2ad8
+  wheatbytecode-asm: github.com/ostracod/wheatbytecode-asm/ea6e1dad7291ccb508ed935f45af0a6c0a487daf
 
 packages:
 
@@ -153,17 +153,17 @@ packages:
       - supports-color
     dev: false
 
-  github.com/ostracod/wheatbytecode-asm/06cfb3388ed8fb351eabf84024d4712b142b2ad8:
-    resolution: {tarball: https://codeload.github.com/ostracod/wheatbytecode-asm/tar.gz/06cfb3388ed8fb351eabf84024d4712b142b2ad8}
+  github.com/ostracod/wheatbytecode-asm/ea6e1dad7291ccb508ed935f45af0a6c0a487daf:
+    resolution: {tarball: https://codeload.github.com/ostracod/wheatbytecode-asm/tar.gz/ea6e1dad7291ccb508ed935f45af0a6c0a487daf}
     name: wheatbytecode-asm
     version: 1.0.0
     requiresBuild: true
     dependencies:
-      wheatsystem-spec: github.com/ostracod/wheatsystem-spec/c796adf15676a7f1f440c44aefc599462eb32276
+      wheatsystem-spec: github.com/ostracod/wheatsystem-spec/946dae65d59cec1e59db8aff95e0910e8fd0e896
     dev: false
 
-  github.com/ostracod/wheatsystem-spec/c796adf15676a7f1f440c44aefc599462eb32276:
-    resolution: {tarball: https://codeload.github.com/ostracod/wheatsystem-spec/tar.gz/c796adf15676a7f1f440c44aefc599462eb32276}
+  github.com/ostracod/wheatsystem-spec/946dae65d59cec1e59db8aff95e0910e8fd0e896:
+    resolution: {tarball: https://codeload.github.com/ostracod/wheatsystem-spec/tar.gz/946dae65d59cec1e59db8aff95e0910e8fd0e896}
     name: wheatsystem-spec
     version: 1.0.0
     requiresBuild: true
