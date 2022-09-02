@@ -246,6 +246,42 @@ void validateDynamicAlloc(int32_t dynamicAlloc) {
     }
 }
 
+allocPointer_t createSystemSentry(int8_t type, heapMemOffset_t size) {
+    allocPointer_t output = createDynamicAlloc(
+        sizeof(systemSentryHeader_t) + size,
+        GUARDED_ALLOC_ATTR | SENTRY_ALLOC_ATTR,
+        NULL_ALLOC_POINTER
+    );
+    checkUnhandledError(NULL_ALLOC_POINTER);
+    setSystemSentryMember(output, type, type);
+    return output;
+}
+
+allocPointer_t createGate(int8_t mode) {
+    allocPointer_t output = createSystemSentry(GATE_SENTRY_TYPE, sizeof(gateSentry_t));
+    checkUnhandledError(NULL_ALLOC_POINTER);
+    setGateMember(output, owner, currentImplementer);
+    setGateMember(output, mode, mode);
+    setGateMember(output, isOpen, true);
+    return output;
+}
+
+void deleteGate(allocPointer_t gate) {
+    // TODO: Implement.
+}
+
+void waitForGate(allocPointer_t gate) {
+    // TODO: Implement.
+}
+
+void openGate(allocPointer_t gate) {
+    // TODO: Implement.
+}
+
+void closeGate(allocPointer_t gate) {
+    // TODO: Implement.
+}
+
 int8_t heapMemNameEqualsStorageName(
     heapMemOffset_t heapMemNameAddress,
     uint8_t heapMemNameSize,
@@ -476,11 +512,7 @@ allocPointer_t openFile(heapMemOffset_t nameAddress, heapMemOffset_t nameSize) {
     storageOffset_t contentSize = getFileHeaderMember(fileAddress, contentSize);
     
     // Create file handle.
-    allocPointer_t output = createDynamicAlloc(
-        sizeof(fileHandle_t),
-        GUARDED_ALLOC_ATTR | SENTRY_ALLOC_ATTR,
-        NULL_ALLOC_POINTER
-    );
+    allocPointer_t output = createSystemSentry(FILE_HANDLE_SENTRY_TYPE, sizeof(fileHandle_t));
     checkUnhandledError(NULL_ALLOC_POINTER);
     setSystemSentryMember(output, type, FILE_HANDLE_SENTRY_TYPE);
     setFileHandleMember(output, address, fileAddress);
@@ -758,7 +790,6 @@ void launchApp(allocPointer_t fileHandle) {
     );
     checkUnhandledError();
     setRunningAppMember(runningApp, fileHandle, fileHandle);
-    setRunningAppMember(runningApp, shouldSkipWait, false);
     setRunningAppMember(runningApp, killAction, NONE_KILL_ACTION);
     setFileHandleMember(fileHandle, runningApp, runningApp);
     setFileHandleMember(fileHandle, initErr, NONE_ERR_CODE);
@@ -1039,7 +1070,7 @@ int8_t createThread(allocPointer_t runningApp, int32_t funcId) {
     setThreadMember(thread, runningApp, runningApp);
     setThreadMember(thread, funcId, funcId);
     setThreadMember(thread, localFrame, NULL_ALLOC_POINTER);
-    setThreadMember(thread, isWaiting, false);
+    setThreadMember(thread, blockingGate, NULL_ALLOC_POINTER);
     callFunc(thread, runningApp, funcIndex, false);
     if (nextThread == NULL_ALLOC_POINTER) {
         nextThread = thread;
@@ -1084,7 +1115,7 @@ void registerErrorInCurrentThread(int8_t error) {
         }
         if (shouldHandleError) {
             setLocalFrameMember(currentLocalFrame, lastErrorCode, error);
-            setThreadMember(currentThread, isWaiting, false);
+            setThreadMember(currentThread, blockingGate, NULL_ALLOC_POINTER);
             break;
         }
         returnFromFunc();
@@ -1164,8 +1195,8 @@ void runAppSystem() {
         }
         allocPointer_t thread = nextThread;
         advanceNextThread(thread);
-        int8_t isWaiting = getThreadMember(thread, isWaiting);
-        if (!isWaiting) {
+        allocPointer_t blockingGate = getThreadMember(thread, blockingGate);
+        if (blockingGate == NULL_ALLOC_POINTER) {
             setCurrentThread(thread);
             if (currentLocalFrame == NULL_ALLOC_POINTER) {
                 deleteThread(currentThread);
@@ -1759,6 +1790,30 @@ void evaluateBytecodeInstruction() {
                 int32_t instructionOffset = readArgConstantInt(0);
                 jumpToBytecodeInstruction(instructionOffset);
             }
+        }
+    } else if (opcodeCategory == 0x2) {
+        // Gate instructions.
+        if (opcodeOffset == 0x0) {
+            // newGate.
+            int32_t mode = readArgInt(1);
+            if (mode < STAY_OPEN_GATE_MODE || mode > WAIT_CLOSE_GATE_MODE) {
+                throw(TYPE_ERR_CODE);
+            }
+            allocPointer_t gate = createGate(mode);
+            checkUnhandledError();
+            writeArgInt(0, gate);
+        } else if (opcodeOffset == 0x1) {
+            // delGate.
+            
+        } else if (opcodeOffset == 0x2) {
+            // waitGate.
+            
+        } else if (opcodeOffset == 0x3) {
+            // openGate.
+            
+        } else if (opcodeOffset == 0x4) {
+            // closeGate.
+            
         }
     } else if (opcodeCategory == 0x3) {
         // Error instructions.

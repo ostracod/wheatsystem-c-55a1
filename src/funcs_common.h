@@ -184,9 +184,22 @@
 #define writeSystemSentry(pointer, index, type, value) \
     writeHeapMem(getSystemSentryDataAddress(pointer) + index, type, value)
 
+// Determines whether the given dynamic allocation is a system sentry.
+// "pointer" is an allocPointer_t to a dynamicAlloc_t
 #define dynamicAllocIsSystemSentry(pointer) \
     ((getDynamicAllocMember(pointer, attributes) & SENTRY_ALLOC_ATTR) \
         && getDynamicAllocMember(pointer, creator) == NULL_ALLOC_POINTER)
+
+// Retrieves a member of the given gate sentry.
+// "gate" is an allocPointer_t to a gateSentry_t.
+// "memberName" is the name of a member in gateSentry_t.
+#define getGateMember(gate, memberName) \
+    readSystemSentry(gate, getStructMemberOffset(gateSentry_t, memberName), getStructMemberType(gateSentry_t, memberName))
+// Modifies a member of the given gate sentry.
+// "gate" is an allocPointer_t to a gateSentry_t.
+// "memberName" is the name of a member in gateSentry_t.
+#define setGateMember(gate, memberName, value) \
+    writeSystemSentry(gate, getStructMemberOffset(gateSentry_t, memberName), getStructMemberType(gateSentry_t, memberName), value)
 
 // Reads a value from non-volatile storage.
 // "address" is the offset of first byte to read.
@@ -226,12 +239,12 @@
     (sizeof(fileHeader_t) + nameSize + contentSize)
 
 // Retrieves a member of the given file handle.
-// "fileHandle" is an allocPointer_t to a dynamicAlloc_t.
+// "fileHandle" is an allocPointer_t to a fileHandle_t.
 // "memberName" is the name of a member in fileHandle_t.
 #define getFileHandleMember(fileHandle, memberName) \
     readSystemSentry(fileHandle, getStructMemberOffset(fileHandle_t, memberName), getStructMemberType(fileHandle_t, memberName))
 // Modifies a member of the given file handle.
-// "fileHandle" is an allocPointer_t to a dynamicAlloc_t.
+// "fileHandle" is an allocPointer_t to a fileHandle_t.
 // "memberName" is the name of a member in fileHandle_t.
 #define setFileHandleMember(fileHandle, memberName, value) \
     writeSystemSentry(fileHandle, getStructMemberOffset(fileHandle_t, memberName), getStructMemberType(fileHandle_t, memberName), value)
@@ -657,6 +670,21 @@ allocPointer_t createStringAllocFromFixedArrayHelper(
 // "dynamicAlloc" is a pointer to dynamicAlloc_t.
 void validateDynamicAlloc(int32_t dynamicAlloc);
 
+// Creates a sentry allocation whose creator field is NULL_ALLOC_POINTER.
+// "size" is the number of bytes in the data region of the new system sentry.
+allocPointer_t createSystemSentry(int8_t type, heapMemOffset_t size);
+
+// Creates a gate sentry with the given mode.
+allocPointer_t createGate(int8_t mode);
+// Deletes the given gate sentry.
+void deleteGate(allocPointer_t gate);
+// Blocks execution of the current thread if the given gate is closed.
+void waitForGate(allocPointer_t gate);
+// Changes the state of the given gate to be open.
+void openGate(allocPointer_t gate);
+// Changes the state of the given gate to be closed.
+void closeGate(allocPointer_t gate);
+
 // Determines whether a file name in heap memory equals a file name in storage.
 int8_t heapMemNameEqualsStorageName(
     heapMemOffset_t heapMemNameAddress,
@@ -680,7 +708,7 @@ void createFile(
     storageOffset_t contentSize
 );
 // Deletes the given file.
-// "fileHandle" is a pointer to a dynamicAlloc_t.
+// "fileHandle" is a pointer to a fileHandle_t.
 void deleteFile(allocPointer_t fileHandle);
 // Finds the address of the file with the given name. Returns MISSING_FILE_ADDRESS if the file cannot be found.
 storageOffset_t getFileAddressByName(
@@ -690,22 +718,22 @@ storageOffset_t getFileAddressByName(
 // Determines the total amount of storage space which the given file occupies.
 storageOffset_t getFileStorageSize(storageOffset_t fileAddress);
 // Increments the open depth of the given file handle.
-// "fileHandle" is a pointer to a dynamicAlloc_t.
+// "fileHandle" is a pointer to a fileHandle_t.
 void incrementFileOpenDepth(allocPointer_t fileHandle);
 // Opens the file with the given name, returning a file handle. If the file has already been opened, this function returns the existing file handle and increments its open depth. If the file is missing, this function returns NULL_ALLOC_POINTER.
 allocPointer_t openFile(heapMemOffset_t nameAddress, heapMemOffset_t nameSize);
 // Deletes the given file handle, and kills any running app launched from the file.
-// "fileHandle" is a pointer to a dynamicAlloc_t.
+// "fileHandle" is a pointer to a fileHandle_t.
 void deleteFileHandle(allocPointer_t fileHandle);
 // Deletes the given file handle if it is not being used by any application.
-// "fileHandle" is a pointer to a dynamicAlloc_t.
+// "fileHandle" is a pointer to a fileHandle_t.
 void deleteFileHandleIfUnused(allocPointer_t fileHandle);
 // Closes the given file, decrementing the open depth of the file handle. If the open depth reaches zero, the file handle is deleted.
-// "fileHandle" is a pointer to a dynamicAlloc_t.
+// "fileHandle" is a pointer to a fileHandle_t.
 void closeFile(allocPointer_t fileHandle);
 void readFileRange(
     void *destination,
-    // Pointer to a dynamicAlloc_t.
+    // Pointer to a fileHandle_t.
     allocPointer_t fileHandle,
     // Offset of first byte to read.
     storageOffset_t pos,

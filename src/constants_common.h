@@ -42,6 +42,9 @@
 #define FILE_HANDLE_SENTRY_TYPE 1
 #define GATE_SENTRY_TYPE 2
 
+#define STAY_OPEN_GATE_MODE 0
+#define WAIT_CLOSE_GATE_MODE 1
+
 // Size available to store files.
 #define STORAGE_SIZE ((storageOffset_t)128 * (storageOffset_t)1024)
 

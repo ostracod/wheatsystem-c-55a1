@@ -56,6 +56,14 @@ typedef struct systemSentry_t {
     int8_t data[0];
 } systemSentry_t;
 
+// Provides a mechanism for thread synchronization. Stored within the data region of a systemSentry_t.
+typedef struct gateSentry_t {
+    // Pointer to runningApp_t.
+    allocPointer_t owner;
+    int8_t mode;
+    int8_t isOpen;
+} gateSentry_t;
+
 // Stored at the beginning of non-volatile storage
 typedef struct storageHeader_t {
     storageOffset_t firstFileAddress;
@@ -92,16 +100,15 @@ typedef struct thread_t {
     int8_t funcId;
     // Currently active localFrame_t.
     allocPointer_t localFrame;
-    // Whether the thread is blocked by a "wait" instruction.
-    int8_t isWaiting;
+    // Pointer to the gateSentry_t which is blocking execution.
+    // Will be NULL_ALLOC_POINTER if no gate is blocking.
+    allocPointer_t blockingGate;
 } thread_t;
 
 // Stored at the beginning of a running application allocation.
 typedef struct runningAppHeader_t {
     // fileHandle_t of an application.
     allocPointer_t fileHandle;
-    // Whether the next "wait" instruction will be excused from blocking.
-    int8_t shouldSkipWait;
     // The last action performed when attempting to kill the app.
     int8_t killAction;
     // The amount of time since the last kill action.
