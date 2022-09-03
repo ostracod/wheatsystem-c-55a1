@@ -184,12 +184,6 @@
 #define writeSystemSentry(pointer, index, type, value) \
     writeHeapMem(getSystemSentryDataAddress(pointer) + index, type, value)
 
-// Determines whether the given dynamic allocation is a system sentry.
-// "pointer" is an allocPointer_t to a dynamicAlloc_t
-#define dynamicAllocIsSystemSentry(pointer) \
-    ((getDynamicAllocMember(pointer, attributes) & SENTRY_ALLOC_ATTR) \
-        && getDynamicAllocMember(pointer, creator) == NULL_ALLOC_POINTER)
-
 // Retrieves a member of the given gate sentry.
 // "gate" is an allocPointer_t to a gateSentry_t.
 // "memberName" is the name of a member in gateSentry_t.
@@ -200,6 +194,9 @@
 // "memberName" is the name of a member in gateSentry_t.
 #define setGateMember(gate, memberName, value) \
     writeSystemSentry(gate, getStructMemberOffset(gateSentry_t, memberName), getStructMemberType(gateSentry_t, memberName), value)
+// Changes the state of the given gate to be closed.
+// "gate" is an allocPointer_t to a gateSentry_t.
+#define closeGate(gate) setGateMember(gate, isOpen, false)
 
 // Reads a value from non-volatile storage.
 // "address" is the offset of first byte to read.
@@ -527,16 +524,24 @@
 })
 // Reads a pointer to a dynamic allocation from a bytecode argument.
 #define readArgDynamicAlloc(index) ({ \
-    allocPointer_t pointer = readArgInt(index); \
+    int32_t pointer = readArgInt(index); \
     validateDynamicAlloc(pointer); \
     checkUnhandledError(); \
     (allocPointer_t)pointer; \
 })
 
+// Reads a pointer to a gate sentry from a bytecode argument.
+#define readArgGate(index) ({ \
+    int32_t gate = readArgInt(index); \
+    validateGate(gate); \
+    checkUnhandledError(); \
+    (allocPointer_t)gate; \
+})
+
 // Reads a pointer to a file handle from a bytecode argument.
 #define readArgFileHandle(index) ({ \
-    allocPointer_t fileHandle = readArgInt(index); \
-    validateFileHandle(fileHandle); \
+    int32_t fileHandle = readArgInt(index); \
+    validateSystemSentry(fileHandle, FILE_HANDLE_SENTRY_TYPE); \
     checkUnhandledError(); \
     (allocPointer_t)fileHandle; \
 })
@@ -673,17 +678,26 @@ void validateDynamicAlloc(int32_t dynamicAlloc);
 // Creates a sentry allocation whose creator field is NULL_ALLOC_POINTER.
 // "size" is the number of bytes in the data region of the new system sentry.
 allocPointer_t createSystemSentry(int8_t type, heapMemOffset_t size);
+// Determines whether a dynamic allocation is a system sentry with the given type.
+// "dynamicAlloc" is a pointer to a dynamicAlloc_t
+int8_t dynamicAllocIsSystemSentry(allocPointer_t dynamicAlloc, int8_t type);
+// Verifies whether the given pointer references a valid system sentry. May assign a new value to unhandledErrorCode.
+// "sentry" is a pointer to a systemSentry_t.
+void validateSystemSentry(int32_t sentry, int8_t type);
 
 // Creates a gate sentry with the given mode.
 allocPointer_t createGate(int8_t mode);
 // Deletes the given gate sentry.
 void deleteGate(allocPointer_t gate);
+// Returns true if the gate has become closed after passing.
+int8_t passThroughGate(allocPointer_t gate);
 // Blocks execution of the current thread if the given gate is closed.
 void waitForGate(allocPointer_t gate);
 // Changes the state of the given gate to be open.
 void openGate(allocPointer_t gate);
-// Changes the state of the given gate to be closed.
-void closeGate(allocPointer_t gate);
+// Verifies whether the given pointer references a valid gate sentry which belongs to the current implementer. May assign a new value to unhandledErrorCode.
+// "sentry" is a pointer to a gateSentry_t.
+void validateGate(int32_t gate);
 
 // Determines whether a file name in heap memory equals a file name in storage.
 int8_t heapMemNameEqualsStorageName(
@@ -741,14 +755,10 @@ void readFileRange(
 );
 // Retrieves a list of all file names in the system volume. The output stores an array of pointers to dynamic allocations.
 allocPointer_t getAllFileNames();
-
 // Opens a file with the given name. Uses openFile for underlying logic.
 // "stringAlloc" is a pointer to a dynamicAlloc_t containing the name of the file to open.
 // Returns a pointer to a fileHandle_t.
 allocPointer_t openFileByStringAlloc(allocPointer_t stringAlloc);
-// Verifies whether the given pointer references a valid file handle. May assign a new value to unhandledErrorCode.
-// "fileHandle" is a pointer to a fileHandle_t.
-void validateFileHandle(int32_t fileHandle);
 
 // Retrieves an index in the function table of the given running application.
 // "runningApp" is a pointer to a runningApp_t.

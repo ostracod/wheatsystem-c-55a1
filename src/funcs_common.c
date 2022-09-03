@@ -257,6 +257,20 @@ allocPointer_t createSystemSentry(int8_t type, heapMemOffset_t size) {
     return output;
 }
 
+int8_t dynamicAllocIsSystemSentry(allocPointer_t dynamicAlloc, int8_t type) {
+    return ((getDynamicAllocMember(dynamicAlloc, attributes) & SENTRY_ALLOC_ATTR)
+        && getDynamicAllocMember(dynamicAlloc, creator) == NULL_ALLOC_POINTER
+        && getSystemSentryMember(dynamicAlloc, type) == type);
+}
+
+void validateSystemSentry(int32_t sentry, int8_t type) {
+    validateDynamicAlloc(sentry);
+    checkUnhandledError();
+    if (!dynamicAllocIsSystemSentry(sentry, type)) {
+        throw(TYPE_ERR_CODE);
+    }
+}
+
 allocPointer_t createGate(int8_t mode) {
     allocPointer_t output = createSystemSentry(GATE_SENTRY_TYPE, sizeof(gateSentry_t));
     checkUnhandledError(NULL_ALLOC_POINTER);
@@ -267,19 +281,57 @@ allocPointer_t createGate(int8_t mode) {
 }
 
 void deleteGate(allocPointer_t gate) {
-    // TODO: Implement.
+    allocPointer_t lastThread = currentThread;
+    allocPointer_t thread = allocsByType[THREAD_ALLOC_TYPE];
+    while (thread != NULL_ALLOC_POINTER) {
+        if (getThreadMember(thread, blockingGate) == gate) {
+            setCurrentThread(thread);
+            registerErrorInCurrentThread(MISSING_ERR_CODE);
+        }
+        thread = getAllocNextByType(thread);
+    }
+    setCurrentThread(lastThread);
+    deleteAlloc(gate);
+}
+
+int8_t passThroughGate(allocPointer_t gate) {
+    if (getGateMember(gate, mode) == PASS_CLOSE_GATE_MODE) {
+        setGateMember(gate, isOpen, false);
+        return true;
+    } else {
+        return false;
+    }
 }
 
 void waitForGate(allocPointer_t gate) {
-    // TODO: Implement.
+    if (getGateMember(gate, isOpen)) {
+        passThroughGate(gate);
+    } else {
+        setThreadMember(currentThread, blockingGate, gate);
+    }
 }
 
 void openGate(allocPointer_t gate) {
-    // TODO: Implement.
+    setGateMember(gate, isOpen, true);
+    allocPointer_t thread = allocsByType[THREAD_ALLOC_TYPE];
+    while (thread != NULL_ALLOC_POINTER) {
+        if (getThreadMember(thread, blockingGate) == gate) {
+            setThreadMember(thread, blockingGate, NULL_ALLOC_POINTER);
+            int8_t hasClosed = passThroughGate(gate);
+            if (hasClosed) {
+                break;
+            }
+        }
+        thread = getAllocNextByType(thread);
+    }
 }
 
-void closeGate(allocPointer_t gate) {
-    // TODO: Implement.
+void validateGate(int32_t gate) {
+    validateSystemSentry(gate, GATE_SENTRY_TYPE);
+    checkUnhandledError();
+    if (getGateMember(gate, owner) != currentImplementer) {
+        throw(DATA_ERR_CODE);
+    }
 }
 
 int8_t heapMemNameEqualsStorageName(
@@ -630,15 +682,6 @@ allocPointer_t openFileByStringAlloc(allocPointer_t stringAlloc) {
     return openFile(address, (uint8_t)size);
 }
 
-void validateFileHandle(int32_t fileHandle) {
-    validateDynamicAlloc(fileHandle);
-    checkUnhandledError();
-    if (!dynamicAllocIsSystemSentry(fileHandle)
-            || getSystemSentryMember(fileHandle, type) != FILE_HANDLE_SENTRY_TYPE) {
-        throw(TYPE_ERR_CODE);
-    }
-}
-
 int32_t findFuncById(allocPointer_t runningApp, int32_t funcId) {
     allocPointer_t fileHandle = getRunningAppMember(runningApp, fileHandle);
     int8_t fileType = getFileHandleType(fileHandle);
@@ -881,7 +924,8 @@ void hardKillApp(allocPointer_t runningApp, int8_t errorCode) {
         int8_t type = getAllocType(alloc);
         if (type == DYNAMIC_ALLOC_TYPE) {
             allocPointer_t creator = getDynamicAllocMember(alloc, creator);
-            if (creator == runningApp) {
+            if (creator == runningApp || (dynamicAllocIsSystemSentry(alloc, GATE_SENTRY_TYPE)
+                    && getGateMember(alloc, owner) == runningApp)) {
                 deleteAlloc(alloc);
             }
         }
@@ -1195,8 +1239,7 @@ void runAppSystem() {
         }
         allocPointer_t thread = nextThread;
         advanceNextThread(thread);
-        allocPointer_t blockingGate = getThreadMember(thread, blockingGate);
-        if (blockingGate == NULL_ALLOC_POINTER) {
+        if (getThreadMember(thread, blockingGate) == NULL_ALLOC_POINTER) {
             setCurrentThread(thread);
             if (currentLocalFrame == NULL_ALLOC_POINTER) {
                 deleteThread(currentThread);
@@ -1796,24 +1839,27 @@ void evaluateBytecodeInstruction() {
         if (opcodeOffset == 0x0) {
             // newGate.
             int32_t mode = readArgInt(1);
-            if (mode < STAY_OPEN_GATE_MODE || mode > WAIT_CLOSE_GATE_MODE) {
+            if (mode < STAY_OPEN_GATE_MODE || mode > PASS_CLOSE_GATE_MODE) {
                 throw(TYPE_ERR_CODE);
             }
             allocPointer_t gate = createGate(mode);
             checkUnhandledError();
             writeArgInt(0, gate);
-        } else if (opcodeOffset == 0x1) {
-            // delGate.
-            
-        } else if (opcodeOffset == 0x2) {
-            // waitGate.
-            
-        } else if (opcodeOffset == 0x3) {
-            // openGate.
-            
-        } else if (opcodeOffset == 0x4) {
-            // closeGate.
-            
+        } else {
+            allocPointer_t gate = readArgGate(0);
+            if (opcodeOffset == 0x1) {
+                // delGate.
+                deleteGate(gate);
+            } else if (opcodeOffset == 0x2) {
+                // waitGate.
+                waitForGate(gate);
+            } else if (opcodeOffset == 0x3) {
+                // openGate.
+                openGate(gate);
+            } else if (opcodeOffset == 0x4) {
+                // closeGate.
+                closeGate(gate);
+            }
         }
     } else if (opcodeCategory == 0x3) {
         // Error instructions.
