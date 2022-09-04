@@ -139,6 +139,8 @@ typedef struct localFrameHeader_t {
     int32_t funcIndex;
     // Pointer to the previous localFrame_t.
     allocPointer_t previousLocalFrame;
+    // argFrame_t passed from the previous function invocation.
+    allocPointer_t previousArgFrame;
     // argFrame_t to pass to the next function invocation.
     allocPointer_t nextArgFrame;
     // Last error code caught by an error handler.

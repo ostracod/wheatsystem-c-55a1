@@ -398,10 +398,7 @@
     writeHeapMem(getArgFrameDataAddress(argFrame) + index, type, value)
 
 // Retrieves the argument frame which has been passed to the current function invocation.
-#define getPreviousArgFrame() ({ \
-    allocPointer_t localFrame = getLocalFrameMember(currentLocalFrame, previousLocalFrame); \
-    getLocalFrameMember(localFrame, nextArgFrame); \
-})
+#define getPreviousArgFrame() getLocalFrameMember(currentLocalFrame, previousArgFrame)
 // Deletes any argument frame which has been created by the current function invocation.
 #define cleanUpNextArgFrame() cleanUpNextArgFrameHelper(currentLocalFrame)
 

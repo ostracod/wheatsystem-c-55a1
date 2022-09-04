@@ -997,11 +997,9 @@ void callFunc(
             argFrameSize
         );
     }
+    allocPointer_t previousArgFrame = NULL_ALLOC_POINTER;
     if (argFrameSize > 0) {
-        allocPointer_t previousArgFrame;
-        if (previousLocalFrame == NULL_ALLOC_POINTER) {
-            previousArgFrame = NULL_ALLOC_POINTER;
-        } else {
+        if (previousLocalFrame != NULL_ALLOC_POINTER) {
             previousArgFrame = getLocalFrameMember(previousLocalFrame, nextArgFrame);
         }
         if (previousArgFrame == NULL_ALLOC_POINTER
@@ -1041,6 +1039,7 @@ void callFunc(
     setLocalFrameMember(localFrame, implementer, implementer);
     setLocalFrameMember(localFrame, funcIndex, funcIndex);
     setLocalFrameMember(localFrame, previousLocalFrame, previousLocalFrame);
+    setLocalFrameMember(localFrame, previousArgFrame, previousArgFrame);
     setLocalFrameMember(localFrame, nextArgFrame, NULL_ALLOC_POINTER);
     setLocalFrameMember(localFrame, lastErrorCode, NONE_ERR_CODE);
     setLocalFrameMember(localFrame, shouldThrottle, shouldThrottle);
@@ -1626,23 +1625,13 @@ void parseInstructionArg(instructionArg_t *destination) {
                     startAddress = getBytecodeLocalFrameDataAddress(currentLocalFrame);
                     size = getBytecodeLocalFrameSize(currentLocalFrame);
                 } else {
-                    allocPointer_t localFrame;
+                    allocPointer_t argFrame;
                     if (referenceType == PREV_ARG_FRAME_REF_TYPE) {
-                        localFrame = getLocalFrameMember(
-                            currentLocalFrame,
-                            previousLocalFrame
-                        );
-                        if (localFrame == NULL_ALLOC_POINTER) {
-                            throw(ARG_FRAME_ERR_CODE);
-                        }
+                        argFrame = getLocalFrameMember(currentLocalFrame, previousArgFrame);
                     } else {
                         // referenceType must equal NEXT_ARG_FRAME_REF_TYPE.
-                        localFrame = currentLocalFrame;
+                        argFrame = getLocalFrameMember(currentLocalFrame, nextArgFrame);
                     }
-                    allocPointer_t argFrame = getLocalFrameMember(
-                        localFrame,
-                        nextArgFrame
-                    );
                     if (argFrame == NULL_ALLOC_POINTER) {
                         throw(ARG_FRAME_ERR_CODE);
                     }
