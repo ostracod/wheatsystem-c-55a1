@@ -281,6 +281,9 @@
 // Retrieves the type of a file from the given bit field.
 #define getTypeFromFileAttributes(fileAttributes) (fileAttributes & 0x03)
 
+// Returns whether the implementer of the current function has admin permission.
+#define currentImplementerHasAdminPerm() \
+    getHasAdminPermFromFileAttributes(getFileHandleMember(currentImplementerFileHandle, attributes))
 // Helper macro for runningAppMayAccessAlloc and currentImplementerMayAccessAlloc.
 #define runningAppMayAccessAllocHelper(runningApp, dynamicAlloc) { \
     int8_t attributes = getDynamicAllocMember(dynamicAlloc, attributes); \
@@ -303,6 +306,19 @@
 // "memberName" is the name of a member in thread_t.
 #define setThreadMember(thread, memberName, value) \
     writeAlloc(thread, getStructMemberOffset(thread_t, memberName), getStructMemberType(thread_t, memberName), value)
+
+// Sets the currently active thread.
+// "thread" is an allocPointer_t to a thread_t.
+#define setCurrentThread(thread) \
+    currentThread = thread; \
+    setCurrentLocalFrame(getThreadMember(currentThread, localFrame));
+// Sets the next thread to be scheduled.
+// "previousThread" is an allocPointer_t to a thread_t.
+#define advanceNextThread(previousThread) \
+    nextThread = getAllocNextByType(previousThread); \
+    if (nextThread == NULL_ALLOC_POINTER) { \
+        nextThread = allocsByType[THREAD_ALLOC_TYPE]; \
+    }
 
 // Retrieves a member of the running application header in the given running application.
 // "runningApp" is an allocPointer_t to a runningApp_t.
@@ -818,12 +834,6 @@ void deleteThread(allocPointer_t thread);
 // Causes an error handler to be invoked within the current thread.
 void registerErrorInCurrentThread(int8_t error);
 
-// Sets the currently active thread.
-// "thread" is a pointer to a thread_t.
-void setCurrentThread(allocPointer_t thread);
-// Sets the next thread to be scheduled.
-// "previousThread" is a pointer to a thread_t.
-void advanceNextThread(allocPointer_t previousThread);
 // Provides some time for the current thread to perform work.
 void scheduleCurrentThread();
 // Enters a blocking loop to run all WheatSystem applications.
@@ -832,8 +842,6 @@ void runAppSystem();
 // Returns whether the given running application has admin permission.
 // "runningApp" is a pointer to a runningApp_t.
 int8_t runningAppHasAdminPerm(allocPointer_t runningApp);
-// Returns whether the implementer of the current function has admin permission.
-int8_t currentImplementerHasAdminPerm();
 // Returns whether the given running application has permission to read or modify the data region of the given dynamic allocation.
 // "runningApp" is a pointer to a runningApp_t.
 // "dynamicAlloc" is a pointer to a dynamicAlloc_t.

@@ -54,7 +54,23 @@
 
 // Sets up the AVR SPI bus. Must be called before using the SPI bus.
 #define initializeSpi() SPCR = (1 << SPE) | (1 << MSTR)
+// Blocks execution until the SPI bus receives one byte. Returns the byte received over the SPI bus.
+#define receiveSpiInt8() ({ \
+    SPDR = 0xFF; \
+    while (!(SPSR & (1 << SPIF))) {} \
+    SPDR; \
+})
+// Sends the given value over the SPI bus.
+#define sendSpiInt8(value) \
+    SPDR = value; \
+    while (!(SPSR & (1 << SPIF))) {}
 
+// Sends an address to SRAM over SPI.
+#define sendAddressToSram(inputAddress) { \
+    int16_t address = inputAddress; \
+    sendSpiInt8(*((int8_t *)&address + 1)); \
+    sendSpiInt8(*(int8_t *)&address); \
+}
 // Reads a value from heap memory.
 // "address" is the address of first byte to read.
 #define readHeapMem(address, type) \
@@ -64,6 +80,13 @@
 #define writeHeapMem(address, type, value) \
     ({type tempValue = value; writeHeapMemRange(address, &tempValue, sizeof(type));})
 
+// Sends an address to EEPROM over SPI.
+#define sendAddressToEeprom(inputAddress) { \
+    int32_t address = inputAddress; \
+    sendSpiInt8(*((int8_t *)&address + 2)); \
+    sendSpiInt8(*((int8_t *)&address + 1)); \
+    sendSpiInt8(*(int8_t *)&address); \
+}
 // External EEPROM does not require any initialization beyond setting pin modes.
 #define initializeStorage() true
 
@@ -91,10 +114,6 @@ void initializePinModes();
 
 // Changes the currently active SPI mode. Mode number = device ID | action ID.
 void setSpiMode(int8_t mode);
-// Blocks execution until the SPI bus receives one byte. Returns the byte received over the SPI bus.
-int8_t receiveSpiInt8();
-// Sends the given value over the SPI bus.
-void sendSpiInt8(int8_t value);
 
 // Sets up serial UART communication.
 void initializeUart();
@@ -106,8 +125,6 @@ void sendUartInt8(int8_t character);
 
 // Sets up external SRAM over SPI.
 void initializeSram();
-// Sends an address to SRAM over SPI.
-void sendAddressToSram(int16_t address);
 // Reads an interval of data from heap memory.
 // "address" is the offset of first byte to read.
 void readHeapMemRange(
@@ -123,8 +140,6 @@ void writeHeapMemRange(
     heapMemOffset_t amount
 );
 
-// Sends an address to EEPROM over SPI.
-void sendAddressToEeprom();
 // Reads an interval of data from non-volatile storage.
 // "address" is the offset of first byte to read.
 void readStorageRange(

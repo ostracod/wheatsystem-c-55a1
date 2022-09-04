@@ -59,21 +59,6 @@ void setSpiMode(int8_t mode) {
     }
 }
 
-int8_t receiveSpiInt8() {
-    SPDR = 0xFF;
-    while (!(SPSR & (1 << SPIF))) {
-        
-    }
-    return SPDR;
-}
-
-void sendSpiInt8(int8_t value) {
-    SPDR = value;
-    while (!(SPSR & (1 << SPIF))) {
-        
-    }
-}
-
 void setUartBaudRate(int32_t rate) {
     int32_t ratio = F_CPU / (16 * rate) - 1;
     UBRR0L = ratio & 0xFF;
@@ -130,11 +115,6 @@ void initializeSram() {
     setSpiMode(NONE_SPI_MODE);
 }
 
-void sendAddressToSram(int16_t address) {
-    sendSpiInt8((address & 0xFF00) >> 8);
-    sendSpiInt8(address & 0x00FF);
-}
-
 void readHeapMemRange(
     void *destination,
     heapMemOffset_t address,
@@ -185,12 +165,6 @@ void writeHeapMemRange(
         sendSpiInt8(value);
     }
     sramAddress += amount;
-}
-
-void sendAddressToEeprom(storageOffset_t address) {
-    sendSpiInt8((address & 0x00FF0000) >> 16);
-    sendSpiInt8((address & 0x0000FF00) >> 8);
-    sendSpiInt8(address & 0x000000FF);
 }
 
 void readStorageRange(

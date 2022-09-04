@@ -1176,19 +1176,6 @@ void registerErrorInCurrentThread(int8_t error) {
     }
 }
 
-void setCurrentThread(allocPointer_t thread) {
-    currentThread = thread;
-    allocPointer_t localFrame = getThreadMember(currentThread, localFrame);
-    setCurrentLocalFrame(localFrame);
-}
-
-void advanceNextThread(allocPointer_t previousThread) {
-    nextThread = getAllocNextByType(previousThread);
-    if (nextThread == NULL_ALLOC_POINTER) {
-        nextThread = allocsByType[THREAD_ALLOC_TYPE];
-    }
-}
-
 void scheduleCurrentThread() {
     if (currentImplementerFileType == BYTECODE_APP_FILE_TYPE) {
         evaluateBytecodeInstruction();
@@ -1253,11 +1240,6 @@ void runAppSystem() {
 int8_t runningAppHasAdminPerm(allocPointer_t runningApp) {
     allocPointer_t fileHandle = getRunningAppMember(runningApp, fileHandle);
     int8_t attributes = getFileHandleMember(fileHandle, attributes);
-    return getHasAdminPermFromFileAttributes(attributes);
-}
-
-int8_t currentImplementerHasAdminPerm() {
-    int8_t attributes = getFileHandleMember(currentImplementerFileHandle, attributes);
     return getHasAdminPermFromFileAttributes(attributes);
 }
 
