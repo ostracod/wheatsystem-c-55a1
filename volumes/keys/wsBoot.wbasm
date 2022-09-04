@@ -1,9 +1,12 @@
 
 INCLUDE "../macros.wbasm"
 
+VAR gate, s32
 VAR key, s8
 
 FUNC init, wsInit.id
+    newGate gate, 1
+    closeGate gate
     
     VAR termName, s32
     VAR termHandle, s32
@@ -21,7 +24,7 @@ FUNC init, wsInit.id
     wrt termText[4]:s8, 32
     
     LBL loop
-    wait
+    waitGate gate
     
     VAR termTextIndex, s8
     VAR unitPlace, s32
@@ -75,7 +78,7 @@ END
 FUNC termInput, wsTermInput.id
     ARG inputKey, s8
     wrt key, inputKey
-    resume
+    openGate gate
 END
 
 APP_DATA

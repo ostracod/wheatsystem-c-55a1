@@ -1,9 +1,12 @@
 
 INCLUDE "../macros.wbasm"
 
+VAR gate, s32
 VAR serialData, s8
 
 FUNC init, wsInit.id
+    newGate gate, 1
+    closeGate gate
     
     VAR name, s32
     
@@ -41,7 +44,7 @@ FUNC init, wsInit.id
     callRemote serialHandle, startSerialIndex
     
     LBL loop
-    wait
+    waitGate gate
     
     VAR termTextIndex, s8
     VAR unitPlace, s32
@@ -80,7 +83,7 @@ FUNC serialInput, wsSerialInput.id
     ARG port, s8
     ARG value, s8
     wrt serialData, value
-    resume
+    openGate gate
 END
 
 APP_DATA

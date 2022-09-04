@@ -1,10 +1,6 @@
 
 INCLUDE "../macros.wbasm"
 
-MACRO releaseMutex
-    wrt mutexFlag, 0
-END
-
 MACRO callCheckPerm, window
     newArgFrame checkPerm.argsSize
     caller checkPerm.args.app
@@ -47,12 +43,15 @@ DEF inputLen_OFFSET, 30
 DEF inputHorizontalScroll_OFFSET, 34
 DEF inputCursorIndex_OFFSET, 38
 DEF key_OFFSET, 42
-DEF keyPressedIndex_OFFSET, 43
-DEF focusChangedIndex_OFFSET, 47
-DEF window_SIZE, 51
+DEF keyGate_OFFSET, 43
+DEF ackGate_OFFSET, 47
+DEF keyPressedIndex_OFFSET, 51
+DEF focusChangedIndex_OFFSET, 55
+DEF window_SIZE, 59
 
 VAR thisApp, s32
-VAR mutexFlag, s8
+# Must be acquired when accessing `windows`, `windowCount`, or `focusedWindow`.
+VAR windowsMutex, s32
 VAR windows, s32
 VAR windowCount, s8
 VAR focusedWindow, s32
@@ -68,7 +67,7 @@ VAR emptyLine, s32
 FUNC init, wsInit.id, guarded
     
     thisApp thisApp
-    wrt mutexFlag, 0
+    newGate windowsMutex, 1
     newAlloc windows, guardedAllocAttr, 20
     wrt windowCount, 0
     
@@ -132,7 +131,7 @@ FUNC termInput, wsTermInput.id, guarded
     VAR window, s32
     wrt window, focusedWindow
     equ cond, window[mode_OFFSET]:s8, none_MODE
-    jmpZ resumeWithKey, cond
+    jmpZ openKeyGate, cond
     
     VAR keyPressedIndex, s32
     wrt keyPressedIndex, window[keyPressedIndex_OFFSET]:s32
@@ -145,23 +144,18 @@ FUNC termInput, wsTermInput.id, guarded
     LBL skipKeyPressed
     ret
     
-    LBL resumeWithKey
+    LBL openKeyGate
+    VAR keyGate, s32
+    wrt keyGate, window[keyGate_OFFSET]:s32
+    openGate keyGate
+    waitGate window[ackGate_OFFSET]:s32
     wrt window[key_OFFSET]:s8, key
-    LBL resumeLoop
-    resume
-    jmpZ breakResume, window[key_OFFSET]:s8
+    LBL resetLoop
     equ cond, window[mode_OFFSET]:s8, none_MODE
-    jmpZ resumeLoop, cond
-    wrt window[key_OFFSET]:s8, 0
-    LBL breakResume
-END
-
-# Must be called when accessing `windows`, `windowCount`, or `focusedWindow`.
-FUNC acquireMutex, 0, guarded
-    VAR oldValue, s8
-    LBL loop
-    testAndSet oldValue, mutexFlag
-    jmpNZ loop, oldValue
+    jmpNZ breakReset, cond
+    jmpNZ resetLoop, window[key_OFFSET]:s8
+    LBL breakReset
+    closeGate keyGate
 END
 
 FUNC checkPerm, 0, guarded
@@ -317,7 +311,7 @@ FUNC splitMessage, 0, guarded
     wrt window[messageLineAmount_OFFSET]:s32, lineCount
 END
 
-# Must be called between `acquireMutex` and `releaseMutex`.
+# Must be called with `windowsMutex`.
 FUNC drawFocusedWindow, 0, guarded
     VAR cond, s8
     VAR index, s32
@@ -467,13 +461,13 @@ END
 FUNC drawWindowIfFocused, 0, guarded
     ARG window, s32
     
-    call acquireMutex
+    waitGate windowsMutex
     VAR cond, s8
     equ cond, window, focusedWindow
     jmpZ skipDraw, cond
     call drawFocusedWindow
     LBL skipDraw
-    releaseMutex
+    openGate windowsMutex
 END
 
 FUNC focusWindow, 0, guarded
@@ -483,13 +477,13 @@ FUNC focusWindow, 0, guarded
     VAR lastWindow, s32
     VAR funcIndex, s32
     
-    call acquireMutex
+    waitGate windowsMutex
     equ cond, window, focusedWindow
     jmpNZ cancelFocus, cond
     wrt lastWindow, focusedWindow
     wrt focusedWindow, window
     call drawFocusedWindow
-    releaseMutex
+    openGate windowsMutex
     
     jmpZ skipBlur, lastWindow
     wrt funcIndex, lastWindow[focusChangedIndex_OFFSET]:s32
@@ -512,18 +506,21 @@ FUNC focusWindow, 0, guarded
     ret
     
     LBL cancelFocus
-    releaseMutex
+    openGate windowsMutex
 END
 
 FUNC waitForKey, 0, guarded
     ARG dest, s8
     ARG window, s32
     
-    LBL waitLoop
-    wait
+    VAR ackGate, s32
+    wrt ackGate, window[ackGate_OFFSET]:s32
+    waitGate window[keyGate_OFFSET]:s32
+    openGate ackGate
+    LBL keyLoop
     wrt dest, window[key_OFFSET]:s8
-    jmpZ waitLoop, dest
-    
+    jmpZ keyLoop, dest
+    closeGate ackGate
     wrt window[key_OFFSET]:s8, 0
 END
 
@@ -539,6 +536,8 @@ FUNC newWindow, wsNewWindow.id
     newAlloc dest, guardedAllocAttr | sentryAllocAttr, window_SIZE
     caller ptr
     wrt dest[owner_OFFSET]:s32, ptr
+    newGate dest[keyGate_OFFSET]:s32, 0
+    newGate dest[ackGate_OFFSET]:s32, 0
     findFunc dest[keyPressedIndex_OFFSET]:s32, ptr, wsWindowKeyPressed.id
     findFunc dest[focusChangedIndex_OFFSET]:s32, ptr, wsWindowFocusChanged.id
     jmpNZ skipCreateTitle, title
@@ -551,7 +550,7 @@ FUNC newWindow, wsNewWindow.id
     call clrTermBuff
     wrt dest[termBuff_OFFSET]:s32, ptr
     
-    call acquireMutex
+    waitGate windowsMutex
     mul windowIndex, windowCount, 4
     allocSize size, windows
     gre cond, size, windowIndex
@@ -567,7 +566,7 @@ FUNC newWindow, wsNewWindow.id
     LBL skipResize
     wrt windows[windowIndex]:s32, dest
     add windowCount, windowCount, 1
-    releaseMutex
+    openGate windowsMutex
     
     newArgFrame focusWindow.argsSize
     wrt focusWindow.args.window, dest
@@ -583,15 +582,15 @@ FUNC delWindow, wsDelWindow.id
     
     equ cond, window, focusedWindow
     jmpZ skipFocus, cond
-    call acquireMutex
+    waitGate windowsMutex
     wrt focusedWindow, null
-    releaseMutex
+    openGate windowsMutex
     newArgFrame focusWindow.argsSize
     wrt focusWindow.args.window, shellWindow
     call focusWindow
     LBL skipFocus
     
-    call acquireMutex
+    waitGate windowsMutex
     wrt index, 0
     LBL findLoop
     equ cond, window, windows[index]:s32
@@ -610,7 +609,7 @@ FUNC delWindow, wsDelWindow.id
     sub index, size, 4
     wrt windows[index]:s8, null
     sub windowCount, windowCount, 1
-    releaseMutex
+    openGate windowsMutex
     
     delAlloc window[title_OFFSET]:s32
     delAlloc window[termBuff_OFFSET]:s32
@@ -623,6 +622,7 @@ FUNC displayWindowMessage, wsDisplayWindowMessage.id
     ARG window, s32
     ARG message, s32
     
+    VAR ackGate, s32
     VAR verticalScroll, s32
     VAR cond, s8
     VAR index, s32
@@ -631,8 +631,11 @@ FUNC displayWindowMessage, wsDisplayWindowMessage.id
     wrt splitMessage.args.window, window
     wrt splitMessage.args.message, message
     call splitMessage
+    wrt ackGate, window[ackGate_OFFSET]:s32
     wrt verticalScroll, 0
     wrt window[mode_OFFSET]:s8, displayMessage_MODE
+    closeGate ackGate
+    wrt window[key_OFFSET]:s8, 0
     
     LBL drawLoop
     wrt window[verticalScroll_OFFSET]:s32, verticalScroll
@@ -691,6 +694,7 @@ FUNC displayWindowMessage, wsDisplayWindowMessage.id
     wrt dest, 1
     LBL skipEscape
     wrt window[mode_OFFSET]:s8, none_MODE
+    openGate ackGate
 END
 
 FUNC promptWindowOption, wsPromptWindowOption.id
@@ -700,6 +704,7 @@ FUNC promptWindowOption, wsPromptWindowOption.id
     ARG options, s32
     
     VAR messageLineAmount, s32
+    VAR ackGate, s32
     VAR verticalScroll, s32
     VAR horizontalScroll, s32
     VAR cursorIndex, s32
@@ -715,6 +720,7 @@ FUNC promptWindowOption, wsPromptWindowOption.id
     call splitMessage
     wrt messageLineAmount, window[messageLineAmount_OFFSET]:s32
     
+    wrt ackGate, window[ackGate_OFFSET]:s32
     wrt verticalScroll, 0
     wrt horizontalScroll, 0
     wrt cursorIndex, 0
@@ -724,6 +730,8 @@ FUNC promptWindowOption, wsPromptWindowOption.id
     wrt window[input_OFFSET]:s32, options
     wrt window[inputLen_OFFSET]:s32, optionAmount
     wrt window[mode_OFFSET]:s8, promptOption_MODE
+    closeGate ackGate
+    wrt window[key_OFFSET]:s8, 0
     
     LBL drawLoop
     wrt window[verticalScroll_OFFSET]:s32, verticalScroll
@@ -857,6 +865,7 @@ FUNC promptWindowOption, wsPromptWindowOption.id
     wrt dest, -1
     LBL skipEscape
     wrt window[mode_OFFSET]:s8, none_MODE
+    openGate ackGate
 END
 
 FUNC promptWindowText, wsPromptWindowText.id
@@ -866,6 +875,7 @@ FUNC promptWindowText, wsPromptWindowText.id
     ARG startText, s32
     
     VAR messageLineAmount, s32
+    VAR ackGate, s32
     VAR verticalScroll, s32
     VAR inputText, s32
     VAR inputTextLen, s32
@@ -895,10 +905,13 @@ FUNC promptWindowText, wsPromptWindowText.id
     wrt cursorIndex, inputTextLen
     LBL skipStartText
     
+    wrt ackGate, window[ackGate_OFFSET]:s32
     wrt verticalScroll, 0
     wrt window[input_OFFSET]:s32, inputText
     wrt window[inputLen_OFFSET]:s32, inputTextLen
     wrt window[mode_OFFSET]:s8, promptText_MODE
+    closeGate ackGate
+    wrt window[key_OFFSET]:s8, 0
     
     LBL drawLoop
     wrt window[verticalScroll_OFFSET]:s32, verticalScroll
@@ -1077,6 +1090,7 @@ FUNC promptWindowText, wsPromptWindowText.id
     wrt dest, null
     LBL skipEscape
     wrt window[mode_OFFSET]:s8, none_MODE
+    openGate ackGate
 END
 
 FUNC clrWindow, wsClrWindow.id
@@ -1143,7 +1157,7 @@ FUNC wrtWindowTerm, wsWrtWindowTerm.id
     allocSize size, text
     wrtBuff termBuff[index]:s8, text[0]:s8, size
     
-    call acquireMutex
+    waitGate windowsMutex
     VAR cond, s8
     equ cond, window, focusedWindow
     jmpZ skipDraw, cond
@@ -1153,7 +1167,7 @@ FUNC wrtWindowTerm, wsWrtWindowTerm.id
     wrt wsWrtTerm.args.text, text
     callRemote termHandle, wrtTermIndex
     LBL skipDraw
-    releaseMutex
+    openGate windowsMutex
 END
 
 APP_DATA
