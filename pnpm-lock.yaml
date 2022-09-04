@@ -2,11 +2,11 @@ lockfileVersion: 5.4
 
 specifiers:
   serialport: ^10.4.0
-  wheatbytecode-asm: github:ostracod/wheatbytecode-asm#dev
+  wheatbytecode-asm: github:ostracod/wheatbytecode-asm#master
 
 dependencies:
   serialport: 10.4.0
-  wheatbytecode-asm: github.com/ostracod/wheatbytecode-asm/ea6e1dad7291ccb508ed935f45af0a6c0a487daf
+  wheatbytecode-asm: github.com/ostracod/wheatbytecode-asm/d5f531a7c646310d0c4cbdec8bb11d8e5b11fe1d
 
 packages:
 
@@ -153,8 +153,8 @@ packages:
       - supports-color
     dev: false
 
-  github.com/ostracod/wheatbytecode-asm/ea6e1dad7291ccb508ed935f45af0a6c0a487daf:
-    resolution: {tarball: https://codeload.github.com/ostracod/wheatbytecode-asm/tar.gz/ea6e1dad7291ccb508ed935f45af0a6c0a487daf}
+  github.com/ostracod/wheatbytecode-asm/d5f531a7c646310d0c4cbdec8bb11d8e5b11fe1d:
+    resolution: {tarball: https://codeload.github.com/ostracod/wheatbytecode-asm/tar.gz/d5f531a7c646310d0c4cbdec8bb11d8e5b11fe1d}
     name: wheatbytecode-asm
     version: 1.0.0
     requiresBuild: true
