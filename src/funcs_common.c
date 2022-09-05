@@ -1527,18 +1527,17 @@ void writeArgRange(
 
 int32_t readArgIntHelper(instructionArg_t *arg) {
     uint8_t dataType = getArgPrefixDataType(arg->prefix);
+    int8_t dataTypeSize = getArgDataTypeSize(dataType);
+    int8_t buffer[4];
+    validateArgBounds(arg, dataTypeSize);
+    checkUnhandledError(0);
+    readArgRange(buffer, arg, 0, dataTypeSize);
     if (dataType == SIGNED_INT_8_TYPE) {
-        int8_t output;
-        validateArgBounds(arg, sizeof(output));
-        checkUnhandledError(0);
-        readArgRange(&output, arg, 0, sizeof(output));
-        return output;
+        return *(int8_t *)buffer;
+    } else if (dataType == SIGNED_INT_16_TYPE) {
+        return *(int16_t *)buffer;
     } else {
-        int32_t output;
-        validateArgBounds(arg, sizeof(output));
-        checkUnhandledError(0);
-        readArgRange((int8_t *)&output, arg, 0, sizeof(output));
-        return output;
+        return *(int32_t *)buffer;
     }
 }
 
@@ -1589,16 +1588,23 @@ void parseInstructionArg(instructionArg_t *destination) {
     uint8_t argPrefix = readInstructionData(uint8_t);
     uint8_t referenceType = getArgPrefixReferenceType(argPrefix);
     uint8_t dataType = getArgPrefixDataType(argPrefix);
-    if (dataType > SIGNED_INT_32_TYPE || referenceType > DYNAMIC_ALLOC_REF_TYPE) {
+    if (dataType > SIGNED_INT_32_TYPE || referenceType > PREV_ARG_REF_TYPE) {
         throw(TYPE_ERR_CODE);
     }
     if (referenceType == CONSTANT_REF_TYPE) {
         destination->prefix = argPrefix;
         if (dataType == SIGNED_INT_8_TYPE) {
             destination->constantValue = readInstructionData(int8_t);
+        } else if (dataType == SIGNED_INT_16_TYPE) {
+            destination->constantValue = readInstructionData(int16_t);
         } else {
             destination->constantValue = readInstructionData(int32_t);
         }
+    } else if (referenceType == PREV_ARG_REF_TYPE) {
+        if (argParseIndex <= 0) {
+            throw(MISSING_ERR_CODE);
+        }
+        *destination = instructionArgArray[argParseIndex - 1];
     } else {
         instructionArg_t arg1;
         parseInstructionArg(&arg1);
@@ -1723,8 +1729,8 @@ void evaluateBytecodeInstruction() {
         argAmountArray,
         offset1 + opcodeOffset
     );
-    for (int8_t index = 0; index < argAmount; index++) {
-        parseInstructionArg(instructionArgArray + index);
+    for (argParseIndex = 0; argParseIndex < argAmount; argParseIndex++) {
+        parseInstructionArg(instructionArgArray + argParseIndex);
         checkUnhandledError();
     }
     setBytecodeLocalFrameMember(

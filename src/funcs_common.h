@@ -517,7 +517,7 @@
 #define getArgPrefixDataType(argPrefix) (argPrefix & 0x0F)
 
 // Retrieves the number of bytes which the given argument type occupies.
-#define getArgDataTypeSize(dataType) (dataType == SIGNED_INT_8_TYPE ? 1 : 4)
+#define getArgDataTypeSize(dataType) (dataType == SIGNED_INT_8_TYPE ? 1 : (dataType == SIGNED_INT_16_TYPE ? 2 : 4))
 
 // Reads an integer from a bytecode argument.
 #define readArgInt(index) ({ \

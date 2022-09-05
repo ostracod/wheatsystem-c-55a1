@@ -6,9 +6,9 @@ DEF termTextSize, 6
 FUNC isPrime
     
     ARG isPrime, s8
-    ARG number, s32
-    VAR factor, s32
-    VAR condition, s32
+    ARG number, s16
+    VAR factor, s16
+    VAR remainder, s16
     
     wrt isPrime, 1
     wrt factor, 2
@@ -17,8 +17,8 @@ FUNC isPrime
     jmpG retSkip, number, factor
     ret
     LBL retSkip
-    mod condition, number, factor
-    jmpNZ registerCompositeSkip, condition
+    mod remainder, number, factor
+    jmpNZ registerCompositeSkip, remainder
     wrt isPrime, 0
     ret
     LBL registerCompositeSkip
@@ -37,21 +37,21 @@ FUNC init, wsInit.id
     launch termHandle
     findFunc wrtTermIndex, termHandle, wsWrtTerm.id
     
-    VAR number, s32
+    VAR number, s16
     VAR termText, s32
     newAlloc termText, 0, termTextSize
     
     wrt number, 2
     LBL loop
     
-    newArgFrame 5
+    newArgFrame isPrime.argsSize
     wrt isPrime.args.number, number
     call isPrime
     jmpZ printSkip, isPrime.args.isPrime
     
     VAR termTextIndex, s8
     VAR unitPlace, s32
-    VAR tempNumber, s32
+    VAR tempNumber, s16
     VAR termDigit, s8
     VAR condition, s8
     
@@ -62,8 +62,8 @@ FUNC init, wsInit.id
     LBL digitLoop
     div termDigit, tempNumber, unitPlace
     add termText[termTextIndex]:s8, 48, termDigit
-    mod tempNumber, tempNumber, unitPlace
-    div unitPlace, unitPlace, 10
+    mod tempNumber, prevArg, unitPlace
+    div unitPlace, prevArg, 10
     inc termTextIndex
     jmpG digitLoop, termTextSize, termTextIndex
     
