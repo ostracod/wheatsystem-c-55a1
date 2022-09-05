@@ -1743,13 +1743,17 @@ void evaluateBytecodeInstruction() {
             // wrtBuff.
             evaluateWrtBuffInstruction();
         } else if (opcodeOffset == 0x2) {
+            // fillBuff.
+            // TODO: Implement.
+            
+        } else if (opcodeOffset == 0x3) {
             // newArgFrame.
             heapMemOffset_t argFrameSize = (heapMemOffset_t)readArgInt(0);
             if (argFrameSize < 0) {
                 throw(LEN_ERR_CODE);
             }
             createNextArgFrame(argFrameSize);
-        } else if (opcodeOffset == 0x3) {
+        } else if (opcodeOffset == 0x4) {
             // newAlloc.
             int8_t attributes = (int8_t)readArgInt(1) & ALLOC_ATTR_MASK;
             heapMemOffset_t size = (heapMemOffset_t)readArgInt(2);
@@ -1763,24 +1767,24 @@ void evaluateBytecodeInstruction() {
             );
             checkUnhandledError();
             writeArgInt(0, alloc);
-        } else if (opcodeOffset == 0x4) {
+        } else if (opcodeOffset == 0x5) {
             // delAlloc.
             allocPointer_t alloc = readArgDynamicAlloc(0);
             if (!currentImplementerMayAccessAlloc(alloc)) {
                 throw(PERM_ERR_CODE);
             }
             deleteAlloc(alloc);
-        } else if (opcodeOffset == 0x5) {
+        } else if (opcodeOffset == 0x6) {
             // allocAttrs.
             allocPointer_t alloc = readArgDynamicAlloc(1);
             int8_t attributes = getDynamicAllocMember(alloc, attributes);
             writeArgInt(0, attributes);
-        } else if (opcodeOffset == 0x6) {
+        } else if (opcodeOffset == 0x7) {
             // allocSize.
             allocPointer_t alloc = readArgDynamicAlloc(1);
             heapMemOffset_t size = getDynamicAllocSize(alloc);
             writeArgInt(0, size);
-        } else if (opcodeOffset == 0x7) {
+        } else if (opcodeOffset == 0x8) {
             // allocCreator.
             allocPointer_t alloc = readArgDynamicAlloc(1);
             allocPointer_t creator = getDynamicAllocMember(alloc, creator);
@@ -1790,7 +1794,7 @@ void evaluateBytecodeInstruction() {
                 allocPointer_t fileHandle = getRunningAppMember(creator, fileHandle);
                 writeArgInt(0, fileHandle);
             }
-        } else if (opcodeOffset == 0x8) {
+        } else if (opcodeOffset == 0x9) {
             // setAllocAttrs.
             allocPointer_t alloc = readArgDynamicAlloc(0);
             if (!currentImplementerMayAccessAlloc(alloc)) {
@@ -1801,24 +1805,38 @@ void evaluateBytecodeInstruction() {
         }
     } else if (opcodeCategory == 0x1) {
         // Control flow instructions.
+        int32_t instructionOffset = readArgConstantInt(0);
+        int8_t condition = 0;
         if (opcodeOffset == 0x0) {
             // jmp.
-            int32_t instructionOffset = readArgConstantInt(0);
+            condition = true;
+        } else {
+            int32_t operand1 = readArgInt(1);
+            if (opcodeOffset == 0x1) {
+                // jmpZ.
+                condition = (operand1 == 0);
+            } else if (opcodeOffset == 0x2) {
+                // jmpNZ.
+                condition = (operand1 != 0);
+            } else {
+                int32_t operand2 = readArgInt(2);
+                if (opcodeOffset == 0x3) {
+                    // jmpE.
+                    condition = (operand1 == operand2);
+                } else if (opcodeOffset == 0x4) {
+                    // jmpNE.
+                    condition = (operand1 != operand2);
+                } else if (opcodeOffset == 0x5) {
+                    // jmpG.
+                    condition = (operand1 > operand2);
+                } else if (opcodeOffset == 0x6) {
+                    // jmpNG.
+                    condition = (operand1 <= operand2);
+                }
+            }
+        }
+        if (condition) {
             jumpToBytecodeInstruction(instructionOffset);
-        } else if (opcodeOffset == 0x1) {
-            // jmpZ.
-            int32_t condition = readArgInt(1);
-            if (condition == 0) {
-                int32_t instructionOffset = readArgConstantInt(0);
-                jumpToBytecodeInstruction(instructionOffset);
-            }
-        } else if (opcodeOffset == 0x2) {
-            // jmpNZ.
-            int32_t condition = readArgInt(1);
-            if (condition != 0) {
-                int32_t instructionOffset = readArgConstantInt(0);
-                jumpToBytecodeInstruction(instructionOffset);
-            }
         }
     } else if (opcodeCategory == 0x2) {
         // Gate instructions.
@@ -1935,53 +1953,40 @@ void evaluateBytecodeInstruction() {
         }
         writeArgInt(0, result);
     } else if (opcodeCategory == 0x6) {
-        // Comparison instructions.
-        int32_t operand1 = readArgInt(1);
-        int32_t operand2 = readArgInt(2);
+        // Arithmetic instructions.
         int32_t result = 0;
         if (opcodeOffset == 0x0) {
-            // equ.
-            result = (operand1 == operand2);
+            result = readArgInt(0) + 1;
         } else if (opcodeOffset == 0x1) {
-            // nEqu.
-            result = (operand1 != operand2);
-        } else if (opcodeOffset == 0x2) {
-            // gre.
-            result = (operand1 > operand2);
-        } else if (opcodeOffset == 0x3) {
-            // nGre.
-            result = (operand1 <= operand2);
+            result = readArgInt(0) - 1;
+        } else {
+            int32_t operand1 = readArgInt(1);
+            int32_t operand2 = readArgInt(2);
+            if (opcodeOffset == 0x2) {
+                // add.
+                result = operand1 + operand2;
+            } else if (opcodeOffset == 0x3) {
+                // sub.
+                result = operand1 - operand2;
+            } else if (opcodeOffset == 0x4) {
+                // mul.
+                result = operand1 * operand2;
+            } else if (opcodeOffset == 0x5) {
+                // div.
+                if (operand2 == 0) {
+                    throw(NUM_RANGE_ERR_CODE);
+                }
+                result = operand1 / operand2;
+            } else if (opcodeOffset == 0x6) {
+                // mod.
+                if (operand2 == 0) {
+                    throw(NUM_RANGE_ERR_CODE);
+                }
+                result = operand1 % operand2;
+            }
         }
         writeArgInt(0, result);
     } else if (opcodeCategory == 0x7) {
-        // Arithmetic instructions.
-        int32_t operand1 = readArgInt(1);
-        int32_t operand2 = readArgInt(2);
-        int32_t result = 0;
-        if (opcodeOffset == 0x0) {
-            // add.
-            result = operand1 + operand2;
-        } else if (opcodeOffset == 0x1) {
-            // sub.
-            result = operand1 - operand2;
-        } else if (opcodeOffset == 0x2) {
-            // mul.
-            result = operand1 * operand2;
-        } else if (opcodeOffset == 0x3) {
-            // div.
-            if (operand2 == 0) {
-                throw(NUM_RANGE_ERR_CODE);
-            }
-            result = operand1 / operand2;
-        } else if (opcodeOffset == 0x4) {
-            // mod.
-            if (operand2 == 0) {
-                throw(NUM_RANGE_ERR_CODE);
-            }
-            result = operand1 % operand2;
-        }
-        writeArgInt(0, result);
-    } else if (opcodeCategory == 0x8) {
         // Application instructions.
         if (opcodeOffset == 0x0) {
             // launch.
@@ -2015,7 +2020,7 @@ void evaluateBytecodeInstruction() {
                 softKillApp(runningApp);
             }
         }
-    } else if (opcodeCategory == 0x9) {
+    } else if (opcodeCategory == 0x8) {
         // File instructions.
         if (opcodeOffset == 0x0) {
             // newFile.
@@ -2100,7 +2105,7 @@ void evaluateBytecodeInstruction() {
                 offset += sizeToCopy;
             }
         }
-    } else if (opcodeCategory == 0xA) {
+    } else if (opcodeCategory == 0x9) {
         // File metadata instructions.
         if (opcodeOffset == 0x0) {
             // allFileNames.
@@ -2151,7 +2156,7 @@ void evaluateBytecodeInstruction() {
             storageOffset_t size = getFileHandleMember(fileHandle, contentSize);
             writeArgInt(0, size);
         }
-    } else if (opcodeCategory == 0xB) {
+    } else if (opcodeCategory == 0xA) {
         // Permission instructions.
         if (opcodeOffset == 0x0) {
             // hasAdminPerm.
@@ -2174,7 +2179,7 @@ void evaluateBytecodeInstruction() {
             allocPointer_t fileHandle = readArgFileHandle(0);
             setFileHasAdminPerm(fileHandle, false);
         }
-    } else if (opcodeCategory == 0xC) {
+    } else if (opcodeCategory == 0xB) {
         // Resource instructions.
         if (opcodeOffset == 0x0) {
             // memSize.

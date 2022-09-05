@@ -14,8 +14,7 @@ FUNC isPrime
     wrt factor, 2
     LBL checkFactorLoop
     
-    gre condition, number, factor
-    jmpNZ retSkip, condition
+    jmpG retSkip, number, factor
     ret
     LBL retSkip
     mod condition, number, factor
@@ -24,7 +23,7 @@ FUNC isPrime
     ret
     LBL registerCompositeSkip
     
-    add factor, factor, 1
+    inc factor
     jmp checkFactorLoop
 END
 
@@ -65,9 +64,8 @@ FUNC init, wsInit.id
     add termText[termTextIndex]:s8, 48, termDigit
     mod tempNumber, tempNumber, unitPlace
     div unitPlace, unitPlace, 10
-    add termTextIndex, termTextIndex, 1
-    gre condition, termTextSize, termTextIndex
-    jmpNZ digitLoop, condition
+    inc termTextIndex
+    jmpG digitLoop, termTextSize, termTextIndex
     
     newArgFrame 12
     wrt wsWrtTerm.args.x, 0
@@ -76,7 +74,7 @@ FUNC init, wsInit.id
     callRemote termHandle, wrtTermIndex
     
     LBL printSkip
-    add number, number, 1
+    inc number
     jmp loop
 END
 

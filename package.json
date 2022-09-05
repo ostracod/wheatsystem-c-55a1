@@ -7,7 +7,7 @@
     },
     "dependencies": {
         "serialport": "^10.4.0",
-        "wheatbytecode-asm": "github:ostracod/wheatbytecode-asm#master"
+        "wheatbytecode-asm": "github:ostracod/wheatbytecode-asm#dev"
     },
     "devDependencies": {}
 }

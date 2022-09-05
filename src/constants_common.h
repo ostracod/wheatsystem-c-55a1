@@ -97,10 +97,12 @@
 #define NEXT_ARG_FRAME_REF_TYPE 0x4
 #define APP_DATA_REF_TYPE 0x5
 #define DYNAMIC_ALLOC_REF_TYPE 0x6
-#define HEAP_MEM_REF_TYPE 0x7
+#define PREV_ARG_REF_TYPE 0x7
+#define HEAP_MEM_REF_TYPE 0x8
 
 #define SIGNED_INT_8_TYPE 0x0
-#define SIGNED_INT_32_TYPE 0x1
+#define SIGNED_INT_16_TYPE 0x1
+#define SIGNED_INT_32_TYPE 0x2
 
 #define INIT_FUNC_ID 1
 #define KILL_FUNC_ID 2
@@ -126,9 +128,9 @@
 const int8_t bootStringConstant[7];
 
 // Mapping from more significant opcode nybble to offset in argAmountArray. Fixed array of values.
-const int8_t argAmountOffsetArray[15];
+const int8_t argAmountOffsetArray[14];
 // Expected number of arguments for each bytecode instruction. Fixed array of values.
-const int8_t argAmountArray[70];
+const int8_t argAmountArray[73];
 
 // List of functions which the term driver implements. Fixed array of values.
 const systemAppFunc_t termAppFuncArray[5];

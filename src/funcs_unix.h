@@ -34,7 +34,7 @@
 }
 
 #define handleTestInstruction() \
-    if (opcodeCategory == 0xD) { \
+    if (opcodeCategory == 0xC) { \
         handleTestInstructionHelper(opcodeOffset); \
         return; \
     }
