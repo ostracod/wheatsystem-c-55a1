@@ -311,7 +311,8 @@
 // "thread" is an allocPointer_t to a thread_t.
 #define setCurrentThread(thread) \
     currentThread = thread; \
-    setCurrentLocalFrame(getThreadMember(currentThread, localFrame));
+    currentLocalFrame = getThreadMember(currentThread, localFrame); \
+    updateLocalFrameContext();
 // Sets the next thread to be scheduled.
 // "previousThread" is an allocPointer_t to a thread_t.
 #define advanceNextThread(previousThread) \
@@ -819,7 +820,8 @@ void callFunc(
     int32_t funcIndex,
     int8_t shouldCheckPerm
 );
-void setCurrentLocalFrame(allocPointer_t localFrame);
+// Must be called after "callFunc" and "returnFromFunc" to update certain global variables.
+void updateLocalFrameContext();
 // Stops evaluation of the current function invocation, and returns control to the previous function invocation.
 void returnFromFunc();
 

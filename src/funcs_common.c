@@ -308,6 +308,7 @@ void waitForGate(allocPointer_t gate) {
         passThroughGate(gate);
     } else {
         setThreadMember(currentThread, blockingGate, gate);
+        shouldStopCoalescence = true;
     }
 }
 
@@ -909,6 +910,7 @@ void hardKillApp(allocPointer_t runningApp, int8_t errorCode) {
         while (currentLocalFrame != NULL_ALLOC_POINTER) {
             allocPointer_t localFrame = currentLocalFrame;
             returnFromFunc();
+            updateLocalFrameContext();
             if (localFrame == bottomFrame) {
                 break;
             }
@@ -1076,11 +1078,10 @@ void callFunc(
     
     // Update thread local frame.
     setThreadMember(thread, localFrame, localFrame);
+    currentLocalFrame = localFrame;
 }
 
-// Does not update currentThread.
-void setCurrentLocalFrame(allocPointer_t localFrame) {
-    currentLocalFrame = localFrame;
+void updateLocalFrameContext() {
     if (currentLocalFrame == NULL_ALLOC_POINTER) {
         currentImplementer = NULL_ALLOC_POINTER;
         currentImplementerFileHandle = NULL_ALLOC_POINTER;
@@ -1100,7 +1101,7 @@ void returnFromFunc() {
     );
     deleteAlloc(currentLocalFrame);
     setThreadMember(currentThread, localFrame, previousLocalFrame);
-    setCurrentLocalFrame(previousLocalFrame);
+    currentLocalFrame = previousLocalFrame;
 }
 
 int8_t createThread(allocPointer_t runningApp, int32_t funcId) {
@@ -1162,6 +1163,7 @@ void registerErrorInCurrentThread(int8_t error) {
             break;
         }
         returnFromFunc();
+        updateLocalFrameContext();
         if (currentLocalFrame == NULL_ALLOC_POINTER) {
             if (getThreadMember(currentThread, funcId) == INIT_FUNC_ID) {
                 allocPointer_t runningApp = getThreadMember(currentThread, runningApp);
@@ -1178,7 +1180,29 @@ void registerErrorInCurrentThread(int8_t error) {
 
 void scheduleCurrentThread() {
     if (currentImplementerFileType == BYTECODE_APP_FILE_TYPE) {
-        evaluateBytecodeInstruction();
+        instructionBodyStartFilePos = getBytecodeLocalFrameMember(
+            currentLocalFrame,
+            instructionBodyStartFilePos
+        );
+        instructionBodyEndFilePos = getBytecodeLocalFrameMember(
+            currentLocalFrame,
+            instructionBodyEndFilePos
+        );
+        currentInstructionFilePos = getBytecodeLocalFrameMember(
+            currentLocalFrame,
+            instructionFilePos
+        );
+        shouldStopCoalescence = false;
+        allocPointer_t lastLocalFrame = currentLocalFrame;
+        int8_t count = 1;
+        while (true) {
+            evaluateBytecodeInstruction();
+            if (count > 4 || currentLocalFrame != lastLocalFrame
+                    || shouldStopCoalescence || unhandledErrorCode != NONE_ERR_CODE) {
+                break;
+            }
+            count += 1;
+        }
     } else {
         int8_t funcIndex = (int8_t)getLocalFrameMember(currentLocalFrame, funcIndex);
         void (*threadAction)() = getRunningSystemAppFuncMember(
@@ -1188,9 +1212,11 @@ void scheduleCurrentThread() {
         );
         threadAction();
     }
+    // At this point, local frame context may be dirty because some calls to "returnFromFunc"
+    // are intentionally not followed by "updateLocalFrameContext".
     if (unhandledErrorCode != NONE_ERR_CODE) {
-        if (currentThread != NULL_ALLOC_POINTER) {
-            // currentThread will be null if the app quits while running.
+        if (currentLocalFrame != NULL_ALLOC_POINTER) {
+            updateLocalFrameContext();
             registerErrorInCurrentThread(unhandledErrorCode);
         }
         unhandledErrorCode = NONE_ERR_CODE;
@@ -1551,10 +1577,11 @@ void jumpToBytecodeInstruction(int32_t instructionOffset) {
         currentLocalFrame,
         instructionBodyStartFilePos
     );
+    currentInstructionFilePos = instructionBodyFilePos + instructionOffset;
     setBytecodeLocalFrameMember(
         currentLocalFrame,
         instructionFilePos,
-        instructionBodyFilePos + instructionOffset
+        currentInstructionFilePos
     );
 }
 
@@ -1677,18 +1704,6 @@ void evaluateWrtBuffInstruction() {
 }
 
 void evaluateBytecodeInstruction() {
-    instructionBodyStartFilePos = getBytecodeLocalFrameMember(
-        currentLocalFrame,
-        instructionBodyStartFilePos
-    );
-    instructionBodyEndFilePos = getBytecodeLocalFrameMember(
-        currentLocalFrame,
-        instructionBodyEndFilePos
-    );
-    currentInstructionFilePos = getBytecodeLocalFrameMember(
-        currentLocalFrame,
-        instructionFilePos
-    );
     if (currentInstructionFilePos == instructionBodyEndFilePos) {
         returnFromFunc();
         return;
@@ -1978,6 +1993,7 @@ void evaluateBytecodeInstruction() {
         } else if (opcodeOffset == 0x2) {
             // quitApp.
             hardKillApp(currentImplementer, NONE_ERR_CODE);
+            shouldStopCoalescence = true;
         } else if (opcodeOffset == 0x3) {
             // appIsRunning.
             allocPointer_t appHandle = readArgFileHandle(1);

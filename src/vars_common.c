@@ -22,5 +22,6 @@ instructionArg_t instructionArgArray[MAXIMUM_ARG_AMOUNT];
 int32_t currentInstructionFilePos;
 int32_t instructionBodyStartFilePos;
 int32_t instructionBodyEndFilePos;
+int8_t shouldStopCoalescence;
 
 
