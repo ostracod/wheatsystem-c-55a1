@@ -1750,8 +1750,20 @@ void evaluateBytecodeInstruction() {
             evaluateWrtBuffInstruction();
         } else if (opcodeOffset == 0x2) {
             // fillBuff.
-            // TODO: Implement.
-            
+            instructionArg_t *buffer = instructionArgArray;
+            int32_t bufferSize = readArgInt(1);
+            validateArgBounds(buffer, bufferSize);
+            checkUnhandledError();
+            int32_t value = readArgInt(2);
+            uint8_t valueType = getArgPrefixDataType((instructionArgArray + 2)->prefix);
+            int8_t valueSize = getArgDataTypeSize(valueType);
+            if (bufferSize % valueSize != 0) {
+                throw(LEN_ERR_CODE);
+            }
+            for (heapMemOffset_t offset = 0; offset < bufferSize; offset += valueSize) {
+                writeArgRange(buffer, offset, (int8_t *)&value, valueSize);
+                checkUnhandledError();
+            }
         } else if (opcodeOffset == 0x3) {
             // newArgFrame.
             heapMemOffset_t argFrameSize = (heapMemOffset_t)readArgInt(0);
