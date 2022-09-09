@@ -50,7 +50,6 @@ FUNC init, wsInit.id
     VAR unitPlace, s32
     VAR tempNumber, s32
     VAR termDigit, s8
-    VAR condition, s8
     
     wrt termTextIndex, 0
     wrt unitPlace, 100
@@ -59,11 +58,10 @@ FUNC init, wsInit.id
     LBL digitLoop
     div termDigit, tempNumber, unitPlace
     add termText[termTextIndex]:s8, 48, termDigit
-    mod tempNumber, tempNumber, unitPlace
-    div unitPlace, unitPlace, 10
-    add termTextIndex, termTextIndex, 1
-    gre condition, 3, termTextIndex
-    jmpNZ digitLoop, condition
+    mod tempNumber, prevArg, unitPlace
+    div unitPlace, prevArg, 10
+    inc termTextIndex
+    jmpG digitLoop, 3, termTextIndex
     
     newArgFrame 12
     wrt wsWrtTerm.args.x, 0

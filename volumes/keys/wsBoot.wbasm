@@ -30,10 +30,8 @@ FUNC init, wsInit.id
     VAR unitPlace, s32
     VAR tempNumber, s32
     VAR termDigit, s8
-    VAR condition, s8
     
-    gre condition, 0, key
-    jmpZ skip1, condition
+    jmpNG skip1, 0, key
     sub tempNumber, 0, key
     wrt termText[0]:s8, 45
     wrt termText[5]:s8, 32
@@ -44,10 +42,8 @@ FUNC init, wsInit.id
     wrt termText[5]:s8, key
     LBL skip2
     
-    gre condition, 32, key
-    jmpNZ skip3, condition
-    gre condition, key, 126
-    jmpNZ skip3, condition
+    jmpG skip3, 32, key
+    jmpG skip3, key, 126
     wrt termText[5]:s8, key
     jmp skip4
     LBL skip3
@@ -60,11 +56,10 @@ FUNC init, wsInit.id
     LBL digitLoop
     div termDigit, tempNumber, unitPlace
     add termText[termTextIndex]:s8, 48, termDigit
-    mod tempNumber, tempNumber, unitPlace
-    div unitPlace, unitPlace, 10
-    add termTextIndex, termTextIndex, 1
-    gre condition, 4, termTextIndex
-    jmpNZ digitLoop, condition
+    mod tempNumber, prevArg, unitPlace
+    div unitPlace, prevArg, 10
+    inc termTextIndex
+    jmpG digitLoop, 4, termTextIndex
     
     newArgFrame wsWrtTerm.argsSize
     wrt wsWrtTerm.args.x, 0

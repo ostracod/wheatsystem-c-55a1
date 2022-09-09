@@ -21,8 +21,8 @@ END
 
 MACRO updateCursorPosY
     div cursorPosY, cursorIndex, termWidth
-    add cursorPosY, cursorPosY, messageLineAmount
-    sub cursorPosY, cursorPosY, verticalScroll
+    add cursorPosY, prevArg, messageLineAmount
+    sub cursorPosY, prevArg, verticalScroll
 END
 
 DEF none_MODE, 0
@@ -86,14 +86,7 @@ FUNC init, wsInit.id, guarded
     mul termBuffSize, termWidth, termHeight
     
     newAlloc emptyLine, guardedAllocAttr, termWidth
-    VAR cond, s8
-    VAR index, s32
-    wrt index, 0
-    LBL emptyLineLoop
-    wrt emptyLine[index]:s8, 32
-    add index, index, 1
-    gre cond, termWidth, index
-    jmpNZ emptyLineLoop, cond
+    fillBuff emptyLine[0]:s8, termWidth, 32:s8
     
     findFunc funcIndex, termHandle, wsListenTerm.id
     callRemote termHandle, funcIndex
@@ -126,17 +119,13 @@ END
 FUNC termInput, wsTermInput.id, guarded
     ARG key, s8
     
-    VAR cond, s8
-    
     VAR window, s32
     wrt window, focusedWindow
-    equ cond, window[mode_OFFSET]:s8, none_MODE
-    jmpZ openKeyGate, cond
+    jmpNE openKeyGate, window[mode_OFFSET]:s8, none_MODE
     
     VAR keyPressedIndex, s32
     wrt keyPressedIndex, window[keyPressedIndex_OFFSET]:s32
-    gre cond, 0, keyPressedIndex
-    jmpNZ skipKeyPressed, cond
+    jmpG skipKeyPressed, 0, keyPressedIndex
     newArgFrame wsWindowKeyPressed.argsSize
     wrt wsWindowKeyPressed.args.window, window
     wrt wsWindowKeyPressed.args.key, key
@@ -151,8 +140,7 @@ FUNC termInput, wsTermInput.id, guarded
     waitGate window[ackGate_OFFSET]:s32
     wrt window[key_OFFSET]:s8, key
     LBL resetLoop
-    equ cond, window[mode_OFFSET]:s8, none_MODE
-    jmpNZ breakReset, cond
+    jmpE breakReset, window[mode_OFFSET]:s8, none_MODE
     jmpNZ resetLoop, window[key_OFFSET]:s8
     LBL breakReset
     closeGate keyGate
@@ -163,27 +151,12 @@ FUNC checkPerm, 0, guarded
     ARG window, s32
     
     VAR cond, s8
-    equ cond, app, window[owner_OFFSET]:s32
-    jmpNZ return, cond
-    equ cond, app, thisApp
-    jmpNZ return, cond
+    jmpE return, app, window[owner_OFFSET]:s32
+    jmpE return, app, thisApp
     hasAdminPerm cond, app
     jmpNZ return, cond
     throw permErr
     LBL return
-END
-
-FUNC clrTermBuff, 0, guarded
-    ARG termBuff, s32
-    
-    VAR cond, s8
-    VAR index, s32
-    wrt index, 0
-    LBL loop
-    wrt termBuff[index]:s8, 32
-    add index, index, 1
-    gre cond, termBuffSize, index
-    jmpNZ loop, cond
 END
 
 FUNC createLine, 0, guarded
@@ -194,12 +167,10 @@ FUNC createLine, 0, guarded
     VAR index, s32
     VAR size, s32
     newAlloc dest, guardedAllocAttr, termWidth
-    wrtBuff dest[0]:s8, emptyLine[0]:s8, termWidth
+    fillBuff dest[0]:s8, termWidth, 32:s8
     mul index, lineCount, 4
     allocSize size, lines
-    VAR cond, s8
-    gre cond, size, index
-    jmpNZ skipResize, cond
+    jmpG skipResize, size, index
     
     VAR newSize, s32
     mul newSize, size, 2
@@ -211,14 +182,13 @@ FUNC createLine, 0, guarded
     
     LBL skipResize
     wrt lines[index]:s32, dest
-    add lineCount, lineCount, 1
+    inc lineCount
 END
 
 FUNC splitMessage, 0, guarded
     ARG window, s32
     ARG message, s32
     
-    VAR cond, s8
     VAR char, s8
     VAR size, s32
     
@@ -241,17 +211,14 @@ FUNC splitMessage, 0, guarded
     callCreateLine line, lineIndex, lines, lineCount
     
     LBL splitLoop
-    gre cond, messageSize, messageIndex
-    jmpZ breakSplit, cond
+    jmpNG breakSplit, messageSize, messageIndex
     
     VAR wordStartIndex, s32
     wrt wordStartIndex, messageIndex
     LBL spaceLoop
-    gre cond, messageSize, wordStartIndex
-    jmpZ breakSpace, cond
-    equ cond, message[wordStartIndex]:s8, 32
-    jmpZ breakSpace, cond
-    add wordStartIndex, wordStartIndex, 1
+    jmpNG breakSpace, messageSize, wordStartIndex
+    jmpNE breakSpace, message[wordStartIndex]:s8, 32
+    inc wordStartIndex
     jmp spaceLoop
     LBL breakSpace
     
@@ -259,28 +226,21 @@ FUNC splitMessage, 0, guarded
     wrt wordEndIndex, wordStartIndex
     wrt size, 0
     LBL wordLoop
-    gre cond, messageSize, wordEndIndex
-    jmpZ breakWord, cond
-    gre cond, termWidth, size
-    jmpZ breakWord, cond
+    jmpNG breakWord, messageSize, wordEndIndex
+    jmpNG breakWord, termWidth, size
     wrt char, message[wordEndIndex]:s8
-    gre cond, 33, char
-    jmpNZ breakWord, cond
-    gre cond, char, 126
-    jmpNZ breakWord, cond
-    add wordEndIndex, wordEndIndex, 1
-    add size, size, 1
-    equ cond, char, 45
-    jmpNZ breakWord, cond
-    equ cond, char, 47
-    jmpZ wordLoop, cond
+    jmpG breakWord, 33, char
+    jmpG breakWord, char, 126
+    inc wordEndIndex
+    inc size
+    jmpE breakWord, char, 45
+    jmpNE wordLoop, char, 47
     LBL breakWord
     
     sub size, wordEndIndex, messageIndex
     VAR lineEndIndex, s32
     add lineEndIndex, lineIndex, size
-    gre cond, lineEndIndex, termWidth
-    jmpZ skipCreateLine, cond
+    jmpNG skipCreateLine, lineEndIndex, termWidth
     
     callCreateLine line, lineIndex, lines, lineCount
     wrt messageIndex, wordStartIndex
@@ -288,18 +248,15 @@ FUNC splitMessage, 0, guarded
     
     LBL skipCreateLine
     wrtBuff line[lineIndex]:s8, message[messageIndex]:s8, size
-    add lineIndex, lineIndex, size
+    add lineIndex, prevArg, size
     wrt messageIndex, wordEndIndex
     
     LBL specialLoop
-    gre cond, messageSize, messageIndex
-    jmpZ breakSpecial, cond
+    jmpNG breakSpecial, messageSize, messageIndex
     wrt char, message[messageIndex]:s8
-    gre cond, char, 31
-    jmpNZ breakSpecial, cond
-    add messageIndex, messageIndex, 1
-    equ cond, char, 10
-    jmpZ specialLoop, cond
+    jmpG breakSpecial, char, 31
+    inc messageIndex
+    jmpNE specialLoop, char, 10
     callCreateLine line, lineIndex, lines, lineCount
     jmp specialLoop
     LBL breakSpecial
@@ -313,7 +270,6 @@ END
 
 # Must be called with `windowsMutex`.
 FUNC drawFocusedWindow, 0, guarded
-    VAR cond, s8
     VAR index, s32
     VAR offset, s32
     VAR size, s32
@@ -322,8 +278,7 @@ FUNC drawFocusedWindow, 0, guarded
     
     VAR mode, s8
     wrt mode, focusedWindow[mode_OFFSET]:s8
-    equ cond, mode, none_MODE
-    jmpNZ noneMode, cond
+    jmpE noneMode, mode, none_MODE
     
     VAR posY, s32
     wrt posY, 0
@@ -336,23 +291,20 @@ FUNC drawFocusedWindow, 0, guarded
     wrt messageLines, focusedWindow[messageLines_OFFSET]:s32
     wrt messageLineAmount, focusedWindow[messageLineAmount_OFFSET]:s32
     LBL messageLoop
-    gre cond, termHeight, posY
-    jmpZ stopDraw, cond
+    jmpNG stopDraw, termHeight, posY
     add index, verticalScroll, posY
-    gre cond, messageLineAmount, index
-    jmpZ breakMessage, cond
+    jmpNG breakMessage, messageLineAmount, index
     mul offset, index, 4
     wrt line, messageLines[offset]:s32
     newArgFrame wsWrtTerm.argsSize
     wrt wsWrtTerm.args.y, posY
     wrt wsWrtTerm.args.text, line
     callRemote termHandle, wrtTermIndex
-    add posY, posY, 1
+    inc posY
     jmp messageLoop
     LBL breakMessage
     
-    equ cond, mode, displayMessage_MODE
-    jmpNZ emptyLineLoop, cond
+    jmpE emptyLineLoop, mode, displayMessage_MODE
     
     VAR input, s32
     VAR inputLen, s32
@@ -362,38 +314,32 @@ FUNC drawFocusedWindow, 0, guarded
     wrt cursorIndex, focusedWindow[inputCursorIndex_OFFSET]:s32
     
     add index, verticalScroll, posY
-    sub index, index, messageLineAmount
-    gre cond, 0, index
-    jmpZ skipUnderflow, cond
+    sub index, prevArg, messageLineAmount
+    jmpNG skipUnderflow, 0, index
     wrt index, 0
     LBL skipUnderflow
     newAlloc line, guardedAllocAttr, termWidth
     
-    equ cond, mode, promptText_MODE
-    jmpNZ handlePromptText, cond
+    jmpE handlePromptText, mode, promptText_MODE
     
     VAR tempSize, s32
     sub tempSize, termWidth, 1
     LBL optionLoop
-    gre cond, termHeight, posY
-    jmpZ cleanUpLine, cond
-    gre cond, inputLen, index
-    jmpZ cleanUpLine, cond
-    wrtBuff line[0]:s8, emptyLine[0]:s8, termWidth
+    jmpNG cleanUpLine, termHeight, posY
+    jmpNG cleanUpLine, inputLen, index
+    fillBuff line[0]:s8, termWidth, 32:s8
     mul offset, index, 4
     wrt ptr, input[offset]:s32
     allocSize size, ptr
-    equ cond, index, cursorIndex
-    jmpNZ handleCursor, cond
+    jmpE handleCursor, index, cursorIndex
     wrt offset, 0
     jmp skipCursor1
     LBL handleCursor
     wrt line[0]:s8, 62
     wrt offset, focusedWindow[inputHorizontalScroll_OFFSET]:s32
     LBL skipCursor1
-    sub size, size, offset
-    gre cond, size, tempSize
-    jmpZ skipResize1, cond
+    sub size, prevArg, offset
+    jmpNG skipResize1, size, tempSize
     wrt size, tempSize
     LBL skipResize1
     wrtBuff line[1]:s8, ptr[offset]:s8, size
@@ -401,52 +347,45 @@ FUNC drawFocusedWindow, 0, guarded
     wrt wsWrtTerm.args.y, posY
     wrt wsWrtTerm.args.text, line
     callRemote termHandle, wrtTermIndex
-    add index, index, 1
-    add posY, posY, 1
+    inc index
+    inc posY
     jmp optionLoop
     
     LBL handlePromptText
-    mul index, index, termWidth
+    mul index, prevArg, termWidth
     LBL textLoop
-    gre cond, termHeight, posY
-    jmpZ cleanUpLine, cond
-    gre cond, index, inputLen
-    jmpNZ cleanUpLine, cond
-    wrtBuff line[0]:s8, emptyLine[0]:s8, termWidth
+    jmpNG cleanUpLine, termHeight, posY
+    jmpG cleanUpLine, index, inputLen
+    fillBuff line[0]:s8, termWidth, 32:s8
     sub size, inputLen, index
-    gre cond, 0, size
-    jmpNZ skipText, cond
-    gre cond, termWidth, size
-    jmpNZ skipResize2, cond
+    jmpG skipText, 0, size
+    jmpG skipResize2, termWidth, size
     wrt size, termWidth
     LBL skipResize2
     wrtBuff line[0]:s8, input[index]:s8, size
     LBL skipText
     sub offset, cursorIndex, index
-    gre cond, 0, offset
-    jmpNZ skipCursor2, cond
-    gre cond, termWidth, offset
-    jmpZ skipCursor2, cond
+    jmpG skipCursor2, 0, offset
+    jmpNG skipCursor2, termWidth, offset
     wrt line[offset]:s8, 95
     LBL skipCursor2
     newArgFrame wsWrtTerm.argsSize
     wrt wsWrtTerm.args.y, posY
     wrt wsWrtTerm.args.text, line
     callRemote termHandle, wrtTermIndex
-    add index, index, termWidth
-    add posY, posY, 1
+    add index, prevArg, termWidth
+    inc posY
     jmp textLoop
     
     LBL cleanUpLine
     delAlloc line
     
     LBL emptyLineLoop
-    gre cond, termHeight, posY
-    jmpZ stopDraw, cond
+    jmpNG stopDraw, termHeight, posY
     wrt wsWrtTerm.args.y, posY
     wrt wsWrtTerm.args.text, emptyLine
     callRemote termHandle, wrtTermIndex
-    add posY, posY, 1
+    inc posY
     jmp emptyLineLoop
     
     LBL stopDraw
@@ -462,9 +401,7 @@ FUNC drawWindowIfFocused, 0, guarded
     ARG window, s32
     
     waitGate windowsMutex
-    VAR cond, s8
-    equ cond, window, focusedWindow
-    jmpZ skipDraw, cond
+    jmpNE skipDraw, window, focusedWindow
     call drawFocusedWindow
     LBL skipDraw
     openGate windowsMutex
@@ -473,13 +410,11 @@ END
 FUNC focusWindow, 0, guarded
     ARG window, s32
     
-    VAR cond, s8
     VAR lastWindow, s32
     VAR funcIndex, s32
     
     waitGate windowsMutex
-    equ cond, window, focusedWindow
-    jmpNZ cancelFocus, cond
+    jmpE cancelFocus, window, focusedWindow
     wrt lastWindow, focusedWindow
     wrt focusedWindow, window
     call drawFocusedWindow
@@ -487,8 +422,7 @@ FUNC focusWindow, 0, guarded
     
     jmpZ skipBlur, lastWindow
     wrt funcIndex, lastWindow[focusChangedIndex_OFFSET]:s32
-    gre cond, 0, funcIndex
-    jmpNZ skipBlur, cond
+    jmpG skipBlur, 0, funcIndex
     newArgFrame wsWindowFocusChanged.argsSize
     wrt wsWindowFocusChanged.args.window, lastWindow
     wrt wsWindowFocusChanged.args.hasFocus, 0
@@ -496,8 +430,7 @@ FUNC focusWindow, 0, guarded
     LBL skipBlur
     
     wrt funcIndex, window[focusChangedIndex_OFFSET]:s32
-    gre cond, 0, funcIndex
-    jmpNZ skipFocus, cond
+    jmpG skipFocus, 0, funcIndex
     newArgFrame wsWindowFocusChanged.argsSize
     wrt wsWindowFocusChanged.args.window, window
     wrt wsWindowFocusChanged.args.hasFocus, 1
@@ -530,7 +463,6 @@ FUNC newWindow, wsNewWindow.id
     
     VAR windowIndex, s32
     VAR size, s32
-    VAR cond, s8
     VAR ptr, s32
     
     newAlloc dest, guardedAllocAttr | sentryAllocAttr, window_SIZE
@@ -545,16 +477,13 @@ FUNC newWindow, wsNewWindow.id
     LBL skipCreateTitle
     wrt dest[title_OFFSET]:s32, title
     newAlloc ptr, guardedAllocAttr, termBuffSize
-    newArgFrame clrTermBuff.argsSize
-    wrt clrTermBuff.args.termBuff, ptr
-    call clrTermBuff
+    fillBuff ptr[0]:s8, termBuffSize, 32:s8
     wrt dest[termBuff_OFFSET]:s32, ptr
     
     waitGate windowsMutex
     mul windowIndex, windowCount, 4
     allocSize size, windows
-    gre cond, size, windowIndex
-    jmpNZ skipResize, cond
+    jmpG skipResize, size, windowIndex
     
     VAR newSize, s32
     mul newSize, size, 2
@@ -565,7 +494,7 @@ FUNC newWindow, wsNewWindow.id
     
     LBL skipResize
     wrt windows[windowIndex]:s32, dest
-    add windowCount, windowCount, 1
+    inc windowCount
     openGate windowsMutex
     
     newArgFrame focusWindow.argsSize
@@ -577,11 +506,9 @@ FUNC delWindow, wsDelWindow.id
     ARG window, s32
     callCheckPerm window
     
-    VAR cond, s8
     VAR index, s32
     
-    equ cond, window, focusedWindow
-    jmpZ skipFocus, cond
+    jmpNE skipFocus, window, focusedWindow
     waitGate windowsMutex
     wrt focusedWindow, null
     openGate windowsMutex
@@ -593,9 +520,8 @@ FUNC delWindow, wsDelWindow.id
     waitGate windowsMutex
     wrt index, 0
     LBL findLoop
-    equ cond, window, windows[index]:s32
-    jmpNZ breakFind, cond
-    add index, index, 4
+    jmpE breakFind, window, windows[index]:s32
+    add index, prevArg, 4
     jmp findLoop
     
     LBL breakFind
@@ -608,7 +534,7 @@ FUNC delWindow, wsDelWindow.id
     wrtBuff windows[index]:s8, windows[nextIndex]:s8, sizeToMove
     sub index, size, 4
     wrt windows[index]:s8, null
-    sub windowCount, windowCount, 1
+    dec windowCount
     openGate windowsMutex
     
     delAlloc window[title_OFFSET]:s32
@@ -624,7 +550,6 @@ FUNC displayWindowMessage, wsDisplayWindowMessage.id
     
     VAR ackGate, s32
     VAR verticalScroll, s32
-    VAR cond, s8
     VAR index, s32
     
     newArgFrame splitMessage.argsSize
@@ -649,37 +574,28 @@ FUNC displayWindowMessage, wsDisplayWindowMessage.id
     call waitForKey
     VAR key, s8
     wrt key, waitForKey.args.dest
-    equ cond, key, 10
-    jmpNZ enterPressed, cond
-    equ cond, key, 27
-    jmpNZ escapePressed, cond
-    equ cond, key, -3
-    jmpNZ upPressed, cond
-    equ cond, key, -4
-    jmpNZ downPressed, cond
-    equ cond, key, 9
-    jmpNZ tabPressed, cond
-    equ cond, key, -5
-    jmpNZ rtabPressed, cond
+    jmpE enterPressed, key, 10
+    jmpE escapePressed, key, 27
+    jmpE upPressed, key, -3
+    jmpE downPressed, key, -4
+    jmpE tabPressed, key, 9
+    jmpE rtabPressed, key, -5
     jmp keyLoop
     
     LBL upPressed
-    gre cond, verticalScroll, 0
-    jmpZ keyLoop, cond
-    sub verticalScroll, verticalScroll, 1
+    jmpNG keyLoop, verticalScroll, 0
+    dec verticalScroll
     jmp drawLoop
     
     LBL downPressed
     add index, verticalScroll, termHeight
-    gre cond, window[messageLineAmount_OFFSET]:s32, index
-    jmpZ keyLoop, cond
-    add verticalScroll, verticalScroll, 1
+    jmpNG keyLoop, window[messageLineAmount_OFFSET]:s32, index
+    inc verticalScroll
     jmp drawLoop
     
     LBL tabPressed
     sub verticalScroll, window[messageLineAmount_OFFSET]:s32, termHeight
-    gre cond, 0, verticalScroll
-    jmpZ drawLoop, cond
+    jmpNG drawLoop, 0, verticalScroll
     wrt verticalScroll, 0
     jmp drawLoop
     
@@ -711,7 +627,6 @@ FUNC promptWindowOption, wsPromptWindowOption.id
     VAR cursorPosY, s32
     VAR optionAmount, s32
     VAR totalLineAmount, s32
-    VAR cond, s32
     VAR index, s32
     
     newArgFrame splitMessage.argsSize
@@ -725,7 +640,7 @@ FUNC promptWindowOption, wsPromptWindowOption.id
     wrt horizontalScroll, 0
     wrt cursorIndex, 0
     allocSize optionAmount, options
-    div optionAmount, optionAmount, 4
+    div optionAmount, prevArg, 4
     add totalLineAmount, messageLineAmount, optionAmount
     wrt window[input_OFFSET]:s32, options
     wrt window[inputLen_OFFSET]:s32, optionAmount
@@ -743,85 +658,66 @@ FUNC promptWindowOption, wsPromptWindowOption.id
     
     LBL keyLoop
     add cursorPosY, messageLineAmount, cursorIndex
-    sub cursorPosY, cursorPosY, verticalScroll
+    sub cursorPosY, prevArg, verticalScroll
     newArgFrame waitForKey.argsSize
     wrt waitForKey.args.window, window
     call waitForKey
     VAR key, s8
     wrt key, waitForKey.args.dest
-    equ cond, key, 10
-    jmpNZ enterPressed, cond
-    equ cond, key, 27
-    jmpNZ escapePressed, cond
-    equ cond, key, -3
-    jmpNZ upPressed, cond
-    equ cond, key, -4
-    jmpNZ downPressed, cond
-    equ cond, key, -1
-    jmpNZ leftPressed, cond
-    equ cond, key, -2
-    jmpNZ rightPressed, cond
-    equ cond, key, 9
-    jmpNZ tabPressed, cond
-    equ cond, key, -5
-    jmpNZ rtabPressed, cond
+    jmpE enterPressed, key, 10
+    jmpE escapePressed, key, 27
+    jmpE upPressed, key, -3
+    jmpE downPressed, key, -4
+    jmpE leftPressed, key, -1
+    jmpE rightPressed, key, -2
+    jmpE tabPressed, key, 9
+    jmpE rtabPressed, key, -5
     jmp keyLoop
     
     LBL upPressed
-    gre cond, cursorIndex, 0
-    jmpZ scroll1, cond
-    gre cond, cursorPosY, 0
-    jmpNZ skipScroll1, cond
+    jmpNG scroll1, cursorIndex, 0
+    jmpG skipScroll1, cursorPosY, 0
     LBL scroll1
-    sub verticalScroll, verticalScroll, 1
+    dec verticalScroll
     LBL skipScroll1
-    gre cond, cursorIndex, 0
-    jmpZ skipCursor1, cond
-    gre cond, termHeight, cursorPosY
-    jmpZ skipCursor1, cond
-    sub cursorIndex, cursorIndex, 1
+    jmpNG skipCursor1, cursorIndex, 0
+    jmpNG skipCursor1, termHeight, cursorPosY
+    dec cursorIndex
     LBL skipCursor1
     jmp alignBounds
     
     LBL downPressed
     sub index, termHeight, 1
-    gre cond, index, cursorPosY
-    jmpNZ skipScroll2, cond
-    add verticalScroll, verticalScroll, 1
+    jmpG skipScroll2, index, cursorPosY
+    inc verticalScroll
     LBL skipScroll2
     sub index, optionAmount, 1
-    gre cond, index, cursorIndex
-    jmpZ skipCursor2, cond
-    gre cond, termHeight, cursorPosY
-    jmpZ skipCursor2, cond
-    add cursorIndex, cursorIndex, 1
+    jmpNG skipCursor2, index, cursorIndex
+    jmpNG skipCursor2, termHeight, cursorPosY
+    inc cursorIndex
     LBL skipCursor2
     jmp alignBounds
     
     LBL leftPressed
-    sub horizontalScroll, horizontalScroll, 4
-    gre cond, 0, horizontalScroll
-    jmpZ drawLoop, cond
+    sub horizontalScroll, prevArg, 4
+    jmpNG drawLoop, 0, horizontalScroll
     wrt horizontalScroll, 0
     jmp drawLoop
     
     LBL rightPressed
-    add horizontalScroll, horizontalScroll, 4
+    add horizontalScroll, prevArg, 4
     mul index, cursorIndex, 4
     allocSize index, options[index]:s32
-    sub index, index, termWidth
-    add index, index, 1
-    gre cond, horizontalScroll, index
-    jmpZ drawLoop, cond
+    sub index, prevArg, termWidth
+    inc index
+    jmpNG drawLoop, horizontalScroll, index
     wrt horizontalScroll, index
-    gre cond, 0, horizontalScroll
-    jmpZ drawLoop, cond
+    jmpNG drawLoop, 0, horizontalScroll
     wrt horizontalScroll, 0
     jmp drawLoop
     
     LBL tabPressed
-    gre cond, termHeight, cursorPosY
-    jmpNZ skipTab, cond
+    jmpG skipTab, termHeight, cursorPosY
     wrt verticalScroll, messageLineAmount
     wrt cursorIndex, 0
     jmp alignBounds
@@ -831,8 +727,7 @@ FUNC promptWindowOption, wsPromptWindowOption.id
     jmp alignBounds
     
     LBL rtabPressed
-    gre cond, cursorIndex, 0
-    jmpZ skipRtab, cond
+    jmpNG skipRtab, cursorIndex, 0
     wrt verticalScroll, messageLineAmount
     wrt cursorIndex, 0
     jmp alignBounds
@@ -843,18 +738,15 @@ FUNC promptWindowOption, wsPromptWindowOption.id
     LBL alignBounds
     wrt horizontalScroll, 0
     sub index, totalLineAmount, termHeight
-    gre cond, verticalScroll, index
-    jmpZ skipAlign, cond
+    jmpNG skipAlign, verticalScroll, index
     wrt verticalScroll, index
     LBL skipAlign
-    gre cond, 0, verticalScroll
-    jmpZ drawLoop, cond
+    jmpNG drawLoop, 0, verticalScroll
     wrt verticalScroll, 0
     jmp drawLoop
     
     LBL enterPressed
-    gre cond, termHeight, cursorPosY
-    jmpNZ acceptOption, cond
+    jmpG acceptOption, termHeight, cursorPosY
     wrt verticalScroll, messageLineAmount
     wrt cursorIndex, 0
     jmp alignBounds
@@ -881,7 +773,6 @@ FUNC promptWindowText, wsPromptWindowText.id
     VAR inputTextLen, s32
     VAR cursorIndex, s32
     VAR cursorPosY, s32
-    VAR cond, s32
     VAR index, s32
     VAR size, s32
     VAR ptr, s32
@@ -928,45 +819,32 @@ FUNC promptWindowText, wsPromptWindowText.id
     call waitForKey
     VAR key, s8
     wrt key, waitForKey.args.dest
-    equ cond, key, 127
-    jmpNZ deletePressed, cond
-    gre cond, key, 31
-    jmpNZ charPressed, cond
-    equ cond, key, 10
-    jmpNZ enterPressed, cond
-    equ cond, key, 27
-    jmpNZ escapePressed, cond
-    equ cond, key, -3
-    jmpNZ upPressed, cond
-    equ cond, key, -4
-    jmpNZ downPressed, cond
-    equ cond, key, -1
-    jmpNZ leftPressed, cond
-    equ cond, key, -2
-    jmpNZ rightPressed, cond
-    equ cond, key, 9
-    jmpNZ tabPressed, cond
-    equ cond, key, -5
-    jmpNZ rtabPressed, cond
+    jmpE deletePressed, key, 127
+    jmpG charPressed, key, 31
+    jmpE enterPressed, key, 10
+    jmpE escapePressed, key, 27
+    jmpE upPressed, key, -3
+    jmpE downPressed, key, -4
+    jmpE leftPressed, key, -1
+    jmpE rightPressed, key, -2
+    jmpE tabPressed, key, 9
+    jmpE rtabPressed, key, -5
     jmp keyLoop
     
     LBL deletePressed
-    gre cond, cursorIndex, 0
-    jmpZ keyLoop, cond
+    jmpNG keyLoop, cursorIndex, 0
     sub index, cursorIndex, 1
     sub size, inputTextLen, cursorIndex
-    gre cond, size, 0
-    jmpZ skipCopy1, cond
+    jmpNG skipCopy1, size, 0
     wrtBuff inputText[index]:s8, inputText[cursorIndex]:s8, size
     LBL skipCopy1
     wrt cursorIndex, index
-    sub inputTextLen, inputTextLen, 1
+    dec inputTextLen
     jmp scrollToCursor
     
     LBL charPressed
     allocSize size, inputText
-    gre cond, size, inputTextLen
-    jmpNZ skipResize, cond
+    jmpG skipResize, size, inputTextLen
     VAR newSize, s32
     mul newSize, size, 2
     newAlloc ptr, guardedAllocAttr, newSize
@@ -977,68 +855,59 @@ FUNC promptWindowText, wsPromptWindowText.id
     LBL skipResize
     add index, cursorIndex, 1
     sub size, inputTextLen, cursorIndex
-    gre cond, size, 0
-    jmpZ skipCopy2, cond
+    jmpNG skipCopy2, size, 0
     wrtBuff inputText[index]:s8, inputText[cursorIndex]:s8, size
     LBL skipCopy2
     wrt inputText[cursorIndex]:s8, key
     wrt cursorIndex, index
-    add inputTextLen, inputTextLen, 1
+    inc inputTextLen
     jmp scrollToCursor
     
     LBL upPressed
     jmpZ scrollUp, cursorIndex
-    gre cond, termHeight, cursorPosY
-    jmpNZ moveCursorUp, cond
+    jmpG moveCursorUp, termHeight, cursorPosY
     LBL scrollUp
-    sub verticalScroll, verticalScroll, 1
+    dec verticalScroll
     jmp alignBounds
     LBL moveCursorUp
-    sub cursorIndex, cursorIndex, termWidth
-    gre cond, 0, cursorIndex
-    jmpZ scrollToCursor, cond
+    sub cursorIndex, prevArg, termWidth
+    jmpNG scrollToCursor, 0, cursorIndex
     wrt cursorIndex, 0
     jmp scrollToCursor
     
     LBL downPressed
-    gre cond, termHeight, cursorPosY
-    jmpNZ moveCursorDown, cond
-    add verticalScroll, verticalScroll, 1
+    jmpG moveCursorDown, termHeight, cursorPosY
+    inc verticalScroll
     jmp alignBounds
     LBL moveCursorDown
-    add cursorIndex, cursorIndex, termWidth
-    gre cond, cursorIndex, inputTextLen
-    jmpZ scrollToCursor, cond
+    add cursorIndex, prevArg, termWidth
+    jmpNG scrollToCursor, cursorIndex, inputTextLen
     wrt cursorIndex, inputTextLen
     jmp scrollToCursor
     
     LBL leftPressed
-    gre cond, cursorIndex, 0
-    jmpZ keyLoop, cond
-    sub cursorIndex, cursorIndex, 1
+    jmpNG keyLoop, cursorIndex, 0
+    dec cursorIndex
     jmp scrollToCursor
     
     LBL rightPressed
-    gre cond, inputTextLen, cursorIndex
-    jmpZ keyLoop, cond
-    add cursorIndex, cursorIndex, 1
+    jmpNG keyLoop, inputTextLen, cursorIndex
+    inc cursorIndex
     jmp scrollToCursor
     
     LBL tabPressed
-    gre cond, termHeight, cursorPosY
-    jmpNZ skipTab, cond
+    jmpG skipTab, termHeight, cursorPosY
     wrt verticalScroll, messageLineAmount
     wrt cursorIndex, 0
     jmp alignBounds
     LBL skipTab
     div verticalScroll, inputTextLen, termWidth
-    add verticalScroll, verticalScroll, messageLineAmount
+    add verticalScroll, prevArg, messageLineAmount
     wrt cursorIndex, inputTextLen
     jmp alignBounds
     
     LBL rtabPressed
-    gre cond, cursorIndex, 0
-    jmpZ skipRtab, cond
+    jmpNG skipRtab, cursorIndex, 0
     wrt verticalScroll, messageLineAmount
     wrt cursorIndex, 0
     jmp alignBounds
@@ -1048,37 +917,32 @@ FUNC promptWindowText, wsPromptWindowText.id
     
     LBL scrollToCursor
     updateCursorPosY
-    gre cond, 0, cursorPosY
-    jmpZ skipScrollBack, cond
+    jmpNG skipScrollBack, 0, cursorPosY
     div verticalScroll, cursorIndex, termWidth
-    add verticalScroll, verticalScroll, messageLineAmount
+    add verticalScroll, prevArg, messageLineAmount
     jmp alignBounds
     LBL skipScrollBack
-    gre cond, termHeight, cursorPosY
-    jmpNZ alignBounds, cond
+    jmpG alignBounds, termHeight, cursorPosY
     div verticalScroll, cursorIndex, termWidth
-    add verticalScroll, verticalScroll, messageLineAmount
-    sub verticalScroll, verticalScroll, termHeight
-    add verticalScroll, verticalScroll, 1
+    add verticalScroll, prevArg, messageLineAmount
+    sub verticalScroll, prevArg, termHeight
+    inc verticalScroll
     
     LBL alignBounds
     VAR totalLineAmount, s32
     div totalLineAmount, inputTextLen, termWidth
-    add totalLineAmount, totalLineAmount, 1
-    add totalLineAmount, totalLineAmount, messageLineAmount
+    inc totalLineAmount
+    add totalLineAmount, prevArg, messageLineAmount
     sub index, totalLineAmount, termHeight
-    gre cond, verticalScroll, index
-    jmpZ skipAlign, cond
+    jmpNG skipAlign, verticalScroll, index
     wrt verticalScroll, index
     LBL skipAlign
-    gre cond, 0, verticalScroll
-    jmpZ drawLoop, cond
+    jmpNG drawLoop, 0, verticalScroll
     wrt verticalScroll, 0
     jmp drawLoop
     
     LBL enterPressed
-    gre cond, termHeight, cursorPosY
-    jmpNZ acceptText, cond
+    jmpG acceptText, termHeight, cursorPosY
     wrt cursorIndex, inputTextLen
     jmp scrollToCursor
     LBL acceptText
@@ -1097,10 +961,9 @@ FUNC clrWindow, wsClrWindow.id
     ARG window, s32
     callCheckPerm window
     
-    newArgFrame clrTermBuff.argsSize
-    wrt clrTermBuff.args.termBuff, window[termBuff_OFFSET]:s32
-    call clrTermBuff
-    
+    VAR termBuff, s32
+    wrt termBuff, window[termBuff_OFFSET]:s32
+    fillBuff termBuff[0]:s8, termBuffSize, 32:s8
     newArgFrame drawWindowIfFocused.argsSize
     wrt drawWindowIfFocused.args.window, window
     call drawWindowIfFocused
@@ -1126,7 +989,7 @@ FUNC readWindowTerm, wsReadWindowTerm.id
     
     VAR index, s32
     mul index, y, termWidth
-    add index, index, x
+    add index, prevArg, x
     VAR termBuff, s32
     wrt termBuff, window[termBuff_OFFSET]:s32
     newAlloc dest, 0, length
@@ -1150,7 +1013,7 @@ FUNC wrtWindowTerm, wsWrtWindowTerm.id
     
     VAR index, s32
     mul index, y, termWidth
-    add index, index, x
+    add index, prevArg, x
     VAR termBuff, s32
     wrt termBuff, window[termBuff_OFFSET]:s32
     VAR size, s32
@@ -1158,9 +1021,7 @@ FUNC wrtWindowTerm, wsWrtWindowTerm.id
     wrtBuff termBuff[index]:s8, text[0]:s8, size
     
     waitGate windowsMutex
-    VAR cond, s8
-    equ cond, window, focusedWindow
-    jmpZ skipDraw, cond
+    jmpNE skipDraw, window, focusedWindow
     newArgFrame wsWrtTerm.argsSize
     wrt wsWrtTerm.args.x, x
     wrt wsWrtTerm.args.y, y
