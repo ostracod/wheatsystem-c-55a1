@@ -39,8 +39,8 @@ const int8_t argAmountArray[] PROGMEM = {
 const systemAppFunc_t termAppFuncArray[] PROGMEM = {
     (systemAppFunc_t){INIT_FUNC_ID, true, 0, 0, initializeTermApp},
     (systemAppFunc_t){LISTEN_TERM_FUNC_ID, true, 0, 0, setTermObserver},
-    (systemAppFunc_t){TERM_SIZE_FUNC_ID, true, 8, 0, getTermSize},
-    (systemAppFunc_t){WRT_TERM_FUNC_ID, true, 12, 0, writeTermText},
+    (systemAppFunc_t){TERM_SIZE_FUNC_ID, true, 4, 0, getTermSize},
+    (systemAppFunc_t){WRT_TERM_FUNC_ID, true, 8, 0, writeTermText},
     (systemAppFunc_t){KILL_FUNC_ID, true, 0, 0, killTermApp}
 };
 

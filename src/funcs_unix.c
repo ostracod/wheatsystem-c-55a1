@@ -124,16 +124,16 @@ void initializeTermApp() {
 
 void getTermSize() {
     allocPointer_t previousArgFrame = getPreviousArgFrame();
-    writeArgFrame(previousArgFrame, 0, int32_t, TERM_WIDTH);
-    writeArgFrame(previousArgFrame, 4, int32_t, TERM_HEIGHT);
+    writeArgFrame(previousArgFrame, 0, int16_t, TERM_WIDTH);
+    writeArgFrame(previousArgFrame, 2, int16_t, TERM_HEIGHT);
     returnFromFunc();
 }
 
 void writeTermText() {
     allocPointer_t previousArgFrame = getPreviousArgFrame();
-    int32_t posX = readArgFrame(previousArgFrame, 0, int32_t);
-    int32_t posY = readArgFrame(previousArgFrame, 4, int32_t);
-    allocPointer_t textAlloc = readArgFrame(previousArgFrame, 8, int32_t);
+    int16_t posX = readArgFrame(previousArgFrame, 0, int16_t);
+    int16_t posY = readArgFrame(previousArgFrame, 2, int16_t);
+    allocPointer_t textAlloc = readArgFrame(previousArgFrame, 4, int32_t);
     validateDynamicAlloc(textAlloc);
     checkErrorInSystemApp();
     if (!runningAppMayAccessAlloc(getCurrentCaller(), textAlloc)

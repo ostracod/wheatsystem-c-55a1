@@ -23,7 +23,7 @@ FUNC init, wsInit.id
     wrt termText[0]:s8, 115
     wrt termText[1]:s8, 101
     wrt termText[2]:s8, 114
-    newArgFrame 12
+    newArgFrame wsWrtTerm.argsSize
     wrt wsWrtTerm.args.x, 0
     wrt wsWrtTerm.args.y, 0
     wrt wsWrtTerm.args.text, termText
@@ -38,7 +38,7 @@ FUNC init, wsInit.id
     launch serialHandle
     findFunc wrtSerialIndex, serialHandle, wsWrtSerial.id
     findFunc startSerialIndex, serialHandle, wsStartSerial.id
-    newArgFrame 5
+    newArgFrame wsStartSerial.argsSize
     wrt wsStartSerial.args.port, 0
     wrt wsStartSerial.args.baudRate, 9600
     callRemote serialHandle, startSerialIndex
@@ -63,13 +63,13 @@ FUNC init, wsInit.id
     inc termTextIndex
     jmpG digitLoop, 3, termTextIndex
     
-    newArgFrame 12
+    newArgFrame wsWrtTerm.argsSize
     wrt wsWrtTerm.args.x, 0
     wrt wsWrtTerm.args.y, 0
     wrt wsWrtTerm.args.text, termText
     callRemote termHandle, wrtTermIndex
     
-    newArgFrame 5
+    newArgFrame wsWrtSerial.argsSize
     wrt wsWrtSerial.args.port, 0
     wrt wsWrtSerial.args.buff, termText
     callRemote serialHandle, wrtSerialIndex

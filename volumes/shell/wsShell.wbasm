@@ -36,18 +36,18 @@ DEF title_OFFSET, 5
 DEF mode_OFFSET, 9
 DEF termBuff_OFFSET, 10
 DEF verticalScroll_OFFSET, 14
-DEF messageLines_OFFSET, 18
-DEF messageLineAmount_OFFSET, 22
-DEF input_OFFSET, 26
-DEF inputLen_OFFSET, 30
-DEF inputHorizontalScroll_OFFSET, 34
-DEF inputCursorIndex_OFFSET, 38
-DEF key_OFFSET, 42
-DEF keyGate_OFFSET, 43
-DEF ackGate_OFFSET, 47
-DEF keyPressedIndex_OFFSET, 51
-DEF focusChangedIndex_OFFSET, 55
-DEF window_SIZE, 59
+DEF messageLines_OFFSET, 16
+DEF messageLineAmount_OFFSET, 20
+DEF input_OFFSET, 22
+DEF inputLen_OFFSET, 26
+DEF inputHorizontalScroll_OFFSET, 28
+DEF inputCursorIndex_OFFSET, 30
+DEF key_OFFSET, 32
+DEF keyGate_OFFSET, 33
+DEF ackGate_OFFSET, 37
+DEF keyPressedIndex_OFFSET, 41
+DEF focusChangedIndex_OFFSET, 45
+DEF window_SIZE, 49
 
 VAR thisApp, s32
 # Must be acquired when accessing `windows`, `windowCount`, or `focusedWindow`.
@@ -59,8 +59,8 @@ VAR shellWindow, s32
 
 VAR termHandle, s32
 VAR wrtTermIndex, s32
-VAR termWidth, s32
-VAR termHeight, s32
+VAR termWidth, s16
+VAR termHeight, s16
 VAR termBuffSize, s32
 VAR emptyLine, s32
 
@@ -162,7 +162,7 @@ END
 FUNC createLine, 0, guarded
     ARG dest, s32
     ARG lines, s32
-    ARG lineCount, s32
+    ARG lineCount, s16
     
     VAR index, s32
     VAR size, s32
@@ -193,7 +193,7 @@ FUNC splitMessage, 0, guarded
     VAR size, s32
     
     jmpNZ skipNull, message
-    wrt window[messageLineAmount_OFFSET]:s32, 0
+    wrt window[messageLineAmount_OFFSET]:s16, 0
     ret
     
     LBL skipNull
@@ -203,7 +203,7 @@ FUNC splitMessage, 0, guarded
     wrt messageIndex, 0
     
     VAR lines, s32
-    VAR lineCount, s32
+    VAR lineCount, s16
     VAR line, s32
     VAR lineIndex, s32
     newAlloc lines, guardedAllocAttr, 20
@@ -265,7 +265,7 @@ FUNC splitMessage, 0, guarded
     LBL breakSplit
     
     wrt window[messageLines_OFFSET]:s32, lines
-    wrt window[messageLineAmount_OFFSET]:s32, lineCount
+    wrt window[messageLineAmount_OFFSET]:s16, lineCount
 END
 
 # Must be called with `windowsMutex`.
@@ -280,16 +280,16 @@ FUNC drawFocusedWindow, 0, guarded
     wrt mode, focusedWindow[mode_OFFSET]:s8
     jmpE noneMode, mode, none_MODE
     
-    VAR posY, s32
+    VAR posY, s16
     wrt posY, 0
     
-    VAR verticalScroll, s32
-    wrt verticalScroll, focusedWindow[verticalScroll_OFFSET]:s32
+    VAR verticalScroll, s16
+    wrt verticalScroll, focusedWindow[verticalScroll_OFFSET]:s16
     
     VAR messageLines, s32
-    VAR messageLineAmount, s32
+    VAR messageLineAmount, s16
     wrt messageLines, focusedWindow[messageLines_OFFSET]:s32
-    wrt messageLineAmount, focusedWindow[messageLineAmount_OFFSET]:s32
+    wrt messageLineAmount, focusedWindow[messageLineAmount_OFFSET]:s16
     LBL messageLoop
     jmpNG stopDraw, termHeight, posY
     add index, verticalScroll, posY
@@ -307,11 +307,11 @@ FUNC drawFocusedWindow, 0, guarded
     jmpE emptyLineLoop, mode, displayMessage_MODE
     
     VAR input, s32
-    VAR inputLen, s32
-    VAR cursorIndex, s32
+    VAR inputLen, s16
+    VAR cursorIndex, s16
     wrt input, focusedWindow[input_OFFSET]:s32
-    wrt inputLen, focusedWindow[inputLen_OFFSET]:s32
-    wrt cursorIndex, focusedWindow[inputCursorIndex_OFFSET]:s32
+    wrt inputLen, focusedWindow[inputLen_OFFSET]:s16
+    wrt cursorIndex, focusedWindow[inputCursorIndex_OFFSET]:s16
     
     add index, verticalScroll, posY
     sub index, prevArg, messageLineAmount
@@ -336,7 +336,7 @@ FUNC drawFocusedWindow, 0, guarded
     jmp skipCursor1
     LBL handleCursor
     wrt line[0]:s8, 62
-    wrt offset, focusedWindow[inputHorizontalScroll_OFFSET]:s32
+    wrt offset, focusedWindow[inputHorizontalScroll_OFFSET]:s16
     LBL skipCursor1
     sub size, prevArg, offset
     jmpNG skipResize1, size, tempSize
@@ -461,8 +461,8 @@ FUNC newWindow, wsNewWindow.id
     ARG dest, s32
     ARG title, s32
     
-    VAR windowIndex, s32
-    VAR size, s32
+    VAR windowIndex, s16
+    VAR size, s16
     VAR ptr, s32
     
     newAlloc dest, guardedAllocAttr | sentryAllocAttr, window_SIZE
@@ -485,7 +485,7 @@ FUNC newWindow, wsNewWindow.id
     allocSize size, windows
     jmpG skipResize, size, windowIndex
     
-    VAR newSize, s32
+    VAR newSize, s16
     mul newSize, size, 2
     newAlloc ptr, guardedAllocAttr, newSize
     wrtBuff ptr[0]:s8, windows[0]:s8, size
@@ -506,7 +506,7 @@ FUNC delWindow, wsDelWindow.id
     ARG window, s32
     callCheckPerm window
     
-    VAR index, s32
+    VAR index, s16
     
     jmpNE skipFocus, window, focusedWindow
     waitGate windowsMutex
@@ -525,11 +525,11 @@ FUNC delWindow, wsDelWindow.id
     jmp findLoop
     
     LBL breakFind
-    VAR nextIndex, s32
+    VAR nextIndex, s16
     add index, nextIndex, 4
-    VAR size, s32
+    VAR size, s16
     allocSize size, windows
-    VAR sizeToMove, s32
+    VAR sizeToMove, s16
     sub sizeToMove, size, nextIndex
     wrtBuff windows[index]:s8, windows[nextIndex]:s8, sizeToMove
     sub index, size, 4
@@ -563,7 +563,7 @@ FUNC displayWindowMessage, wsDisplayWindowMessage.id
     wrt window[key_OFFSET]:s8, 0
     
     LBL drawLoop
-    wrt window[verticalScroll_OFFSET]:s32, verticalScroll
+    wrt window[verticalScroll_OFFSET]:s16, verticalScroll
     newArgFrame drawWindowIfFocused.argsSize
     wrt drawWindowIfFocused.args.window, window
     call drawWindowIfFocused
@@ -589,12 +589,12 @@ FUNC displayWindowMessage, wsDisplayWindowMessage.id
     
     LBL downPressed
     add index, verticalScroll, termHeight
-    jmpNG keyLoop, window[messageLineAmount_OFFSET]:s32, index
+    jmpNG keyLoop, window[messageLineAmount_OFFSET]:s16, index
     inc verticalScroll
     jmp drawLoop
     
     LBL tabPressed
-    sub verticalScroll, window[messageLineAmount_OFFSET]:s32, termHeight
+    sub verticalScroll, window[messageLineAmount_OFFSET]:s16, termHeight
     jmpNG drawLoop, 0, verticalScroll
     wrt verticalScroll, 0
     jmp drawLoop
@@ -614,26 +614,26 @@ FUNC displayWindowMessage, wsDisplayWindowMessage.id
 END
 
 FUNC promptWindowOption, wsPromptWindowOption.id
-    ARG dest, s32
+    ARG dest, s16
     ARG window, s32
     ARG message, s32
     ARG options, s32
     
-    VAR messageLineAmount, s32
+    VAR messageLineAmount, s16
     VAR ackGate, s32
-    VAR verticalScroll, s32
-    VAR horizontalScroll, s32
-    VAR cursorIndex, s32
-    VAR cursorPosY, s32
-    VAR optionAmount, s32
-    VAR totalLineAmount, s32
+    VAR verticalScroll, s16
+    VAR horizontalScroll, s16
+    VAR cursorIndex, s16
+    VAR cursorPosY, s16
+    VAR optionAmount, s16
+    VAR totalLineAmount, s16
     VAR index, s32
     
     newArgFrame splitMessage.argsSize
     wrt splitMessage.args.window, window
     wrt splitMessage.args.message, message
     call splitMessage
-    wrt messageLineAmount, window[messageLineAmount_OFFSET]:s32
+    wrt messageLineAmount, window[messageLineAmount_OFFSET]:s16
     
     wrt ackGate, window[ackGate_OFFSET]:s32
     wrt verticalScroll, 0
@@ -643,15 +643,15 @@ FUNC promptWindowOption, wsPromptWindowOption.id
     div optionAmount, prevArg, 4
     add totalLineAmount, messageLineAmount, optionAmount
     wrt window[input_OFFSET]:s32, options
-    wrt window[inputLen_OFFSET]:s32, optionAmount
+    wrt window[inputLen_OFFSET]:s16, optionAmount
     wrt window[mode_OFFSET]:s8, promptOption_MODE
     closeGate ackGate
     wrt window[key_OFFSET]:s8, 0
     
     LBL drawLoop
-    wrt window[verticalScroll_OFFSET]:s32, verticalScroll
-    wrt window[inputHorizontalScroll_OFFSET]:s32, horizontalScroll
-    wrt window[inputCursorIndex_OFFSET]:s32, cursorIndex
+    wrt window[verticalScroll_OFFSET]:s16, verticalScroll
+    wrt window[inputHorizontalScroll_OFFSET]:s16, horizontalScroll
+    wrt window[inputCursorIndex_OFFSET]:s16, cursorIndex
     newArgFrame drawWindowIfFocused.argsSize
     wrt drawWindowIfFocused.args.window, window
     call drawWindowIfFocused
@@ -766,13 +766,13 @@ FUNC promptWindowText, wsPromptWindowText.id
     ARG message, s32
     ARG startText, s32
     
-    VAR messageLineAmount, s32
+    VAR messageLineAmount, s16
     VAR ackGate, s32
-    VAR verticalScroll, s32
+    VAR verticalScroll, s16
     VAR inputText, s32
-    VAR inputTextLen, s32
-    VAR cursorIndex, s32
-    VAR cursorPosY, s32
+    VAR inputTextLen, s16
+    VAR cursorIndex, s16
+    VAR cursorPosY, s16
     VAR index, s32
     VAR size, s32
     VAR ptr, s32
@@ -781,7 +781,7 @@ FUNC promptWindowText, wsPromptWindowText.id
     wrt splitMessage.args.window, window
     wrt splitMessage.args.message, message
     call splitMessage
-    wrt messageLineAmount, window[messageLineAmount_OFFSET]:s32
+    wrt messageLineAmount, window[messageLineAmount_OFFSET]:s16
     
     jmpNZ handleStartText, startText
     wrt inputTextLen, 0
@@ -799,15 +799,15 @@ FUNC promptWindowText, wsPromptWindowText.id
     wrt ackGate, window[ackGate_OFFSET]:s32
     wrt verticalScroll, 0
     wrt window[input_OFFSET]:s32, inputText
-    wrt window[inputLen_OFFSET]:s32, inputTextLen
+    wrt window[inputLen_OFFSET]:s16, inputTextLen
     wrt window[mode_OFFSET]:s8, promptText_MODE
     closeGate ackGate
     wrt window[key_OFFSET]:s8, 0
     
     LBL drawLoop
-    wrt window[verticalScroll_OFFSET]:s32, verticalScroll
-    wrt window[inputLen_OFFSET]:s32, inputTextLen
-    wrt window[inputCursorIndex_OFFSET]:s32, cursorIndex
+    wrt window[verticalScroll_OFFSET]:s16, verticalScroll
+    wrt window[inputLen_OFFSET]:s16, inputTextLen
+    wrt window[inputCursorIndex_OFFSET]:s16, cursorIndex
     newArgFrame drawWindowIfFocused.argsSize
     wrt drawWindowIfFocused.args.window, window
     call drawWindowIfFocused
@@ -929,7 +929,7 @@ FUNC promptWindowText, wsPromptWindowText.id
     inc verticalScroll
     
     LBL alignBounds
-    VAR totalLineAmount, s32
+    VAR totalLineAmount, s16
     div totalLineAmount, inputTextLen, termWidth
     inc totalLineAmount
     add totalLineAmount, prevArg, messageLineAmount
@@ -970,8 +970,8 @@ FUNC clrWindow, wsClrWindow.id
 END
 
 FUNC windowTermSize, wsWindowTermSize.id
-    ARG widthDest, s32
-    ARG heightDest, s32
+    ARG widthDest, s16
+    ARG heightDest, s16
     ARG window, s32
     callCheckPerm window
     
@@ -982,8 +982,8 @@ END
 FUNC readWindowTerm, wsReadWindowTerm.id
     ARG dest, s32
     ARG window, s32
-    ARG x, s32
-    ARG y, s32
+    ARG x, s16
+    ARG y, s16
     ARG length, s32
     callCheckPerm window
     
@@ -1006,8 +1006,8 @@ END
 
 FUNC wrtWindowTerm, wsWrtWindowTerm.id
     ARG window, s32
-    ARG x, s32
-    ARG y, s32
+    ARG x, s16
+    ARG y, s16
     ARG text, s32
     callCheckPerm window
     
