@@ -31,7 +31,7 @@ DEF promptOption_MODE, 2
 DEF promptText_MODE, 3
 
 DEF owner_OFFSET, 0
-DEF hasReqDel_OFFSET, 4
+DEF shouldCleanUp_OFFSET, 4
 DEF title_OFFSET, 5
 DEF mode_OFFSET, 9
 DEF termBuff_OFFSET, 10
@@ -45,9 +45,10 @@ DEF inputCursorIndex_OFFSET, 30
 DEF key_OFFSET, 32
 DEF keyGate_OFFSET, 33
 DEF ackGate_OFFSET, 37
-DEF keyPressedIndex_OFFSET, 41
-DEF focusChangedIndex_OFFSET, 45
-DEF window_SIZE, 49
+DEF reqDelIndex_OFFSET, 41
+DEF keyPressedIndex_OFFSET, 45
+DEF focusChangedIndex_OFFSET, 49
+DEF window_SIZE, 53
 
 VAR thisApp, s32
 # Must be acquired when accessing `windows`, `windowCount`, or `focusedWindow`.
@@ -57,6 +58,7 @@ VAR windowCount, s8
 VAR focusedWindow, s32
 VAR shellWindow, s32
 VAR fileManagerHandle, s32
+VAR mainMenuGate, s32
 
 VAR termHandle, s32
 VAR wrtTermIndex, s32
@@ -69,6 +71,8 @@ FUNC init, wsInit.id, guarded
     
     thisApp thisApp
     newGate windowsMutex, 1
+    newGate mainMenuGate, 1
+    closeGate mainMenuGate
     newAlloc windows, guardedAllocAttr, 20
     wrt windowCount, 0
     
@@ -466,6 +470,7 @@ FUNC newWindow, wsNewWindow.id
     wrt dest[owner_OFFSET]:s32, ptr
     newGate dest[keyGate_OFFSET]:s32, 0
     newGate dest[ackGate_OFFSET]:s32, 0
+    findFunc dest[reqDelIndex_OFFSET]:s32, ptr, wsReqDelWindow.id
     findFunc dest[keyPressedIndex_OFFSET]:s32, ptr, wsWindowKeyPressed.id
     findFunc dest[focusChangedIndex_OFFSET]:s32, ptr, wsWindowFocusChanged.id
     jmpNZ skipCreateTitle, title
@@ -502,8 +507,7 @@ FUNC delWindow, wsDelWindow.id
     ARG window, s32
     callCheckPerm window
     
-    VAR index, s16
-    
+    wrt window[shouldCleanUp_OFFSET]:s8, 1
     jmpNE skipFocus, window, focusedWindow
     waitGate windowsMutex
     wrt focusedWindow, null
@@ -512,31 +516,6 @@ FUNC delWindow, wsDelWindow.id
     wrt focusWindow.args.window, shellWindow
     call focusWindow
     LBL skipFocus
-    
-    waitGate windowsMutex
-    wrt index, 0
-    LBL findLoop
-    jmpE breakFind, window, windows[index]:s32
-    add index, prevArg, 4
-    jmp findLoop
-    
-    LBL breakFind
-    VAR nextIndex, s16
-    add index, nextIndex, 4
-    VAR size, s16
-    allocSize size, windows
-    VAR sizeToMove, s16
-    sub sizeToMove, size, nextIndex
-    wrtBuff windows[index]:s8, windows[nextIndex]:s8, sizeToMove
-    sub index, size, 4
-    wrt windows[index]:s8, null
-    dec windowCount
-    openGate windowsMutex
-    
-    delAlloc window[title_OFFSET]:s32
-    delAlloc window[termBuff_OFFSET]:s32
-    # TODO: Clean up resources associated with current window mode.
-    delAlloc window
 END
 
 FUNC displayWindowMessage, wsDisplayWindowMessage.id
@@ -1027,7 +1006,56 @@ FUNC wrtWindowTerm, wsWrtWindowTerm.id
     openGate windowsMutex
 END
 
-FUNC runShellMenu
+FUNC windowFocusChanged, wsWindowFocusChanged.id, guarded
+    ARG window, s32
+    ARG hasFocus, s8
+    openGate mainMenuGate
+END
+
+FUNC cleanUpWindow, 0, guarded
+    ARG window, s32
+    delAlloc window[title_OFFSET]:s32
+    delAlloc window[termBuff_OFFSET]:s32
+    # TODO: Clean up resources associated with current window mode.
+    delAlloc window
+END
+
+FUNC cleanUpWindows, 0, guarded
+    VAR index, s16
+    VAR nextIndex, s16
+    VAR endIndex, s16
+    VAR sizeToMove, s16
+    VAR window, s32
+    VAR isRunning, s8
+    
+    waitGate windowsMutex
+    wrt index, 0
+    mul endIndex, windowCount, 4
+    LBL cleanUpLoop
+    jmpNG breakCleanUp, endIndex, index
+    wrt window, windows[index]:s32
+    jmpNZ cleanUp, window[shouldCleanUp_OFFSET]:s8
+    appIsRunning isRunning, window[owner_OFFSET]:s32
+    jmpZ cleanUp, isRunning
+    add index, prevArg, 4
+    jmp cleanUpLoop
+    LBL cleanUp
+    newArgFrame cleanUpWindow.argsSize
+    wrt cleanUpWindow.args.window, window
+    call cleanUpWindow
+    add nextIndex, index, 4
+    sub sizeToMove, endIndex, nextIndex
+    jmpZ skipMove, sizeToMove
+    wrtBuff windows[index]:s8, windows[nextIndex]:s8, sizeToMove
+    LBL skipMove
+    dec windowCount
+    sub endIndex, prevArg, 4
+    jmp cleanUpLoop
+    LBL breakCleanUp
+    openGate windowsMutex
+END
+
+FUNC runShellMenu, 0, guarded
     VAR text, s32
     VAR options, s32
     VAR optionsSize, s16
@@ -1070,6 +1098,7 @@ FUNC runShellMenu
     wrt fileManagerOptions[0]:s32, text
     
     LBL mainMenu
+    call cleanUpWindows
     VAR hasFileManager, s8
     wrt hasFileManager, 0
     waitGate windowsMutex
@@ -1132,6 +1161,32 @@ FUNC runShellMenu
     wrt promptWindowOption.args.options, windowOptions
     call promptWindowOption
     wrt optionIndex, promptWindowOption.args.dest
+    jmpE viewWindow, optionIndex, 0
+    jmpE closeWindow, optionIndex, 1
+    jmpE quitApp, optionIndex, 2
+    jmp mainMenu
+    
+    LBL viewWindow
+    newArgFrame focusWindow.argsSize
+    wrt focusWindow.args.window, window
+    call focusWindow
+    jmp waitForFocus
+    
+    LBL closeWindow
+    wrt index, window[reqDelIndex_OFFSET]:s32
+    jmpG hardCloseWindow, 0, index
+    callRemote window[owner_OFFSET]:s32, index
+    # TODO: Wait for owner to delete window.
+    jmp mainMenu
+    LBL hardCloseWindow
+    newArgFrame delWindow.argsSize
+    wrt delWindow.args.window, window
+    call delWindow
+    jmp mainMenu
+    
+    LBL quitApp
+    killApp window[owner_OFFSET]:s32
+    # TODO: Wait for app to die.
     jmp mainMenu
     
     LBL fileManagerMenu
@@ -1146,6 +1201,13 @@ FUNC runShellMenu
     
     LBL launchFileManager
     launch fileManagerHandle
+    jmp waitForFocus
+    
+    LBL waitForFocus
+    newArgFrame clrWindow.argsSize
+    wrt clrWindow.args.window, shellWindow
+    call clrWindow
+    waitGate mainMenuGate
     jmp mainMenu
 END
 
