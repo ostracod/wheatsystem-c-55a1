@@ -1,9 +1,11 @@
 
 INCLUDE "../macros.wbasm"
 
+VAR shellHandle, s32
+VAR window, s32
+
 FUNC init, wsInit.id, guarded
     VAR shellName, s32
-    VAR shellHandle, s32
     VAR newWindowIndex, s32
     VAR displayMessageIndex, s32
     newTextAlloc shellName, shellNameStart, shellNameEnd
@@ -12,7 +14,6 @@ FUNC init, wsInit.id, guarded
     findFunc newWindowIndex, shellHandle, wsNewWindow.id
     findFunc displayMessageIndex, shellHandle, wsDisplayWindowMessage.id
     
-    VAR window, s32
     VAR message, s32
     newArgFrame wsNewWindow.argsSize
     callRemote shellHandle, newWindowIndex
@@ -23,6 +24,16 @@ FUNC init, wsInit.id, guarded
     wrt wsDisplayWindowMessage.args.message, message
     callRemote shellHandle, displayMessageIndex
     delAlloc message
+END
+
+FUNC reqDelWindow, wsReqDelWindow.id, guarded
+    VAR index, s32
+    findFunc index, shellHandle, wsDelWindow.id
+    newArgFrame wsDelWindow.argsSize
+    wrt wsDelWindow.args.window, window
+    callRemote shellHandle, index
+    closeFile shellHandle
+    quitApp
 END
 
 APP_DATA
