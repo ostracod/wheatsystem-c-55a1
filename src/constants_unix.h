@@ -2,8 +2,8 @@
 // This statement provides NULL.
 #include <stdlib.h>
 
-#define TERM_WIDTH 32
-#define TERM_HEIGHT 8
+#define TERM_WIDTH 16
+#define TERM_HEIGHT 2
 
 #define BLACK_ON_WHITE_PAIR 1
 #define CYAN_PAIR 2

@@ -1,0 +1,37 @@
+
+INCLUDE "../macros.wbasm"
+
+FUNC init, wsInit.id, guarded
+    VAR shellName, s32
+    VAR shellHandle, s32
+    VAR newWindowIndex, s32
+    VAR displayMessageIndex, s32
+    newTextAlloc shellName, shellNameStart, shellNameEnd
+    openFile shellHandle, shellName
+    delAlloc shellName
+    findFunc newWindowIndex, shellHandle, wsNewWindow.id
+    findFunc displayMessageIndex, shellHandle, wsDisplayWindowMessage.id
+    
+    VAR window, s32
+    VAR message, s32
+    newArgFrame wsNewWindow.argsSize
+    callRemote shellHandle, newWindowIndex
+    wrt window, wsNewWindow.args.dest
+    newTextAlloc message, messageStart, messageEnd
+    newArgFrame wsDisplayWindowMessage.argsSize
+    wrt wsDisplayWindowMessage.args.window, window
+    wrt wsDisplayWindowMessage.args.message, message
+    callRemote shellHandle, displayMessageIndex
+    delAlloc message
+END
+
+APP_DATA
+    LBL shellNameStart
+    DATA "wsShell"
+    LBL shellNameEnd
+    LBL messageStart
+    DATA "I am a dummy!"
+    LBL messageEnd
+END
+
+

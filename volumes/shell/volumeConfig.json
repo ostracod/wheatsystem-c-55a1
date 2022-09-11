@@ -17,6 +17,12 @@
             "type": "bytecodeApp",
             "hasAdminPerm": true,
             "isGuarded": true
+        },
+        {
+            "name": "dummy",
+            "type": "bytecodeApp",
+            "hasAdminPerm": false,
+            "isGuarded": false
         }
     ]
 }

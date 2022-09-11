@@ -5,6 +5,7 @@
 build
 wsBoot
 wsShell
+dummy
 *.dat
 node_modules
 dist

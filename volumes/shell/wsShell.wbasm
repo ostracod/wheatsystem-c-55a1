@@ -91,34 +91,29 @@ FUNC init, wsInit.id, guarded
     findFunc funcIndex, termHandle, wsListenTerm.id
     callRemote termHandle, funcIndex
     
+    VAR dummyName, s32
+    VAR dummyHandle, s32
+    newTextAlloc dummyName, dummyNameStart, dummyNameEnd
+    openFile dummyHandle, dummyName
+    delAlloc dummyName
+    launch dummyHandle
+    
     newArgFrame newWindow.argsSize
     call newWindow
     wrt shellWindow, newWindow.args.dest
-    VAR testMessage, s32
-    newTextAlloc testMessage, testMessage1Start, testMessage1End
-    #VAR testOptions, s32
-    #newAlloc testOptions, 0, 12
-    #newTextAlloc testOptions[0]:s32, testOption1Start, testOption1End
-    #newTextAlloc testOptions[4]:s32, testOption2Start, testOption2End
-    #newTextAlloc testOptions[8]:s32, testOption3Start, testOption3End
-    #newArgFrame promptWindowOption.argsSize
-    #wrt promptWindowOption.args.window, shellWindow
-    #wrt promptWindowOption.args.message, testMessage
-    #wrt promptWindowOption.args.options, testOptions
-    #call promptWindowOption
-    newArgFrame promptWindowText.argsSize
-    wrt promptWindowText.args.window, shellWindow
-    wrt promptWindowText.args.message, testMessage
-    wrt promptWindowText.args.startText, null
-    call promptWindowText
-    newArgFrame clrWindow.argsSize
-    wrt clrWindow.args.window, shellWindow
-    call clrWindow
+    call runShellMenu
 END
 
 FUNC termInput, wsTermInput.id, guarded
     ARG key, s8
     
+    jmpNE skipSystemMenu, key, -6
+    newArgFrame focusWindow.argsSize
+    wrt focusWindow.args.window, shellWindow
+    call focusWindow
+    ret
+    
+    LBL skipSystemMenu
     VAR window, s32
     wrt window, focusedWindow
     jmpNE openKeyGate, window[mode_OFFSET]:s8, none_MODE
@@ -1031,25 +1026,66 @@ FUNC wrtWindowTerm, wsWrtWindowTerm.id
     openGate windowsMutex
 END
 
+FUNC runShellMenu
+    VAR text, s32
+    VAR options, s32
+    VAR optionsSize, s16
+    VAR optionIndex, s16
+    VAR index, s16
+    VAR index2, s16
+    VAR endIndex, s16
+    VAR window, s32
+    
+    newTextAlloc text, welcomeMessageStart, welcomeMessageEnd
+    newArgFrame displayWindowMessage.argsSize
+    wrt displayWindowMessage.args.window, shellWindow
+    wrt displayWindowMessage.args.message, text
+    call displayWindowMessage
+    delAlloc text
+    
+    VAR windowsTitle, s32
+    newTextAlloc windowsTitle, windowsTitleStart, windowsTitleEnd
+    
+    LBL mainMenu
+    wrt optionsSize, 4
+    newAlloc options, guardedAllocAttr, optionsSize
+    newTextAlloc text, fileManagerTitleStart, fileManagerTitleEnd
+    wrt options[0]:s32, text
+    newArgFrame promptWindowOption.argsSize
+    wrt promptWindowOption.args.window, shellWindow
+    wrt promptWindowOption.args.message, windowsTitle
+    wrt promptWindowOption.args.options, options
+    call promptWindowOption
+    wrt optionIndex, promptWindowOption.args.dest
+    wrt index, 0
+    LBL delOptionsLoop
+    jmpNG breakDelOptions, optionsSize, index
+    delAlloc options[index]:s32
+    add index, prevArg, 4
+    jmp delOptionsLoop
+    LBL breakDelOptions
+    delAlloc options
+    jmpG mainMenu, 0, optionIndex
+    
+    jmp mainMenu
+END
+
 APP_DATA
     LBL termNameStart
     DATA "wsTerm"
     LBL termNameEnd
-    LBL testMessage1Start
-    DATA "Milk\nEggs\nSugar\nButter\nFlour\nVanilla\nChocolate\nBaking powder\nSalt\nVegetable oil\nMustard"
-    LBL testMessage1End
-    LBL testMessage2Start
-    DATA "Enter some text:"
-    LBL testMessage2End
-    LBL testOption1Start
-    DATA "Buy"
-    LBL testOption1End
-    LBL testOption2Start
-    DATA "This is a really long option which requires horizontal scroll"
-    LBL testOption2End
-    LBL testOption3Start
-    DATA "Sell"
-    LBL testOption3End
+    LBL dummyNameStart
+    DATA "dummy"
+    LBL dummyNameEnd
+    LBL welcomeMessageStart
+    DATA "Welcome to WheatSystem!\nVersion 1.0.0"
+    LBL welcomeMessageEnd
+    LBL windowsTitleStart
+    DATA "Windows:"
+    LBL windowsTitleEnd
+    LBL fileManagerTitleStart
+    DATA "File Manager"
+    LBL fileManagerTitleEnd
 END
 
 
