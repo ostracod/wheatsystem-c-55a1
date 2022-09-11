@@ -2,11 +2,8 @@
 *.o_avr
 *.o_unix
 *.su
-build
-wsBoot
-wsShell
-dummy
 *.dat
+build
 node_modules
 dist
 

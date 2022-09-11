@@ -56,6 +56,7 @@ VAR windows, s32
 VAR windowCount, s8
 VAR focusedWindow, s32
 VAR shellWindow, s32
+VAR fileManagerHandle, s32
 
 VAR termHandle, s32
 VAR wrtTermIndex, s32
@@ -1035,6 +1036,14 @@ FUNC runShellMenu
     VAR index2, s16
     VAR endIndex, s16
     VAR window, s32
+    VAR menuWindows, s32
+    VAR menuWindowCount, s8
+    VAR size, s16
+    VAR ptr, s32
+    
+    newTextAlloc text, fileManagerNameStart, fileManagerNameEnd
+    openFile fileManagerHandle, text
+    delAlloc text
     
     newTextAlloc text, welcomeMessageStart, welcomeMessageEnd
     newArgFrame displayWindowMessage.argsSize
@@ -1044,29 +1053,99 @@ FUNC runShellMenu
     delAlloc text
     
     VAR windowsTitle, s32
+    VAR fileManagerTitle, s32
+    VAR windowOptions, s32
+    VAR fileManagerOptions, s32
     newTextAlloc windowsTitle, windowsTitleStart, windowsTitleEnd
+    newTextAlloc fileManagerTitle, fileManagerTitleStart, fileManagerTitleEnd
+    newAlloc windowOptions, guardedAllocAttr, 12
+    newTextAlloc text, viewOptionStart, viewOptionEnd
+    wrt windowOptions[0]:s32, text
+    newTextAlloc text, closeOptionStart, closeOptionEnd
+    wrt windowOptions[4]:s32, text
+    newTextAlloc text, quitOptionStart, quitOptionEnd
+    wrt windowOptions[8]:s32, text
+    newAlloc fileManagerOptions, guardedAllocAttr, 4
+    newTextAlloc text, launchOptionStart, launchOptionEnd
+    wrt fileManagerOptions[0]:s32, text
     
     LBL mainMenu
-    wrt optionsSize, 4
+    VAR hasFileManager, s8
+    wrt hasFileManager, 0
+    waitGate windowsMutex
+    mul endIndex, windowCount, 4
+    add size, endIndex, endIndex
+    newAlloc menuWindows, guardedAllocAttr, size
+    wrt menuWindowCount, 0
+    wrt index, 0
+    wrt index2, 0
+    LBL windowsLoop
+    jmpNG breakWindows, endIndex, index
+    wrt window, windows[index]:s32
+    add index, prevArg, 4
+    jmpE windowsLoop, window, shellWindow
+    jmpNE skipHasFileManager, window[owner_OFFSET]:s32, fileManagerHandle
+    wrt hasFileManager, 1
+    LBL skipHasFileManager
+    wrt menuWindows[index2]:s32, window
+    add index2, prevArg, 4
+    inc menuWindowCount
+    jmp windowsLoop
+    LBL breakWindows
+    openGate windowsMutex
+    jmpNZ skipAddFileManager, hasFileManager
+    wrt menuWindows[index2]:s32, null
+    inc menuWindowCount
+    LBL skipAddFileManager
+    
+    mul optionsSize, menuWindowCount, 4
     newAlloc options, guardedAllocAttr, optionsSize
-    newTextAlloc text, fileManagerTitleStart, fileManagerTitleEnd
-    wrt options[0]:s32, text
+    wrt index, 0
+    LBL optionsLoop
+    jmpNG breakOptions, optionsSize, index
+    wrt window, menuWindows[index]:s32
+    jmpZ fileManagerOption, window
+    wrt text, window[title_OFFSET]:s32
+    jmp skipFileManagerOption
+    LBL fileManagerOption
+    wrt text, fileManagerTitle
+    LBL skipFileManagerOption
+    wrt options[index]:s32, text
+    add index, prevArg, 4
+    jmp optionsLoop
+    LBL breakOptions
+    
     newArgFrame promptWindowOption.argsSize
     wrt promptWindowOption.args.window, shellWindow
     wrt promptWindowOption.args.message, windowsTitle
     wrt promptWindowOption.args.options, options
     call promptWindowOption
-    wrt optionIndex, promptWindowOption.args.dest
-    wrt index, 0
-    LBL delOptionsLoop
-    jmpNG breakDelOptions, optionsSize, index
-    delAlloc options[index]:s32
-    add index, prevArg, 4
-    jmp delOptionsLoop
-    LBL breakDelOptions
+    mul optionIndex, promptWindowOption.args.dest, 4
     delAlloc options
     jmpG mainMenu, 0, optionIndex
+    wrt window, menuWindows[optionIndex]:s32
+    jmpZ fileManagerMenu, window
     
+    newArgFrame promptWindowOption.argsSize
+    wrt promptWindowOption.args.window, shellWindow
+    wrt promptWindowOption.args.message, window[title_OFFSET]:s32
+    wrt promptWindowOption.args.options, windowOptions
+    call promptWindowOption
+    wrt optionIndex, promptWindowOption.args.dest
+    jmp mainMenu
+    
+    LBL fileManagerMenu
+    newArgFrame promptWindowOption.argsSize
+    wrt promptWindowOption.args.window, shellWindow
+    wrt promptWindowOption.args.message, fileManagerTitle
+    wrt promptWindowOption.args.options, fileManagerOptions
+    call promptWindowOption
+    wrt optionIndex, promptWindowOption.args.dest
+    jmpE launchFileManager, optionIndex, 0
+    jmp mainMenu
+    
+    LBL launchFileManager
+    launch fileManagerHandle
     jmp mainMenu
 END
 
@@ -1074,6 +1153,9 @@ APP_DATA
     LBL termNameStart
     DATA "wsTerm"
     LBL termNameEnd
+    LBL fileManagerNameStart
+    DATA "fileManager"
+    LBL fileManagerNameEnd
     LBL dummyNameStart
     DATA "dummy"
     LBL dummyNameEnd
@@ -1086,6 +1168,18 @@ APP_DATA
     LBL fileManagerTitleStart
     DATA "File Manager"
     LBL fileManagerTitleEnd
+    LBL viewOptionStart
+    DATA "View window"
+    LBL viewOptionEnd
+    LBL closeOptionStart
+    DATA "Close window"
+    LBL closeOptionEnd
+    LBL quitOptionStart
+    DATA "Quit app"
+    LBL quitOptionEnd
+    LBL launchOptionStart
+    DATA "Launch app"
+    LBL launchOptionEnd
 END
 
 

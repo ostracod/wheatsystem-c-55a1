@@ -139,14 +139,16 @@ const assembleVolume = (volumeDirectoryPath: string): string => {
     volumeConfig.files.forEach((fileConfig) => {
         const fileName = fileConfig.name;
         const filePath = pathUtils.join(volumeDirectoryPath, fileName);
+        let pathToRead: string;
         if (fileConfig.type === "bytecodeApp") {
             const assemblyFilePath = filePath + ".wbasm";
-            if (fs.existsSync(assemblyFilePath)) {
-                assembleBytecodeFile(assemblyFilePath, filePath);
-            }
+            pathToRead = filePath + ".dat";
+            assembleBytecodeFile(assemblyFilePath, pathToRead);
+        } else {
+            pathToRead = filePath
         }
         const fileAttributes = createFileAttributes(fileConfig);
-        const fileContent = fs.readFileSync(filePath);
+        const fileContent = fs.readFileSync(pathToRead);
         const file = new WheatSystemFile(fileName, fileAttributes, fileContent);
         volume.addFile(file);
     });

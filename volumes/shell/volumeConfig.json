@@ -19,6 +19,12 @@
             "isGuarded": true
         },
         {
+            "name": "fileManager",
+            "type": "bytecodeApp",
+            "hasAdminPerm": true,
+            "isGuarded": true
+        },
+        {
             "name": "dummy",
             "type": "bytecodeApp",
             "hasAdminPerm": false,
