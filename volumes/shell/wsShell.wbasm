@@ -19,57 +19,87 @@ MACRO callCreateLine, dest, lineIndex, lines, lineCount
     wrt lineIndex, 0
 END
 
+# Sets the correct value for `cursorPosY` in `promptWindowText`.
 MACRO updateCursorPosY
     div cursorPosY, cursorIndex, termWidth
     add cursorPosY, prevArg, messageLineAmount
     sub cursorPosY, prevArg, verticalScroll
 END
 
+# Mode of window operation stored at `mode_OFFSET` in each window.
 DEF none_MODE, 0
 DEF displayMessage_MODE, 1
 DEF promptOption_MODE, 2
 DEF promptText_MODE, 3
 
+# The offset of each field within a window allocation is defined below.
+
+# The file handle of the app which owns the window.
 DEF owner_OFFSET, 0
+# Whether the window should be deleted within the `runShellMenu` loop.
 DEF shouldCleanUp_OFFSET, 4
 DEF title_OFFSET, 5
 DEF mode_OFFSET, 9
+# Pointer to allocation containing characters to display.
 DEF termBuff_OFFSET, 10
 DEF verticalScroll_OFFSET, 14
 DEF messageLines_OFFSET, 16
 DEF messageLineAmount_OFFSET, 20
+# In `promptWindowOption`, stores a pointer to an array of option pointers.
+# In `promptWindowText`, stores a pointer to a text allocation.
 DEF input_OFFSET, 22
+# In `promptWindowOption`, stores the number of options from which to select.
+# In `promptWindowText`, stores the number of characters provided by the user.
 DEF inputLen_OFFSET, 26
+# Stores horizontal scroll of the current option in `promptWindowOption`.
 DEF inputHorizontalScroll_OFFSET, 28
 DEF inputCursorIndex_OFFSET, 30
+# Stores the key which has just been pressed.
 DEF key_OFFSET, 32
+# Communicates from `termInput` to `waitForKey` when a key is ready to be registered.
 DEF keyGate_OFFSET, 33
+# Communicates from `waitForKey` to `termInput` when the key has been registered.
 DEF ackGate_OFFSET, 37
+# Index of `reqDelWindow` function in the owner app.
 DEF reqDelIndex_OFFSET, 41
+# Index of `windowKeyPressed` function in the owner app.
 DEF keyPressedIndex_OFFSET, 45
+# Index of `windowFocusChanged` function in the owner app.,
 DEF focusChangedIndex_OFFSET, 49
+# Total size of each window allocation.
 DEF window_SIZE, 53
 
 VAR thisApp, s32
 # Must be acquired when accessing `windows`, `windowCount`, or `focusedWindow`.
 VAR windowsMutex, s32
+# Pointer to array of pointer to all window allocations.
 VAR windows, s32
+# The total number of windows.
 VAR windowCount, s8
+# The window which is currently visible to the user.
 VAR focusedWindow, s32
+# The window which is focused when the user presses the system menu button.
 VAR shellWindow, s32
+# File handle to the file manager app.
 VAR fileManagerHandle, s32
+# Notifies `runShellMenu` when the shell window has gained focus.
 VAR mainMenuGate, s32
+# Notifies `runShellMenu` when a window has been deleted.
 VAR delWindowGate, s32
 
+# File handle to the terminal driver app.
 VAR termHandle, s32
+# Index of `wrtTerm` function in the terminal driver.
 VAR wrtTermIndex, s32
 VAR termWidth, s16
 VAR termHeight, s16
+# Total number of characters which the terminal can display.
 VAR termBuffSize, s32
 VAR emptyLine, s32
 
 FUNC init, wsInit.id, guarded
     
+    # Initialize various global variables.
     thisApp thisApp
     newGate windowsMutex, 1
     newGate mainMenuGate, 1
@@ -79,6 +109,7 @@ FUNC init, wsInit.id, guarded
     newAlloc windows, guardedAllocAttr, 20
     wrt windowCount, 0
     
+    # Launch terminal driver and determine terminal size.
     VAR termName, s32
     newTextAlloc termName, termNameStart, termNameEnd
     openFile termHandle, termName
@@ -93,12 +124,15 @@ FUNC init, wsInit.id, guarded
     wrt termHeight, wsTermSize.args.heightDest
     mul termBuffSize, termWidth, termHeight
     
+    # Create empty text line allocation.
     newAlloc emptyLine, guardedAllocAttr, termWidth
     fillBuff emptyLine[0]:s8, termWidth, 32:s8
     
+    # Become an observer of the terminal driver.
     findFunc funcIndex, termHandle, wsListenTerm.id
     callRemote termHandle, funcIndex
     
+    # Launch an example application which interacts with the shell.
     VAR dummyName, s32
     VAR dummyHandle, s32
     newTextAlloc dummyName, dummyNameStart, dummyNameEnd
@@ -107,6 +141,7 @@ FUNC init, wsInit.id, guarded
     launch dummyHandle
     closeFile dummyHandle
     
+    # Create the shell window, and run the main loop for the shell.
     newArgFrame newWindow.argsSize
     call newWindow
     wrt shellWindow, newWindow.args.dest
@@ -116,17 +151,20 @@ END
 FUNC termInput, wsTermInput.id, guarded
     ARG key, s8
     
+    # If the system menu button is pressed, focus the shell window.
     jmpNE skipSystemMenu, key, -6
     newArgFrame focusWindow.argsSize
     wrt focusWindow.args.window, shellWindow
     call focusWindow
     ret
-    
     LBL skipSystemMenu
+    
+    # Branch based on focused window mode.
     VAR window, s32
     wrt window, focusedWindow
     jmpNE openKeyGate, window[mode_OFFSET]:s8, none_MODE
     
+    # If mode is `none_MODE`, call `windowKeyPressed` on owner app.
     VAR keyPressedIndex, s32
     wrt keyPressedIndex, window[keyPressedIndex_OFFSET]:s32
     jmpG skipKeyPressed, 0, keyPressedIndex
@@ -140,6 +178,7 @@ FUNC termInput, wsTermInput.id, guarded
     LBL skipKeyPressed
     ret
     
+    # Communicate key when window mode is not `none_MODE`.
     LBL openKeyGate
     VAR keyGate, s32
     wrt keyGate, window[keyGate_OFFSET]:s32
@@ -157,6 +196,8 @@ FUNC checkPerm, 0, guarded
     ARG app, s32
     ARG window, s32
     
+    # Throw `permErr` if `app` does not own the window, is not
+    # the shell app, and does not hold admin permission.
     VAR cond, s8
     jmpE return, app, window[owner_OFFSET]:s32
     jmpE return, app, thisApp
@@ -166,11 +207,14 @@ FUNC checkPerm, 0, guarded
     LBL return
 END
 
+# Adds a new line to `lines`, resizing `lines` if necessary.
 FUNC createLine, 0, guarded
     ARG dest, s32
+    # Pointer to array of text allocations.
     ARG lines, s32
     ARG lineCount, s16
     
+    # Create the new line.
     VAR index, s32
     VAR size, s32
     newAlloc dest, guardedAllocAttr, termWidth
@@ -179,6 +223,7 @@ FUNC createLine, 0, guarded
     allocSize size, lines
     jmpG skipResize, size, index
     
+    # Resize `lines` if it is not big enough to fit the new line.
     VAR newSize, s32
     mul newSize, size, 2
     VAR newLines, s32
@@ -187,39 +232,46 @@ FUNC createLine, 0, guarded
     delAlloc lines
     wrt lines, newLines
     
+    # Add the new line to the end of `lines`.
     LBL skipResize
     wrt lines[index]:s32, dest
     inc lineCount
 END
 
+# Splits `message` into lines, wrapping text so that words are not broken.
+# Stores the lines in the `messageLines` field of `window`.
 FUNC splitMessage, 0, guarded
     ARG window, s32
+    # Pointer to text allocation.
     ARG message, s32
     
     VAR char, s8
     VAR size, s32
     
+    # Return if `message` is null.
     jmpNZ skipNull, message
     wrt window[messageLineAmount_OFFSET]:s16, 0
     ret
-    
     LBL skipNull
+    
+    # Initialize local variables.
     VAR messageSize, s32
     VAR messageIndex, s32
-    allocSize messageSize, message
-    wrt messageIndex, 0
-    
     VAR lines, s32
     VAR lineCount, s16
     VAR line, s32
     VAR lineIndex, s32
+    allocSize messageSize, message
+    wrt messageIndex, 0
     newAlloc lines, guardedAllocAttr, 20
     wrt lineCount, 0
     callCreateLine line, lineIndex, lines, lineCount
     
+    # Loop while `messageIndex` is less than the size of `message`.
     LBL splitLoop
     jmpNG breakSplit, messageSize, messageIndex
     
+    # Skip spaces, and store the index in `wordStartIndex`.
     VAR wordStartIndex, s32
     wrt wordStartIndex, messageIndex
     LBL spaceLoop
@@ -229,6 +281,7 @@ FUNC splitMessage, 0, guarded
     jmp spaceLoop
     LBL breakSpace
     
+    # Skip word characters, and store the result in `wordEndIndex`.
     VAR wordEndIndex, s32
     wrt wordEndIndex, wordStartIndex
     wrt size, 0
@@ -244,20 +297,24 @@ FUNC splitMessage, 0, guarded
     jmpNE wordLoop, char, 47
     LBL breakWord
     
+    # Branch based on the size of the new word.
     sub size, wordEndIndex, messageIndex
     VAR lineEndIndex, s32
     add lineEndIndex, lineIndex, size
     jmpNG skipCreateLine, lineEndIndex, termWidth
     
+    # If the new word exceeds the size of the current line, create a new line.
     callCreateLine line, lineIndex, lines, lineCount
     wrt messageIndex, wordStartIndex
     sub size, wordEndIndex, messageIndex
     
+    # Write the word into the current line.
     LBL skipCreateLine
     wrtBuff line[lineIndex]:s8, message[messageIndex]:s8, size
     add lineIndex, prevArg, size
     wrt messageIndex, wordEndIndex
     
+    # Handle non-printable characters and newline characters.
     LBL specialLoop
     jmpNG breakSpecial, messageSize, messageIndex
     wrt char, message[messageIndex]:s8
@@ -271,6 +328,7 @@ FUNC splitMessage, 0, guarded
     jmp splitLoop
     LBL breakSplit
     
+    # Store the results in the window allocation.
     wrt window[messageLines_OFFSET]:s32, lines
     wrt window[messageLineAmount_OFFSET]:s16, lineCount
 END
@@ -283,20 +341,22 @@ FUNC drawFocusedWindow, 0, guarded
     VAR ptr, s32
     VAR line, s32
     
+    # Branch based on current window mode.
     VAR mode, s8
     wrt mode, focusedWindow[mode_OFFSET]:s8
     jmpE noneMode, mode, none_MODE
     
+    # Initialize local variables.
     VAR posY, s16
-    wrt posY, 0
-    
     VAR verticalScroll, s16
-    wrt verticalScroll, focusedWindow[verticalScroll_OFFSET]:s16
-    
     VAR messageLines, s32
     VAR messageLineAmount, s16
+    wrt posY, 0
+    wrt verticalScroll, focusedWindow[verticalScroll_OFFSET]:s16
     wrt messageLines, focusedWindow[messageLines_OFFSET]:s32
     wrt messageLineAmount, focusedWindow[messageLineAmount_OFFSET]:s16
+    
+    # Draw message lines.
     LBL messageLoop
     jmpNG stopDraw, termHeight, posY
     add index, verticalScroll, posY
@@ -311,15 +371,16 @@ FUNC drawFocusedWindow, 0, guarded
     jmp messageLoop
     LBL breakMessage
     
+    # If mode is `displayMessage_MODE`, we don't need to draw options or input text.
     jmpE emptyLineLoop, mode, displayMessage_MODE
     
+    # Initialize more local variables.
     VAR input, s32
     VAR inputLen, s16
     VAR cursorIndex, s16
     wrt input, focusedWindow[input_OFFSET]:s32
     wrt inputLen, focusedWindow[inputLen_OFFSET]:s16
     wrt cursorIndex, focusedWindow[inputCursorIndex_OFFSET]:s16
-    
     add index, verticalScroll, posY
     sub index, prevArg, messageLineAmount
     jmpNG skipUnderflow, 0, index
@@ -329,6 +390,7 @@ FUNC drawFocusedWindow, 0, guarded
     
     jmpE handlePromptText, mode, promptText_MODE
     
+    # Draw options when mode is `promptOption_MODE`.
     VAR tempSize, s32
     sub tempSize, termWidth, 1
     LBL optionLoop
@@ -358,6 +420,7 @@ FUNC drawFocusedWindow, 0, guarded
     inc posY
     jmp optionLoop
     
+    # Draw input text when mode is `promptText_MODE`.
     LBL handlePromptText
     mul index, prevArg, termWidth
     LBL textLoop
@@ -387,6 +450,7 @@ FUNC drawFocusedWindow, 0, guarded
     LBL cleanUpLine
     delAlloc line
     
+    # Fill the rest of the space with empty lines.
     LBL emptyLineLoop
     jmpNG stopDraw, termHeight, posY
     wrt wsWrtTerm.args.y, posY
@@ -398,6 +462,7 @@ FUNC drawFocusedWindow, 0, guarded
     LBL stopDraw
     ret
     
+    # Draw window when mode is `none_MODE`.
     LBL noneMode
     newArgFrame wsWrtTerm.argsSize
     wrt wsWrtTerm.args.text, focusedWindow[termBuff_OFFSET]:s32
@@ -420,6 +485,7 @@ FUNC focusWindow, 0, guarded
     VAR lastWindow, s32
     VAR funcIndex, s32
     
+    # Only focus the window if it is not already focused.
     waitGate windowsMutex
     jmpE cancelFocus, window, focusedWindow
     wrt lastWindow, focusedWindow
@@ -427,6 +493,7 @@ FUNC focusWindow, 0, guarded
     call drawFocusedWindow
     openGate windowsMutex
     
+    # Call `windowFocusChanged` on the owner of the last focused window.
     jmpZ skipBlur, lastWindow
     wrt funcIndex, lastWindow[focusChangedIndex_OFFSET]:s32
     jmpG skipBlur, 0, funcIndex
@@ -439,6 +506,7 @@ FUNC focusWindow, 0, guarded
     clrErrJmp
     LBL skipBlur
     
+    # Call `windowFocusChanged` on the owner of the new window to focus.
     wrt funcIndex, window[focusChangedIndex_OFFSET]:s32
     jmpG skipFocus, 0, funcIndex
     newArgFrame wsWindowFocusChanged.argsSize
@@ -455,6 +523,8 @@ FUNC focusWindow, 0, guarded
     openGate windowsMutex
 END
 
+# When the user presses a key and `window` is focused,
+# `waitForKey` stores the pressed key in `dest`.
 FUNC waitForKey, 0, guarded
     ARG dest, s8
     ARG window, s32
@@ -480,6 +550,7 @@ FUNC newWindow, wsNewWindow.id
     VAR ptr, s32
     VAR name, s32
     
+    # Initialize field members of the new window allocation.
     newAlloc dest, guardedAllocAttr | sentryAllocAttr, window_SIZE
     caller ptr
     fileName name, ptr
@@ -509,6 +580,7 @@ FUNC newWindow, wsNewWindow.id
     allocSize size, windows
     jmpG skipResize, size, windowIndex
     
+    # Resize `windows` if we cannot fit the new window.
     VAR newSize, s16
     mul newSize, size, 2
     newAlloc ptr, guardedAllocAttr, newSize
@@ -516,11 +588,13 @@ FUNC newWindow, wsNewWindow.id
     delAlloc windows
     wrt windows, ptr
     
+    # Add the new window to the end of `windows`.
     LBL skipResize
     wrt windows[windowIndex]:s32, dest
     inc windowCount
     openGate windowsMutex
     
+    # Focus the new window.
     newArgFrame focusWindow.argsSize
     wrt focusWindow.args.window, dest
     call focusWindow
@@ -530,6 +604,7 @@ FUNC delWindow, wsDelWindow.id
     ARG window, s32
     callCheckPerm window
     
+    # Mark the window for deletion, and focus a different window.
     wrt window[shouldCleanUp_OFFSET]:s8, 1
     openGate delWindowGate
     jmpNE skipFocus, window, focusedWindow
@@ -551,22 +626,27 @@ FUNC displayWindowMessage, wsDisplayWindowMessage.id
     VAR verticalScroll, s32
     VAR index, s32
     
+    # Split `message` into lines.
     newArgFrame splitMessage.argsSize
     wrt splitMessage.args.window, window
     wrt splitMessage.args.message, message
     call splitMessage
+    
+    # Initialize local variables and fields in `window`.
     wrt ackGate, window[ackGate_OFFSET]:s32
     wrt verticalScroll, 0
     wrt window[mode_OFFSET]:s8, displayMessage_MODE
     closeGate ackGate
     wrt window[key_OFFSET]:s8, 0
     
+    # Draw the window.
     LBL drawLoop
     wrt window[verticalScroll_OFFSET]:s16, verticalScroll
     newArgFrame drawWindowIfFocused.argsSize
     wrt drawWindowIfFocused.args.window, window
     call drawWindowIfFocused
     
+    # Register the next pressed key.
     LBL keyLoop
     newArgFrame waitForKey.argsSize
     wrt waitForKey.args.window, window
@@ -581,27 +661,32 @@ FUNC displayWindowMessage, wsDisplayWindowMessage.id
     jmpE rtabPressed, key, -5
     jmp keyLoop
     
+    # Scroll up.
     LBL upPressed
     jmpNG keyLoop, verticalScroll, 0
     dec verticalScroll
     jmp drawLoop
     
+    # Scroll down.
     LBL downPressed
     add index, verticalScroll, termHeight
     jmpNG keyLoop, window[messageLineAmount_OFFSET]:s16, index
     inc verticalScroll
     jmp drawLoop
     
+    # Scroll to the end of the message.
     LBL tabPressed
     sub verticalScroll, window[messageLineAmount_OFFSET]:s16, termHeight
     jmpNG drawLoop, 0, verticalScroll
     wrt verticalScroll, 0
     jmp drawLoop
     
+    # Scroll to the beginning of the message.
     LBL rtabPressed
     wrt verticalScroll, 0
     jmp drawLoop
     
+    # Store whether the enter or escape key was pressed.
     LBL enterPressed
     wrt dest, 0
     jmp skipEscape
@@ -628,12 +713,14 @@ FUNC promptWindowOption, wsPromptWindowOption.id
     VAR totalLineAmount, s16
     VAR index, s32
     
+    # Split `message` into lines.
     newArgFrame splitMessage.argsSize
     wrt splitMessage.args.window, window
     wrt splitMessage.args.message, message
     call splitMessage
-    wrt messageLineAmount, window[messageLineAmount_OFFSET]:s16
     
+    # Initialize local variables and fields in `window`.
+    wrt messageLineAmount, window[messageLineAmount_OFFSET]:s16
     wrt ackGate, window[ackGate_OFFSET]:s32
     wrt verticalScroll, 0
     wrt horizontalScroll, 0
@@ -647,6 +734,7 @@ FUNC promptWindowOption, wsPromptWindowOption.id
     closeGate ackGate
     wrt window[key_OFFSET]:s8, 0
     
+    # Draw the window.
     LBL drawLoop
     wrt window[verticalScroll_OFFSET]:s16, verticalScroll
     wrt window[inputHorizontalScroll_OFFSET]:s16, horizontalScroll
@@ -655,6 +743,7 @@ FUNC promptWindowOption, wsPromptWindowOption.id
     wrt drawWindowIfFocused.args.window, window
     call drawWindowIfFocused
     
+    # Register the next pressed key.
     LBL keyLoop
     add cursorPosY, messageLineAmount, cursorIndex
     sub cursorPosY, prevArg, verticalScroll
@@ -673,6 +762,7 @@ FUNC promptWindowOption, wsPromptWindowOption.id
     jmpE rtabPressed, key, -5
     jmp keyLoop
     
+    # Scroll up or select the previous option.
     LBL upPressed
     jmpNG scroll1, cursorIndex, 0
     jmpG skipScroll1, cursorPosY, 0
@@ -685,6 +775,7 @@ FUNC promptWindowOption, wsPromptWindowOption.id
     LBL skipCursor1
     jmp alignBounds
     
+    # Scroll down or select the next option.
     LBL downPressed
     sub index, termHeight, 1
     jmpG skipScroll2, index, cursorPosY
@@ -697,12 +788,14 @@ FUNC promptWindowOption, wsPromptWindowOption.id
     LBL skipCursor2
     jmp alignBounds
     
+    # Scroll the current option left.
     LBL leftPressed
     sub horizontalScroll, prevArg, 4
     jmpNG drawLoop, 0, horizontalScroll
     wrt horizontalScroll, 0
     jmp drawLoop
     
+    # Scroll the current option right.
     LBL rightPressed
     add horizontalScroll, prevArg, 4
     mul index, cursorIndex, 4
@@ -715,6 +808,7 @@ FUNC promptWindowOption, wsPromptWindowOption.id
     wrt horizontalScroll, 0
     jmp drawLoop
     
+    # Scroll to the end of the message or all options.
     LBL tabPressed
     jmpG skipTab, termHeight, cursorPosY
     wrt verticalScroll, messageLineAmount
@@ -725,6 +819,7 @@ FUNC promptWindowOption, wsPromptWindowOption.id
     sub cursorIndex, optionAmount, 1
     jmp alignBounds
     
+    # Scroll to the first option or the beginning of the message.
     LBL rtabPressed
     jmpNG skipRtab, cursorIndex, 0
     wrt verticalScroll, messageLineAmount
@@ -734,6 +829,7 @@ FUNC promptWindowOption, wsPromptWindowOption.id
     wrt verticalScroll, 0
     jmp alignBounds
     
+    # Ensure that vertical scroll is not out of range.
     LBL alignBounds
     wrt horizontalScroll, 0
     sub index, totalLineAmount, termHeight
@@ -744,11 +840,15 @@ FUNC promptWindowOption, wsPromptWindowOption.id
     wrt verticalScroll, 0
     jmp drawLoop
     
+    # If the user presses enter but the current option is not
+    # visible, scroll to the first option.
     LBL enterPressed
     jmpG acceptOption, termHeight, cursorPosY
     wrt verticalScroll, messageLineAmount
     wrt cursorIndex, 0
     jmp alignBounds
+    
+    # Store the index of the selected option, or -1 if escape was pressed.
     LBL acceptOption
     wrt dest, cursorIndex
     jmp skipEscape
@@ -776,12 +876,13 @@ FUNC promptWindowText, wsPromptWindowText.id
     VAR size, s32
     VAR ptr, s32
     
+    # Split `message` into lines.
     newArgFrame splitMessage.argsSize
     wrt splitMessage.args.window, window
     wrt splitMessage.args.message, message
     call splitMessage
-    wrt messageLineAmount, window[messageLineAmount_OFFSET]:s16
     
+    # Create a text allocation to store the input text.
     jmpNZ handleStartText, startText
     wrt inputTextLen, 0
     newAlloc inputText, guardedAllocAttr, 10
@@ -795,6 +896,8 @@ FUNC promptWindowText, wsPromptWindowText.id
     wrt cursorIndex, inputTextLen
     LBL skipStartText
     
+    # Initialize local variables and fields in `window`.
+    wrt messageLineAmount, window[messageLineAmount_OFFSET]:s16
     wrt ackGate, window[ackGate_OFFSET]:s32
     wrt verticalScroll, 0
     wrt window[input_OFFSET]:s32, inputText
@@ -803,6 +906,7 @@ FUNC promptWindowText, wsPromptWindowText.id
     closeGate ackGate
     wrt window[key_OFFSET]:s8, 0
     
+    # Draw the window.
     LBL drawLoop
     wrt window[verticalScroll_OFFSET]:s16, verticalScroll
     wrt window[inputLen_OFFSET]:s16, inputTextLen
@@ -811,6 +915,7 @@ FUNC promptWindowText, wsPromptWindowText.id
     wrt drawWindowIfFocused.args.window, window
     call drawWindowIfFocused
     
+    # Register the next pressed key.
     LBL keyLoop
     updateCursorPosY
     newArgFrame waitForKey.argsSize
@@ -830,6 +935,7 @@ FUNC promptWindowText, wsPromptWindowText.id
     jmpE rtabPressed, key, -5
     jmp keyLoop
     
+    # Delete the character before the cursor.
     LBL deletePressed
     jmpNG keyLoop, cursorIndex, 0
     sub index, cursorIndex, 1
@@ -841,6 +947,7 @@ FUNC promptWindowText, wsPromptWindowText.id
     dec inputTextLen
     jmp scrollToCursor
     
+    # Insert a character before the cursor.
     LBL charPressed
     allocSize size, inputText
     jmpG skipResize, size, inputTextLen
@@ -862,6 +969,7 @@ FUNC promptWindowText, wsPromptWindowText.id
     inc inputTextLen
     jmp scrollToCursor
     
+    # Scroll up or move the cursor up.
     LBL upPressed
     jmpZ scrollUp, cursorIndex
     jmpG moveCursorUp, termHeight, cursorPosY
@@ -874,6 +982,7 @@ FUNC promptWindowText, wsPromptWindowText.id
     wrt cursorIndex, 0
     jmp scrollToCursor
     
+    # Scroll down or move the cursor down.
     LBL downPressed
     jmpG moveCursorDown, termHeight, cursorPosY
     inc verticalScroll
@@ -884,16 +993,19 @@ FUNC promptWindowText, wsPromptWindowText.id
     wrt cursorIndex, inputTextLen
     jmp scrollToCursor
     
+    # Move the cursor left.
     LBL leftPressed
     jmpNG keyLoop, cursorIndex, 0
     dec cursorIndex
     jmp scrollToCursor
     
+    # Move the cursor right.
     LBL rightPressed
     jmpNG keyLoop, inputTextLen, cursorIndex
     inc cursorIndex
     jmp scrollToCursor
     
+    # Scroll to the end of the message or text entry.
     LBL tabPressed
     jmpG skipTab, termHeight, cursorPosY
     wrt verticalScroll, messageLineAmount
@@ -905,6 +1017,7 @@ FUNC promptWindowText, wsPromptWindowText.id
     wrt cursorIndex, inputTextLen
     jmp alignBounds
     
+    # Scroll to the beginning of text entry or the message.
     LBL rtabPressed
     jmpNG skipRtab, cursorIndex, 0
     wrt verticalScroll, messageLineAmount
@@ -914,6 +1027,7 @@ FUNC promptWindowText, wsPromptWindowText.id
     wrt verticalScroll, 0
     jmp alignBounds
     
+    # Adjust vertical scroll so that the cursor is visible.
     LBL scrollToCursor
     updateCursorPosY
     jmpNG skipScrollBack, 0, cursorPosY
@@ -927,6 +1041,7 @@ FUNC promptWindowText, wsPromptWindowText.id
     sub verticalScroll, prevArg, termHeight
     inc verticalScroll
     
+    # Ensure that vertical scroll is not out of range.
     LBL alignBounds
     VAR totalLineAmount, s16
     div totalLineAmount, inputTextLen, termWidth
@@ -940,10 +1055,13 @@ FUNC promptWindowText, wsPromptWindowText.id
     wrt verticalScroll, 0
     jmp drawLoop
     
+    # If the user presses enter but the cursor is not visible, scroll to the cursor.
     LBL enterPressed
     jmpG acceptText, termHeight, cursorPosY
     wrt cursorIndex, inputTextLen
     jmp scrollToCursor
+    
+    # Provide a pointer to a new text allocation, or null if escape was pressed.
     LBL acceptText
     newAlloc dest, 0, inputTextLen
     jmpZ skipEscape, inputTextLen
@@ -960,6 +1078,7 @@ FUNC clrWindow, wsClrWindow.id
     ARG window, s32
     callCheckPerm window
     
+    # Fill the terminal buffer with spaces, and draw the window.
     VAR termBuff, s32
     wrt termBuff, window[termBuff_OFFSET]:s32
     fillBuff termBuff[0]:s8, termBuffSize, 32:s8
@@ -986,6 +1105,7 @@ FUNC readWindowTerm, wsReadWindowTerm.id
     ARG length, s32
     callCheckPerm window
     
+    # Read text from the terminal buffer of the window.
     VAR index, s32
     mul index, y, termWidth
     add index, prevArg, x
@@ -996,6 +1116,7 @@ FUNC readWindowTerm, wsReadWindowTerm.id
     wrtBuff dest[0]:s8, termBuff[index]:s8, length
     ret
     
+    # Clean up the result if there was an error while reading the buffer.
     LBL cleanUpAlloc
     delAlloc dest
     VAR err, s8
@@ -1010,6 +1131,7 @@ FUNC wrtWindowTerm, wsWrtWindowTerm.id
     ARG text, s32
     callCheckPerm window
     
+    # Modify the terminal buffer.
     VAR index, s32
     mul index, y, termWidth
     add index, prevArg, x
@@ -1019,6 +1141,7 @@ FUNC wrtWindowTerm, wsWrtWindowTerm.id
     allocSize size, text
     wrtBuff termBuff[index]:s8, text[0]:s8, size
     
+    # Draw the text if the window is focused.
     waitGate windowsMutex
     jmpNE skipDraw, window, focusedWindow
     newArgFrame wsWrtTerm.argsSize
@@ -1033,7 +1156,9 @@ END
 FUNC windowFocusChanged, wsWindowFocusChanged.id, guarded
     ARG window, s32
     ARG hasFocus, s8
+    jmpZ skipMainMenu, hasFocus
     openGate mainMenuGate
+    LBL skipMainMenu
 END
 
 FUNC cleanUpWindow, 0, guarded
@@ -1053,6 +1178,7 @@ FUNC cleanUpWindows, 0, guarded
     VAR window, s32
     VAR isRunning, s8
     
+    # Delete all windows from `windows` which are marked for deletion.
     waitGate windowsMutex
     wrt index, 0
     mul endIndex, windowCount, 4
@@ -1095,10 +1221,12 @@ FUNC runShellMenu, 0, guarded
     VAR ptr, s32
     VAR cond, s8
     
+    # Acquire a file handle to the file manager.
     newTextAlloc text, fileManagerNameStart, fileManagerNameEnd
     openFile fileManagerHandle, text
     delAlloc text
     
+    # Display a welcome message.
     newTextAlloc text, welcomeMessageStart, welcomeMessageEnd
     newArgFrame displayWindowMessage.argsSize
     wrt displayWindowMessage.args.window, shellWindow
@@ -1106,6 +1234,7 @@ FUNC runShellMenu, 0, guarded
     call displayWindowMessage
     delAlloc text
     
+    # Initialize text allocations for menus.
     VAR windowsTitle, s32
     VAR fileManagerTitle, s32
     VAR windowOptions, s32
@@ -1123,8 +1252,12 @@ FUNC runShellMenu, 0, guarded
     newTextAlloc text, launchOptionStart, launchOptionEnd
     wrt fileManagerOptions[0]:s32, text
     
+    # Enter a loop cleaning up windows and displaying menus.
     LBL mainMenu
     call cleanUpWindows
+    
+    # Determine the set of windows which should be displayed in the menu.
+    # Null represents the file manager when it is not open yet.
     VAR hasFileManager, s8
     wrt hasFileManager, 0
     waitGate windowsMutex
@@ -1153,6 +1286,7 @@ FUNC runShellMenu, 0, guarded
     inc menuWindowCount
     LBL skipAddFileManager
     
+    # Create the list of text allocations for the options prompt.
     mul optionsSize, menuWindowCount, 4
     newAlloc options, guardedAllocAttr, optionsSize
     wrt index, 0
@@ -1170,6 +1304,7 @@ FUNC runShellMenu, 0, guarded
     jmp optionsLoop
     LBL breakOptions
     
+    # Display the options prompt.
     newArgFrame promptWindowOption.argsSize
     wrt promptWindowOption.args.window, shellWindow
     wrt promptWindowOption.args.message, windowsTitle
@@ -1181,6 +1316,7 @@ FUNC runShellMenu, 0, guarded
     wrt window, menuWindows[optionIndex]:s32
     jmpZ fileManagerMenu, window
     
+    # Display a menu for the selected window.
     newArgFrame promptWindowOption.argsSize
     wrt promptWindowOption.args.window, shellWindow
     wrt promptWindowOption.args.message, window[title_OFFSET]:s32
@@ -1192,12 +1328,14 @@ FUNC runShellMenu, 0, guarded
     jmpE quitApp, optionIndex, 2
     jmp mainMenu
     
+    # Focus the window.
     LBL viewWindow
     newArgFrame focusWindow.argsSize
     wrt focusWindow.args.window, window
     call focusWindow
     jmp waitForFocus
     
+    # Request for the window to be deleted.
     LBL closeWindow
     wrt index, window[reqDelIndex_OFFSET]:s32
     jmpG hardCloseWindow, 0, index
@@ -1217,6 +1355,7 @@ FUNC runShellMenu, 0, guarded
     call delWindow
     jmp mainMenu
     
+    # Kill the owner of the window.
     LBL quitApp
     wrt ptr, window[owner_OFFSET]:s32
     fileName text, ptr
@@ -1229,6 +1368,7 @@ FUNC runShellMenu, 0, guarded
     closeFile ptr
     jmp mainMenu
     
+    # Display a menu for the file manager when it is not running yet.
     LBL fileManagerMenu
     newArgFrame promptWindowOption.argsSize
     wrt promptWindowOption.args.window, shellWindow
@@ -1239,12 +1379,14 @@ FUNC runShellMenu, 0, guarded
     jmpE launchFileManager, optionIndex, 0
     jmp mainMenu
     
+    # Launch the file manager.
     LBL launchFileManager
     appIsRunning cond, fileManagerHandle
     jmpNZ mainMenu, cond
     launch fileManagerHandle
     jmp waitForFocus
     
+    # Wait until the shell window gains focus again.
     LBL waitForFocus
     newArgFrame clrWindow.argsSize
     wrt clrWindow.args.window, shellWindow
