@@ -26,18 +26,27 @@ MACRO updateCursorPosY
     sub cursorPosY, prevArg, verticalScroll
 END
 
-# Mode of window operation stored at `mode_OFFSET` in each window.
+# Mode of window operation is stored at `mode_OFFSET` in each window.
+
 DEF none_MODE, 0
 DEF displayMessage_MODE, 1
 DEF promptOption_MODE, 2
 DEF promptText_MODE, 3
 
+# Lifecycle state of clean up is stored at `cleanUpState_OFFSET` in each window.
+
+# Window should not be deleted.
+DEF none_CLEAN_UP_STATE, 0
+# Window mode should enter `none_MODE` in preparation for deletion.
+DEF prepare_CLEAN_UP_STATE, 1
+# Window should be deleted in `runShellMenu`.
+DEF delete_CLEAN_UP_STATE, 2
+
 # The offset of each field within a window allocation is defined below.
 
 # The file handle of the app which owns the window.
 DEF owner_OFFSET, 0
-# Whether the window should be deleted within the `runShellMenu` loop.
-DEF shouldCleanUp_OFFSET, 4
+DEF cleanUpState_OFFSET, 4
 DEF title_OFFSET, 5
 DEF mode_OFFSET, 9
 # Pointer to allocation containing characters to display.
@@ -59,6 +68,7 @@ DEF key_OFFSET, 32
 # Communicates from `termInput` to `waitForKey` when a key is ready to be registered.
 DEF keyGate_OFFSET, 33
 # Communicates from `waitForKey` to `termInput` when the key has been registered.
+# Also notifies `delWindow` when the window mode might be `none_MODE`.
 DEF ackGate_OFFSET, 37
 # Index of `reqDelWindow` function in the owner app.
 DEF reqDelIndex_OFFSET, 41
@@ -86,6 +96,8 @@ VAR fileManagerHandle, s32
 VAR mainMenuGate, s32
 # Notifies `runShellMenu` when a window has been deleted.
 VAR delWindowGate, s32
+# Prevents `termInput` from trying to access a window which is being deleted.
+VAR cleanUpGate, s32
 
 # File handle to the terminal driver app.
 VAR termHandle, s32
@@ -106,6 +118,7 @@ FUNC init, wsInit.id, guarded
     closeGate mainMenuGate
     newGate delWindowGate, 1
     closeGate delWindowGate
+    newGate cleanUpGate, 1
     newAlloc windows, guardedAllocAttr, 20
     wrt windowCount, 0
     
@@ -160,6 +173,7 @@ FUNC termInput, wsTermInput.id, guarded
     LBL skipSystemMenu
     
     # Branch based on focused window mode.
+    waitGate cleanUpGate
     VAR window, s32
     wrt window, focusedWindow
     jmpNE openKeyGate, window[mode_OFFSET]:s8, none_MODE
@@ -167,7 +181,7 @@ FUNC termInput, wsTermInput.id, guarded
     # If mode is `none_MODE`, call `windowKeyPressed` on owner app.
     VAR keyPressedIndex, s32
     wrt keyPressedIndex, window[keyPressedIndex_OFFSET]:s32
-    jmpG skipKeyPressed, 0, keyPressedIndex
+    jmpG finishHandle, 0, keyPressedIndex
     newArgFrame wsWindowKeyPressed.argsSize
     wrt wsWindowKeyPressed.args.window, window
     wrt wsWindowKeyPressed.args.key, key
@@ -175,8 +189,7 @@ FUNC termInput, wsTermInput.id, guarded
     callRemote window[owner_OFFSET]:s32, keyPressedIndex
     LBL handleErr
     clrErrJmp
-    LBL skipKeyPressed
-    ret
+    jmp finishHandle
     
     # Communicate key when window mode is not `none_MODE`.
     LBL openKeyGate
@@ -190,6 +203,9 @@ FUNC termInput, wsTermInput.id, guarded
     jmpNZ resetLoop, window[key_OFFSET]:s8
     LBL breakReset
     closeGate keyGate
+    
+    LBL finishHandle
+    openGate cleanUpGate
 END
 
 FUNC checkPerm, 0, guarded
@@ -529,15 +545,55 @@ FUNC waitForKey, 0, guarded
     ARG dest, s8
     ARG window, s32
     
+    # Wait for `keyGate`.
     VAR ackGate, s32
     wrt ackGate, window[ackGate_OFFSET]:s32
     waitGate window[keyGate_OFFSET]:s32
+    
+    # If the window is marked for deletion, store zero in `dest`.
+    jmpE readKey, window[cleanUpState_OFFSET]:s8, none_CLEAN_UP_STATE
+    wrt dest, 0
+    ret
+    
+    # Wait for non-zero key, then set `key` field back to zero.
+    LBL readKey
     openGate ackGate
     LBL keyLoop
     wrt dest, window[key_OFFSET]:s8
     jmpZ keyLoop, dest
     closeGate ackGate
     wrt window[key_OFFSET]:s8, 0
+END
+
+# Cleans up garbage and sets mode back to `none_MODE`.
+# Throw `missingErr` if the window is marked for deletion.
+FUNC cleanUpMode, 0, guarded
+    ARG window, s32
+    
+    VAR messageLines, s32
+    VAR messageLineAmount, s16
+    VAR index, s16
+    VAR offset, s32
+    VAR cleanUpState, s8
+    wrt messageLines, window[messageLines_OFFSET]:s32
+    jmpZ skipDelMessage, messageLines
+    wrt messageLineAmount, window[messageLineAmount_OFFSET]:s32
+    wrt index, 0
+    LBL lineLoop
+    jmpNG breakLine, messageLineAmount, index
+    mul offset, index, 4
+    delAlloc messageLines[offset]:s32
+    inc index
+    jmp lineLoop
+    LBL breakLine
+    delAlloc window[messageLines_OFFSET]:s32
+    LBL skipDelMessage
+    wrt cleanUpState, window[cleanUpState_OFFSET]:s8
+    openGate window[ackGate_OFFSET]:s32
+    wrt window[mode_OFFSET]:s8, none_MODE
+    jmpE skipErr, cleanUpState, none_CLEAN_UP_STATE
+    throw missingErr
+    LBL skipErr
 END
 
 FUNC newWindow, wsNewWindow.id
@@ -559,6 +615,7 @@ FUNC newWindow, wsNewWindow.id
     wrt dest[owner_OFFSET]:s32, ptr
     newGate dest[keyGate_OFFSET]:s32, 0
     newGate dest[ackGate_OFFSET]:s32, 0
+    closeGate dest[keyGate_OFFSET]:s32
     findFunc dest[reqDelIndex_OFFSET]:s32, ptr, wsReqDelWindow.id
     findFunc dest[keyPressedIndex_OFFSET]:s32, ptr, wsWindowKeyPressed.id
     findFunc dest[focusChangedIndex_OFFSET]:s32, ptr, wsWindowFocusChanged.id
@@ -604,9 +661,11 @@ FUNC delWindow, wsDelWindow.id
     ARG window, s32
     callCheckPerm window
     
-    # Mark the window for deletion, and focus a different window.
-    wrt window[shouldCleanUp_OFFSET]:s8, 1
-    openGate delWindowGate
+    # Request for the window mode to become `none_MODE`.
+    wrt window[cleanUpState_OFFSET]:s8, prepare_CLEAN_UP_STATE
+    openGate window[keyGate_OFFSET]:s32
+    
+    # If the window is focused, focus the shell window.
     jmpNE skipFocus, window, focusedWindow
     waitGate windowsMutex
     wrt focusedWindow, null
@@ -615,6 +674,13 @@ FUNC delWindow, wsDelWindow.id
     wrt focusWindow.args.window, shellWindow
     call focusWindow
     LBL skipFocus
+    
+    # Wait for window mode to become `none_MODE`
+    LBL modeLoop
+    waitGate window[ackGate_OFFSET]:s32
+    jmpNE modeLoop, window[mode_OFFSET]:s8, none_MODE
+    wrt window[cleanUpState_OFFSET]:s8, delete_CLEAN_UP_STATE
+    openGate delWindowGate
 END
 
 FUNC displayWindowMessage, wsDisplayWindowMessage.id
@@ -622,7 +688,6 @@ FUNC displayWindowMessage, wsDisplayWindowMessage.id
     ARG window, s32
     ARG message, s32
     
-    VAR ackGate, s32
     VAR verticalScroll, s32
     VAR index, s32
     
@@ -633,10 +698,9 @@ FUNC displayWindowMessage, wsDisplayWindowMessage.id
     call splitMessage
     
     # Initialize local variables and fields in `window`.
-    wrt ackGate, window[ackGate_OFFSET]:s32
     wrt verticalScroll, 0
     wrt window[mode_OFFSET]:s8, displayMessage_MODE
-    closeGate ackGate
+    closeGate window[ackGate_OFFSET]:s32
     wrt window[key_OFFSET]:s8, 0
     
     # Draw the window.
@@ -659,6 +723,7 @@ FUNC displayWindowMessage, wsDisplayWindowMessage.id
     jmpE downPressed, key, -4
     jmpE tabPressed, key, 9
     jmpE rtabPressed, key, -5
+    jmpZ cleanUp, key
     jmp keyLoop
     
     # Scroll up.
@@ -689,12 +754,15 @@ FUNC displayWindowMessage, wsDisplayWindowMessage.id
     # Store whether the enter or escape key was pressed.
     LBL enterPressed
     wrt dest, 0
-    jmp skipEscape
+    jmp cleanUp
     LBL escapePressed
     wrt dest, 1
-    LBL skipEscape
-    wrt window[mode_OFFSET]:s8, none_MODE
-    openGate ackGate
+    
+    # Clean up garbage and state.
+    LBL cleanUp
+    newArgFrame cleanUpMode.argsSize
+    wrt cleanUpMode.args.window, window
+    call cleanUpMode
 END
 
 FUNC promptWindowOption, wsPromptWindowOption.id
@@ -704,7 +772,6 @@ FUNC promptWindowOption, wsPromptWindowOption.id
     ARG options, s32
     
     VAR messageLineAmount, s16
-    VAR ackGate, s32
     VAR verticalScroll, s16
     VAR horizontalScroll, s16
     VAR cursorIndex, s16
@@ -721,7 +788,6 @@ FUNC promptWindowOption, wsPromptWindowOption.id
     
     # Initialize local variables and fields in `window`.
     wrt messageLineAmount, window[messageLineAmount_OFFSET]:s16
-    wrt ackGate, window[ackGate_OFFSET]:s32
     wrt verticalScroll, 0
     wrt horizontalScroll, 0
     wrt cursorIndex, 0
@@ -731,7 +797,7 @@ FUNC promptWindowOption, wsPromptWindowOption.id
     wrt window[input_OFFSET]:s32, options
     wrt window[inputLen_OFFSET]:s16, optionAmount
     wrt window[mode_OFFSET]:s8, promptOption_MODE
-    closeGate ackGate
+    closeGate window[ackGate_OFFSET]:s32
     wrt window[key_OFFSET]:s8, 0
     
     # Draw the window.
@@ -760,6 +826,7 @@ FUNC promptWindowOption, wsPromptWindowOption.id
     jmpE rightPressed, key, -2
     jmpE tabPressed, key, 9
     jmpE rtabPressed, key, -5
+    jmpZ cleanUp, key
     jmp keyLoop
     
     # Scroll up or select the previous option.
@@ -851,12 +918,15 @@ FUNC promptWindowOption, wsPromptWindowOption.id
     # Store the index of the selected option, or -1 if escape was pressed.
     LBL acceptOption
     wrt dest, cursorIndex
-    jmp skipEscape
+    jmp cleanUp
     LBL escapePressed
     wrt dest, -1
-    LBL skipEscape
-    wrt window[mode_OFFSET]:s8, none_MODE
-    openGate ackGate
+    
+    # Clean up garbage and state.
+    LBL cleanUp
+    newArgFrame cleanUpMode.argsSize
+    wrt cleanUpMode.args.window, window
+    call cleanUpMode
 END
 
 FUNC promptWindowText, wsPromptWindowText.id
@@ -866,7 +936,6 @@ FUNC promptWindowText, wsPromptWindowText.id
     ARG startText, s32
     
     VAR messageLineAmount, s16
-    VAR ackGate, s32
     VAR verticalScroll, s16
     VAR inputText, s32
     VAR inputTextLen, s16
@@ -898,12 +967,11 @@ FUNC promptWindowText, wsPromptWindowText.id
     
     # Initialize local variables and fields in `window`.
     wrt messageLineAmount, window[messageLineAmount_OFFSET]:s16
-    wrt ackGate, window[ackGate_OFFSET]:s32
     wrt verticalScroll, 0
     wrt window[input_OFFSET]:s32, inputText
     wrt window[inputLen_OFFSET]:s16, inputTextLen
     wrt window[mode_OFFSET]:s8, promptText_MODE
-    closeGate ackGate
+    closeGate window[ackGate_OFFSET]:s32
     wrt window[key_OFFSET]:s8, 0
     
     # Draw the window.
@@ -933,6 +1001,7 @@ FUNC promptWindowText, wsPromptWindowText.id
     jmpE rightPressed, key, -2
     jmpE tabPressed, key, 9
     jmpE rtabPressed, key, -5
+    jmpZ cleanUp, key
     jmp keyLoop
     
     # Delete the character before the cursor.
@@ -1064,14 +1133,17 @@ FUNC promptWindowText, wsPromptWindowText.id
     # Provide a pointer to a new text allocation, or null if escape was pressed.
     LBL acceptText
     newAlloc dest, 0, inputTextLen
-    jmpZ skipEscape, inputTextLen
+    jmpZ cleanUp, inputTextLen
     wrtBuff dest[0]:s8, inputText[0]:s8, inputTextLen
-    jmp skipEscape
+    jmp cleanUp
     LBL escapePressed
     wrt dest, null
-    LBL skipEscape
-    wrt window[mode_OFFSET]:s8, none_MODE
-    openGate ackGate
+    
+    # Clean up garbage and state.
+    LBL cleanUp
+    newArgFrame cleanUpMode.argsSize
+    wrt cleanUpMode.args.window, window
+    call cleanUpMode
 END
 
 FUNC clrWindow, wsClrWindow.id
@@ -1163,11 +1235,14 @@ END
 
 FUNC cleanUpWindow, 0, guarded
     ARG window, s32
+    waitGate cleanUpGate
     closeFile window[owner_OFFSET]:s32
     delAlloc window[title_OFFSET]:s32
     delAlloc window[termBuff_OFFSET]:s32
-    # TODO: Clean up resources associated with current window mode.
+    delGate window[keyGate_OFFSET]:s32
+    delGate window[ackGate_OFFSET]:s32
     delAlloc window
+    openGate cleanUpGate
 END
 
 FUNC cleanUpWindows, 0, guarded
@@ -1178,18 +1253,22 @@ FUNC cleanUpWindows, 0, guarded
     VAR window, s32
     VAR isRunning, s8
     
-    # Delete all windows from `windows` which are marked for deletion.
+    # Iterate over each window in `windows`.
     waitGate windowsMutex
     wrt index, 0
     mul endIndex, windowCount, 4
     LBL cleanUpLoop
     jmpNG breakCleanUp, endIndex, index
     wrt window, windows[index]:s32
-    jmpNZ cleanUp, window[shouldCleanUp_OFFSET]:s8
+    
+    # Clean up the window if marked for deletion, or if the owner is not running.
+    jmpE cleanUp, window[cleanUpState_OFFSET]:s8, delete_CLEAN_UP_STATE
     appIsRunning isRunning, window[owner_OFFSET]:s32
     jmpZ cleanUp, isRunning
     add index, prevArg, 4
     jmp cleanUpLoop
+    
+    # Delete the window, and move all windows afterward to the left.
     LBL cleanUp
     newArgFrame cleanUpWindow.argsSize
     wrt cleanUpWindow.args.window, window
@@ -1346,7 +1425,7 @@ FUNC runShellMenu, 0, guarded
     clrErrJmp
     jmp mainMenu
     LBL delWindowLoop
-    jmpNZ mainMenu, window[shouldCleanUp_OFFSET]:s8
+    jmpE mainMenu, window[cleanUpState_OFFSET]:s8, delete_CLEAN_UP_STATE
     waitGate delWindowGate
     jmp delWindowLoop
     LBL hardCloseWindow
