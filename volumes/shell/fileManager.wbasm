@@ -3,46 +3,207 @@ INCLUDE "../macros.wbasm"
 
 VAR shellHandle, s32
 VAR window, s32
+VAR displayMessageIndex, s32
+VAR promptOptionIndex, s32
+VAR promptTextIndex, s32
 
 FUNC init, wsInit.id, guarded
     VAR shellName, s32
-    VAR newWindowIndex, s32
-    VAR displayMessageIndex, s32
     newTextAlloc shellName, shellNameStart, shellNameEnd
     openFile shellHandle, shellName
     delAlloc shellName
-    findFunc newWindowIndex, shellHandle, wsNewWindow.id
     findFunc displayMessageIndex, shellHandle, wsDisplayWindowMessage.id
+    findFunc promptOptionIndex, shellHandle, wsPromptWindowOption.id
+    findFunc promptTextIndex, shellHandle, wsPromptWindowText.id
     
-    VAR message, s32
+    VAR windowTitle, s32
+    VAR rootOptions, s32
+    VAR text, s32
+    newTextAlloc windowTitle, windowTitleStart, windowTitleEnd
+    newAlloc rootOptions, guardedAllocAttr, 8
+    newTextAlloc text, allFilesOptionStart, allFilesOptionEnd
+    wrt rootOptions[0]:s32, text
+    newTextAlloc text, volUsageOptionStart, volUsageOptionEnd
+    wrt rootOptions[4]:s32, text
+    
+    VAR newWindowIndex, s32
+    findFunc newWindowIndex, shellHandle, wsNewWindow.id
     newArgFrame wsNewWindow.argsSize
+    wrt wsNewWindow.args.title, windowTitle
     callRemote shellHandle, newWindowIndex
     wrt window, wsNewWindow.args.dest
-    newTextAlloc message, messageStart, messageEnd
+    
+    LBL menuLoop
+    VAR index, s32
+    newArgFrame wsPromptWindowOption.argsSize
+    wrt wsPromptWindowOption.args.window, window
+    wrt wsPromptWindowOption.args.message, windowTitle
+    wrt wsPromptWindowOption.args.options, rootOptions
+    callRemote shellHandle, promptOptionIndex
+    wrt index, wsPromptWindowOption.args.dest
+    jmpE allFilesOption, index, 0
+    jmpE volUsageOption, index, 1
+    jmp menuLoop
+    
+    LBL allFilesOption
+    call displayAllFiles
+    jmp menuLoop
+    
+    LBL volUsageOption
+    call displayVolUsage
+    jmp menuLoop
+END
+
+FUNC displayAllFiles, 0, guarded
+    # TODO: Implement.
+    
+END
+
+FUNC displayVolUsage, 0, guarded
+    VAR volSize, s32
+    VAR volSizeUsed, s32
+    VAR volSizeLeft, s32
+    volSize volSize
+    volSizeLeft volSizeLeft
+    sub volSizeUsed, volSize, volSizeLeft
+    
+    VAR intText1, s32
+    VAR intText2, s32
+    newArgFrame convertIntToText.argsSize
+    wrt convertIntToText.args.number, volSizeUsed
+    call convertIntToText
+    wrt intText1, convertIntToText.args.dest
+    newArgFrame convertIntToText.argsSize
+    wrt convertIntToText.args.number, volSizeLeft
+    call convertIntToText
+    wrt intText2, convertIntToText.args.dest
+    
+    VAR textSize1, s8
+    VAR textSize2, s8
+    VAR messageSize, s16
+    VAR message, s32
+    VAR index, s16
+    allocSize textSize1, intText1
+    allocSize textSize2, intText2
+    add messageSize, 45, textSize1
+    add messageSize, prevArg, textSize2
+    newAlloc message, guardedAllocAttr, messageSize
+    wrtBuff message[0]:s8, spaceUsedTextStart, ?spaceUsedTextEnd - ?spaceUsedTextStart
+    wrt message[15]:s8, 10
+    wrtBuff message[16]:s8, intText1[0]:s8, textSize1
+    add index, 16, textSize1
+    wrtBuff message[index]:s8, bytesTextStart, ?bytesTextEnd - ?bytesTextStart
+    add index, prevArg, ?bytesTextEnd - ?bytesTextStart
+    wrt message[index]:s8, 10
+    inc index
+    wrtBuff message[index]:s8, spaceFreeTextStart, ?spaceFreeTextEnd - ?spaceFreeTextStart
+    add index, prevArg, ?spaceFreeTextEnd - ?spaceFreeTextStart
+    wrt message[index]:s8, 10
+    inc index
+    wrtBuff message[index]:s8, intText2[0]:s8, textSize2
+    add index, prevArg, textSize2
+    wrtBuff message[index]:s8, bytesTextStart, ?bytesTextEnd - ?bytesTextStart
+    
     newArgFrame wsDisplayWindowMessage.argsSize
     wrt wsDisplayWindowMessage.args.window, window
     wrt wsDisplayWindowMessage.args.message, message
     callRemote shellHandle, displayMessageIndex
+    
+    delAlloc intText1
+    delAlloc intText2
     delAlloc message
 END
 
-FUNC reqDelWindow, wsReqDelWindow.id, guarded
-    VAR index, s32
-    findFunc index, shellHandle, wsDelWindow.id
+FUNC cleanUpAndQuit, 0, guarded
+    VAR delWindowIndex, s32
+    findFunc delWindowIndex, shellHandle, wsDelWindow.id
     newArgFrame wsDelWindow.argsSize
     wrt wsDelWindow.args.window, window
-    callRemote shellHandle, index
+    callRemote shellHandle, delWindowIndex
     closeFile shellHandle
     quitApp
+END
+
+FUNC kill, wsKill.id, guarded
+    call cleanUpAndQuit
+END
+
+FUNC reqDelWindow, wsReqDelWindow.id, guarded
+    call cleanUpAndQuit
+END
+
+# TODO: Consider moving this into a library.
+FUNC convertIntToText, 0, guarded
+    ARG dest, s32
+    ARG number, s32
+    
+    VAR buffer, s8, 10
+    VAR bufferOffset, s8
+    VAR isNegative, s8
+    VAR digitCount, s8
+    
+    jmpG handleNegative, 0, number
+    jmpNZ skipZero, number
+    newAlloc dest, guardedAllocAttr, 1
+    wrt dest[0]:s8, 48
+    ret
+    LBL skipZero
+    wrt isNegative, 0
+    jmp skipNegative
+    LBL handleNegative
+    wrt isNegative, 1
+    sub number, 0, number
+    LBL skipNegative
+    
+    VAR digit, s8
+    wrt digitCount, 0
+    wrt bufferOffset, ?buffer + 10
+    LBL digitLoop
+    inc digitCount
+    mod digit, number, 10
+    add digit, prevArg, 48
+    dec bufferOffset
+    wrt localFrame[bufferOffset]:s8, digit
+    div number, prevArg, 10
+    jmpNZ digitLoop, number
+    
+    VAR destOffset, s8
+    VAR destSize, s8
+    jmpNZ handleHyphen, isNegative
+    newAlloc dest, guardedAllocAttr, digitCount
+    wrt destOffset, 0
+    jmp skipHyphen
+    LBL handleHyphen
+    add destSize, digitCount, 1
+    newAlloc dest, guardedAllocAttr, destSize
+    wrt dest[0]:s8, 45
+    wrt destOffset, 1
+    LBL skipHyphen
+    wrtBuff dest[destOffset]:s8, localFrame[bufferOffset]:s8, digitCount
 END
 
 APP_DATA
     LBL shellNameStart
     DATA "wsShell"
     LBL shellNameEnd
-    LBL messageStart
-    DATA "I am the file manager!"
-    LBL messageEnd
+    LBL windowTitleStart
+    DATA "File Manager"
+    LBL windowTitleEnd
+    LBL allFilesOptionStart
+    DATA "All files"
+    LBL allFilesOptionEnd
+    LBL volUsageOptionStart
+    DATA "Volume usage"
+    LBL volUsageOptionEnd
+    LBL spaceUsedTextStart
+    DATA "Vol space used:"
+    LBL spaceUsedTextEnd
+    LBL spaceFreeTextStart
+    DATA "Vol space free:"
+    LBL spaceFreeTextEnd
+    LBL bytesTextStart
+    DATA " bytes"
+    LBL bytesTextEnd
 END
 
 

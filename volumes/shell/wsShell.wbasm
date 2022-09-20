@@ -145,15 +145,6 @@ FUNC init, wsInit.id, guarded
     findFunc funcIndex, termHandle, wsListenTerm.id
     callRemote termHandle, funcIndex
     
-    # Launch an example application which interacts with the shell.
-    VAR dummyName, s32
-    VAR dummyHandle, s32
-    newTextAlloc dummyName, dummyNameStart, dummyNameEnd
-    openFile dummyHandle, dummyName
-    delAlloc dummyName
-    launch dummyHandle
-    closeFile dummyHandle
-    
     # Create the shell window, and run the main loop for the shell.
     newArgFrame newWindow.argsSize
     call newWindow
