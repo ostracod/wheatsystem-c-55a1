@@ -67,9 +67,9 @@ DEF inputCursorIndex_OFFSET, 30
 DEF key_OFFSET, 32
 # Communicates from `termInput` to `waitForKey` when a key is ready to be registered.
 DEF keyGate_OFFSET, 33
-# Communicates from `waitForKey` to `termInput` when the key has been registered.
-# Also notifies `delWindow` when the window mode might be `none_MODE`.
-DEF ackGate_OFFSET, 37
+# This gate is open when `waitForKey` is ready to accept a key
+# OR if window mode is `none_MODE`.
+DEF readyGate_OFFSET, 37
 # Index of `reqDelWindow` function in the owner app.
 DEF reqDelIndex_OFFSET, 41
 # Index of `windowKeyPressed` function in the owner app.
@@ -193,16 +193,12 @@ FUNC termInput, wsTermInput.id, guarded
     
     # Communicate key when window mode is not `none_MODE`.
     LBL openKeyGate
-    VAR keyGate, s32
-    wrt keyGate, window[keyGate_OFFSET]:s32
-    openGate keyGate
-    waitGate window[ackGate_OFFSET]:s32
+    waitGate window[readyGate_OFFSET]:s32
     wrt window[key_OFFSET]:s8, key
+    openGate window[keyGate_OFFSET]:s32
     LBL resetLoop
-    jmpE breakReset, window[mode_OFFSET]:s8, none_MODE
+    jmpE finishHandle, window[mode_OFFSET]:s8, none_MODE
     jmpNZ resetLoop, window[key_OFFSET]:s8
-    LBL breakReset
-    closeGate keyGate
     
     LBL finishHandle
     openGate cleanUpGate
@@ -539,29 +535,24 @@ FUNC focusWindow, 0, guarded
     openGate windowsMutex
 END
 
-# When the user presses a key and `window` is focused,
-# `waitForKey` stores the pressed key in `dest`.
+# When the user presses a key and `window` is focused, `waitForKey` stores the pressed key
+# in `dest`. If the window is marked for deletion, `waitForKey` stores zero in `dest`.
 FUNC waitForKey, 0, guarded
     ARG dest, s8
     ARG window, s32
     
-    # Wait for `keyGate`.
-    VAR ackGate, s32
-    wrt ackGate, window[ackGate_OFFSET]:s32
+    VAR readyGate, s32
+    wrt readyGate, window[readyGate_OFFSET]:s32
+    LBL waitLoop
+    openGate readyGate
     waitGate window[keyGate_OFFSET]:s32
-    
-    # If the window is marked for deletion, store zero in `dest`.
+    closeGate readyGate
     jmpE readKey, window[cleanUpState_OFFSET]:s8, none_CLEAN_UP_STATE
     wrt dest, 0
     ret
-    
-    # Wait for non-zero key, then set `key` field back to zero.
     LBL readKey
-    openGate ackGate
-    LBL keyLoop
     wrt dest, window[key_OFFSET]:s8
-    jmpZ keyLoop, dest
-    closeGate ackGate
+    jmpZ waitLoop, dest
     wrt window[key_OFFSET]:s8, 0
 END
 
@@ -589,7 +580,7 @@ FUNC cleanUpMode, 0, guarded
     delAlloc window[messageLines_OFFSET]:s32
     LBL skipDelMessage
     wrt cleanUpState, window[cleanUpState_OFFSET]:s8
-    openGate window[ackGate_OFFSET]:s32
+    openGate window[readyGate_OFFSET]:s32
     wrt window[mode_OFFSET]:s8, none_MODE
     jmpE skipErr, cleanUpState, none_CLEAN_UP_STATE
     throw missingErr
@@ -613,9 +604,9 @@ FUNC newWindow, wsNewWindow.id
     openFile ptr, name
     delAlloc name
     wrt dest[owner_OFFSET]:s32, ptr
-    newGate dest[keyGate_OFFSET]:s32, 0
-    newGate dest[ackGate_OFFSET]:s32, 0
+    newGate dest[keyGate_OFFSET]:s32, 1
     closeGate dest[keyGate_OFFSET]:s32
+    newGate dest[readyGate_OFFSET]:s32, 0
     findFunc dest[reqDelIndex_OFFSET]:s32, ptr, wsReqDelWindow.id
     findFunc dest[keyPressedIndex_OFFSET]:s32, ptr, wsWindowKeyPressed.id
     findFunc dest[focusChangedIndex_OFFSET]:s32, ptr, wsWindowFocusChanged.id
@@ -663,7 +654,10 @@ FUNC delWindow, wsDelWindow.id
     
     # Request for the window mode to become `none_MODE`.
     wrt window[cleanUpState_OFFSET]:s8, prepare_CLEAN_UP_STATE
+    LBL modeLoop
+    waitGate window[readyGate_OFFSET]:s32
     openGate window[keyGate_OFFSET]:s32
+    jmpNE modeLoop, window[mode_OFFSET]:s8, none_MODE
     
     # If the window is focused, focus the shell window.
     jmpNE skipFocus, window, focusedWindow
@@ -675,10 +669,6 @@ FUNC delWindow, wsDelWindow.id
     call focusWindow
     LBL skipFocus
     
-    # Wait for window mode to become `none_MODE`
-    LBL modeLoop
-    waitGate window[ackGate_OFFSET]:s32
-    jmpNE modeLoop, window[mode_OFFSET]:s8, none_MODE
     wrt window[cleanUpState_OFFSET]:s8, delete_CLEAN_UP_STATE
     openGate delWindowGate
 END
@@ -700,7 +690,7 @@ FUNC displayWindowMessage, wsDisplayWindowMessage.id
     # Initialize local variables and fields in `window`.
     wrt verticalScroll, 0
     wrt window[mode_OFFSET]:s8, displayMessage_MODE
-    closeGate window[ackGate_OFFSET]:s32
+    closeGate window[readyGate_OFFSET]:s32
     wrt window[key_OFFSET]:s8, 0
     
     # Draw the window.
@@ -797,7 +787,7 @@ FUNC promptWindowOption, wsPromptWindowOption.id
     wrt window[input_OFFSET]:s32, options
     wrt window[inputLen_OFFSET]:s16, optionAmount
     wrt window[mode_OFFSET]:s8, promptOption_MODE
-    closeGate window[ackGate_OFFSET]:s32
+    closeGate window[readyGate_OFFSET]:s32
     wrt window[key_OFFSET]:s8, 0
     
     # Draw the window.
@@ -971,7 +961,7 @@ FUNC promptWindowText, wsPromptWindowText.id
     wrt window[input_OFFSET]:s32, inputText
     wrt window[inputLen_OFFSET]:s16, inputTextLen
     wrt window[mode_OFFSET]:s8, promptText_MODE
-    closeGate window[ackGate_OFFSET]:s32
+    closeGate window[readyGate_OFFSET]:s32
     wrt window[key_OFFSET]:s8, 0
     
     # Draw the window.
@@ -1240,7 +1230,7 @@ FUNC cleanUpWindow, 0, guarded
     delAlloc window[title_OFFSET]:s32
     delAlloc window[termBuff_OFFSET]:s32
     delGate window[keyGate_OFFSET]:s32
-    delGate window[ackGate_OFFSET]:s32
+    delGate window[readyGate_OFFSET]:s32
     delAlloc window
     openGate cleanUpGate
 END
