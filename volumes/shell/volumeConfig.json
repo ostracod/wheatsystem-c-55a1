@@ -29,6 +29,12 @@
             "type": "bytecodeApp",
             "hasAdminPerm": false,
             "isGuarded": false
+        },
+        {
+            "name": "myData",
+            "type": "generic",
+            "hasAdminPerm": false,
+            "isGuarded": false
         }
     ]
 }

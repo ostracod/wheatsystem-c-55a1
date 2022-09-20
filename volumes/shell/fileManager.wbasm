@@ -7,6 +7,12 @@ VAR displayMessageIndex, s32
 VAR promptOptionIndex, s32
 VAR promptTextIndex, s32
 
+VAR windowTitle, s32
+VAR allFilesTitle, s32
+VAR rootOptions, s32
+VAR fileOptions, s32
+VAR launchableOptions, s32
+
 FUNC init, wsInit.id, guarded
     VAR shellName, s32
     newTextAlloc shellName, shellNameStart, shellNameEnd
@@ -16,15 +22,36 @@ FUNC init, wsInit.id, guarded
     findFunc promptOptionIndex, shellHandle, wsPromptWindowOption.id
     findFunc promptTextIndex, shellHandle, wsPromptWindowText.id
     
-    VAR windowTitle, s32
-    VAR rootOptions, s32
-    VAR text, s32
     newTextAlloc windowTitle, windowTitleStart, windowTitleEnd
+    newTextAlloc allFilesTitle, allFilesTitleStart, allFilesTitleEnd
+    
+    VAR text, s32
+    
     newAlloc rootOptions, guardedAllocAttr, 8
     newTextAlloc text, allFilesOptionStart, allFilesOptionEnd
     wrt rootOptions[0]:s32, text
     newTextAlloc text, volUsageOptionStart, volUsageOptionEnd
     wrt rootOptions[4]:s32, text
+    
+    newAlloc fileOptions, guardedAllocAttr, 20
+    newAlloc launchableOptions, guardedAllocAttr, 24
+    newTextAlloc text, launchOptionStart, launchOptionEnd
+    wrt launchableOptions[0]:s32, text
+    newTextAlloc text, viewInfoOptionStart, viewInfoOptionEnd
+    wrt fileOptions[0]:s32, text
+    wrt launchableOptions[4]:s32, text
+    newTextAlloc text, editAttrsOptionStart, editAttrsOptionEnd
+    wrt fileOptions[4]:s32, text
+    wrt launchableOptions[8]:s32, text
+    newTextAlloc text, renameOptionStart, renameOptionEnd
+    wrt fileOptions[8]:s32, text
+    wrt launchableOptions[12]:s32, text
+    newTextAlloc text, duplicateOptionStart, duplicateOptionEnd
+    wrt fileOptions[12]:s32, text
+    wrt launchableOptions[16]:s32, text
+    newTextAlloc text, deleteOptionStart, deleteOptionEnd
+    wrt fileOptions[16]:s32, text
+    wrt launchableOptions[20]:s32, text
     
     VAR newWindowIndex, s32
     findFunc newWindowIndex, shellHandle, wsNewWindow.id
@@ -55,7 +82,74 @@ FUNC init, wsInit.id, guarded
 END
 
 FUNC displayAllFiles, 0, guarded
-    # TODO: Implement.
+    LBL menuLoop
+    VAR fileNames, s32
+    VAR index, s16
+    VAR shouldBreak, s8
+    allFileNames fileNames
+    newArgFrame wsPromptWindowOption.argsSize
+    wrt wsPromptWindowOption.args.window, window
+    wrt wsPromptWindowOption.args.message, allFilesTitle
+    wrt wsPromptWindowOption.args.options, fileNames
+    callRemote shellHandle, promptOptionIndex
+    wrt index, wsPromptWindowOption.args.dest
+    jmpNG handleName, 0, index
+    wrt shouldBreak, 1
+    jmp skipName
+    LBL handleName
+    mul index, prevArg, 4
+    newArgFrame displayFile.argsSize
+    wrt displayFile.args.name, fileNames[index]:s32
+    call displayFile
+    wrt shouldBreak, 0
+    LBL skipName
+    
+    VAR size, s32
+    allocSize size, fileNames
+    wrt index, 0
+    LBL delNameLoop
+    jmpNG breakDelName, size, index
+    delAlloc fileNames[index]:s32
+    add index, prevArg, 4
+    jmp delNameLoop
+    LBL breakDelName
+    delAlloc fileNames
+    jmpZ menuLoop, shouldBreak
+END
+
+FUNC displayFile, 0, guarded
+    ARG name, s32
+    
+    VAR isLaunchable, s8
+    VAR fileHandle, s32
+    VAR fileType, s8
+    VAR isRunning, s8
+    wrt isLaunchable, 0
+    openFile fileHandle, name
+    fileType fileType, fileHandle
+    jmpZ skipLaunchable, fileType
+    appIsRunning isRunning, fileHandle
+    jmpNZ skipLaunchable, isRunning
+    wrt isLaunchable, 1
+    LBL skipLaunchable
+    closeFile fileHandle
+    
+    VAR options, s32
+    jmpNZ handleLaunchableOptions, isLaunchable
+    wrt options, fileOptions
+    jmp skipLaunchableOptions
+    LBL handleLaunchableOptions
+    wrt options, launchableOptions
+    LBL skipLaunchableOptions
+    
+    VAR index, s8
+    newArgFrame wsPromptWindowOption.argsSize
+    wrt wsPromptWindowOption.args.window, window
+    wrt wsPromptWindowOption.args.message, name
+    wrt wsPromptWindowOption.args.options, options
+    callRemote shellHandle, promptOptionIndex
+    wrt index, wsPromptWindowOption.args.dest
+    # TODO: Handle the selected option.
     
 END
 
@@ -204,6 +298,27 @@ APP_DATA
     LBL bytesTextStart
     DATA " bytes"
     LBL bytesTextEnd
+    LBL allFilesTitleStart
+    DATA "All files:"
+    LBL allFilesTitleEnd
+    LBL launchOptionStart
+    DATA "Launch"
+    LBL launchOptionEnd
+    LBL viewInfoOptionStart
+    DATA "View info"
+    LBL viewInfoOptionEnd
+    LBL editAttrsOptionStart
+    DATA "Edit attrs"
+    LBL editAttrsOptionEnd
+    LBL renameOptionStart
+    DATA "Rename"
+    LBL renameOptionEnd
+    LBL duplicateOptionStart
+    DATA "Duplicate"
+    LBL duplicateOptionEnd
+    LBL deleteOptionStart
+    DATA "Delete"
+    LBL deleteOptionEnd
 END
 
 
