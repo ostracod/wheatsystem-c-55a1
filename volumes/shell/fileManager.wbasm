@@ -64,9 +64,12 @@ VAR attrToEditTitle, s32
 VAR chooseTypeTitle, s32
 VAR choosePermTitle, s32
 VAR chooseGuardTitle, s32
+VAR duplicateTitle, s32
 
 VAR renamedMessage, s32
 VAR updatedAttrMessage, s32
+VAR duplicatedMessage, s32
+VAR deletedMessage, s32
 
 VAR rootOptions, s32
 VAR fileOptions, s32
@@ -76,6 +79,7 @@ VAR permableOptions, s32
 VAR typeOptions, s32
 VAR permOptions, s32
 VAR guardOptions, s32
+VAR noYesOptions, s32
 
 FUNC init, wsInit.id, guarded
     VAR shellName, s32
@@ -94,9 +98,12 @@ FUNC init, wsInit.id, guarded
     newTextAlloc chooseTypeTitle, chooseTypeTitleStart, chooseTypeTitleEnd
     newTextAlloc choosePermTitle, choosePermTitleStart, choosePermTitleEnd
     newTextAlloc chooseGuardTitle, chooseGuardTitleStart, chooseGuardTitleEnd
+    newTextAlloc duplicateTitle, duplicateTitleStart, duplicateTitleEnd
     
     newTextAlloc renamedMessage, renamedMessageStart, renamedMessageEnd
     newTextAlloc updatedAttrMessage, updatedAttrMessageStart, updatedAttrMessageEnd
+    newTextAlloc duplicatedMessage, duplicatedMessageStart, duplicatedMessageEnd
+    newTextAlloc deletedMessage, deletedMessageStart, deletedMessageEnd
     
     VAR text, s32
     
@@ -156,6 +163,12 @@ FUNC init, wsInit.id, guarded
     wrt guardOptions[0]:s32, text
     newTextAlloc text, guardedTextStart, guardedTextEnd
     wrt guardOptions[4]:s32, text
+    
+    newAlloc noYesOptions, guardedAllocAttr, 8
+    newTextAlloc text, noOptionStart, noOptionEnd
+    wrt noYesOptions[0]:s32, text
+    newTextAlloc text, yesOptionStart, yesOptionEnd
+    wrt noYesOptions[4]:s32, text
     
     VAR newWindowIndex, s32
     findFunc newWindowIndex, shellHandle, wsNewWindow.id
@@ -267,7 +280,8 @@ FUNC displayFile, 0, guarded
     jmpE viewInfoOption, index, 0
     jmpE editAttrs, index, 1
     jmpE renameOption, index, 2
-    # TODO: Handle other options.
+    jmpE duplicateOption, index, 3
+    jmpE deleteOption, index, 4
     closeFile fileHandle
     ret
     
@@ -295,6 +309,20 @@ FUNC displayFile, 0, guarded
     wrt name, renameFile.args.name
     wrt fileHandle, renameFile.args.fileHandle
     jmp menuLoop
+    
+    LBL duplicateOption
+    newArgFrame duplicateFile.argsSize
+    wrt duplicateFile.args.name, name
+    wrt duplicateFile.args.fileHandle, fileHandle
+    call duplicateFile
+    jmp menuLoop
+    
+    LBL deleteOption
+    newArgFrame deleteFile.argsSize
+    wrt deleteFile.args.name, name
+    wrt deleteFile.args.fileHandle, fileHandle
+    call deleteFile
+    jmpZ menuLoop, deleteFile.args.dest
 END
 
 FUNC displayFileInfo, 0, guarded
@@ -583,6 +611,81 @@ FUNC renameFile, 0, guarded
     newArgFrame wsDisplayWindowMessage.argsSize
     wrt wsDisplayWindowMessage.args.window, window
     wrt wsDisplayWindowMessage.args.message, renamedMessage
+    callRemote shellHandle, displayMessageIndex
+END
+
+FUNC duplicateFile, 0, guarded
+    ARG name, s32
+    ARG fileHandle, s32
+    
+    VAR newName, s32
+    newArgFrame wsPromptWindowText.argsSize
+    wrt wsPromptWindowText.args.window, window
+    wrt wsPromptWindowText.args.message, duplicateTitle
+    wrt wsPromptWindowText.args.startText, name
+    callRemote shellHandle, promptTextIndex
+    wrt newName, wsPromptWindowText.args.dest
+    jmpNZ compareNames, newName
+    ret
+    
+    LBL compareNames
+    newArgFrame textIsEqual.argsSize
+    wrt textIsEqual.args.text1, name
+    wrt textIsEqual.args.text2, newName
+    call textIsEqual
+    jmpZ skipReturn, textIsEqual.args.dest
+    ret
+    LBL skipReturn
+    
+    VAR fileAttrs, s32
+    VAR newFileHandle, s32
+    getFileAttrs fileAttrs, fileHandle
+    newArgFrame duplicateHelper.argsSize
+    wrt duplicateHelper.args.fileHandle, fileHandle
+    wrt duplicateHelper.args.name, newName
+    wrt duplicateHelper.args.fileAttrs, fileAttrs
+    call duplicateHelper
+    wrt newFileHandle, duplicateHelper.args.dest
+    delAlloc fileAttrs
+    
+    newArgFrame wsDisplayWindowMessage.argsSize
+    wrt wsDisplayWindowMessage.args.window, window
+    wrt wsDisplayWindowMessage.args.message, duplicatedMessage
+    callRemote shellHandle, displayMessageIndex
+END
+
+FUNC deleteFile, 0, guarded
+    ARG dest, s8
+    ARG name, s32
+    ARG fileHandle, s32
+    
+    VAR stringBuilder, s32
+    VAR message, s32
+    createStringBuilder stringBuilder
+    addAppDataToString stringBuilder, ?confirmDelTextStart, ?confirmDelTextEnd
+    addTextToString stringBuilder, name
+    addCharToString stringBuilder, 63
+    finishString message, stringBuilder
+    
+    VAR index, s8
+    newArgFrame wsPromptWindowOption.argsSize
+    wrt wsPromptWindowOption.args.window, window
+    wrt wsPromptWindowOption.args.message, message
+    wrt wsPromptWindowOption.args.options, noYesOptions
+    callRemote shellHandle, promptOptionIndex
+    wrt index, wsPromptWindowOption.args.dest
+    delAlloc message
+    jmpE skipReturn, index, 1
+    wrt dest, 0
+    ret
+    LBL skipReturn
+    
+    delFile fileHandle
+    wrt dest, 1
+    
+    newArgFrame wsDisplayWindowMessage.argsSize
+    wrt wsDisplayWindowMessage.args.window, window
+    wrt wsDisplayWindowMessage.args.message, deletedMessage
     callRemote shellHandle, displayMessageIndex
 END
 
@@ -948,6 +1051,24 @@ APP_DATA
     LBL updatedAttrMessageStart
     DATA "Updated attr."
     LBL updatedAttrMessageEnd
+    LBL duplicateTitleStart
+    DATA "Name of copy:"
+    LBL duplicateTitleEnd
+    LBL duplicatedMessageStart
+    DATA "Copied file."
+    LBL duplicatedMessageEnd
+    LBL confirmDelTextStart
+    DATA "Are you sure you want to delete "
+    LBL confirmDelTextEnd
+    LBL noOptionStart
+    DATA "No"
+    LBL noOptionEnd
+    LBL yesOptionStart
+    DATA "Yes"
+    LBL yesOptionEnd
+    LBL deletedMessageStart
+    DATA "Deleted file."
+    LBL deletedMessageEnd
 END
 
 
