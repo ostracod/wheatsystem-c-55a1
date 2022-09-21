@@ -1,6 +1,48 @@
 
 INCLUDE "../macros.wbasm"
 
+MACRO createStringBuilder, dest
+    newAlloc dest, guardedAllocAttr, 8
+    newAlloc dest[0]:s32, guardedAllocAttr, 10
+    wrt dest[4]:s32, 0
+END
+
+MACRO addCharToString, stringBuilder, char
+    newArgFrame addCharToString.argsSize
+    wrt addCharToString.args.stringBuilder, stringBuilder
+    wrt addCharToString.args.char, char
+    call addCharToString
+END
+
+MACRO addAppDataToString, stringBuilder, startLbl, endLbl
+    newArgFrame addAppDataToString.argsSize
+    wrt addAppDataToString.args.stringBuilder, stringBuilder
+    wrt addAppDataToString.args.startOffset, ?startLbl
+    wrt addAppDataToString.args.endOffset, ?endLbl
+    call addAppDataToString
+END
+
+MACRO addTextToString, stringBuilder, text
+    newArgFrame addTextToString.argsSize
+    wrt addTextToString.args.stringBuilder, stringBuilder
+    wrt addTextToString.args.text, text
+    call addTextToString
+END
+
+MACRO addIntToString, stringBuilder, number
+    newArgFrame addIntToString.argsSize
+    wrt addIntToString.args.stringBuilder, stringBuilder
+    wrt addIntToString.args.number, number
+    call addIntToString
+END
+
+MACRO finishString, dest, stringBuilder
+    newArgFrame finishString.argsSize
+    wrt finishString.args.stringBuilder, stringBuilder
+    call finishString
+    wrt dest, finishString.args.dest
+END
+
 VAR shellHandle, s32
 VAR window, s32
 VAR displayMessageIndex, s32
@@ -161,50 +203,24 @@ FUNC displayVolUsage, 0, guarded
     volSizeLeft volSizeLeft
     sub volSizeUsed, volSize, volSizeLeft
     
-    VAR intText1, s32
-    VAR intText2, s32
-    newArgFrame convertIntToText.argsSize
-    wrt convertIntToText.args.number, volSizeUsed
-    call convertIntToText
-    wrt intText1, convertIntToText.args.dest
-    newArgFrame convertIntToText.argsSize
-    wrt convertIntToText.args.number, volSizeLeft
-    call convertIntToText
-    wrt intText2, convertIntToText.args.dest
-    
-    VAR textSize1, s8
-    VAR textSize2, s8
-    VAR messageSize, s16
+    VAR stringBuilder, s32
     VAR message, s32
-    VAR index, s16
-    allocSize textSize1, intText1
-    allocSize textSize2, intText2
-    add messageSize, 45, textSize1
-    add messageSize, prevArg, textSize2
-    newAlloc message, guardedAllocAttr, messageSize
-    wrtBuff message[0]:s8, spaceUsedTextStart, ?spaceUsedTextEnd - ?spaceUsedTextStart
-    wrt message[15]:s8, 10
-    wrtBuff message[16]:s8, intText1[0]:s8, textSize1
-    add index, 16, textSize1
-    wrtBuff message[index]:s8, bytesTextStart, ?bytesTextEnd - ?bytesTextStart
-    add index, prevArg, ?bytesTextEnd - ?bytesTextStart
-    wrt message[index]:s8, 10
-    inc index
-    wrtBuff message[index]:s8, spaceFreeTextStart, ?spaceFreeTextEnd - ?spaceFreeTextStart
-    add index, prevArg, ?spaceFreeTextEnd - ?spaceFreeTextStart
-    wrt message[index]:s8, 10
-    inc index
-    wrtBuff message[index]:s8, intText2[0]:s8, textSize2
-    add index, prevArg, textSize2
-    wrtBuff message[index]:s8, bytesTextStart, ?bytesTextEnd - ?bytesTextStart
+    createStringBuilder stringBuilder
+    addAppDataToString stringBuilder, spaceUsedTextStart, spaceUsedTextEnd
+    addCharToString stringBuilder, 10
+    addIntToString stringBuilder, volSizeUsed
+    addAppDataToString stringBuilder, bytesTextStart, bytesTextEnd
+    addCharToString stringBuilder, 10
+    addAppDataToString stringBuilder, spaceFreeTextStart, spaceFreeTextEnd
+    addCharToString stringBuilder, 10
+    addIntToString stringBuilder, volSizeLeft
+    addAppDataToString stringBuilder, bytesTextStart, bytesTextEnd
+    finishString message, stringBuilder
     
     newArgFrame wsDisplayWindowMessage.argsSize
     wrt wsDisplayWindowMessage.args.window, window
     wrt wsDisplayWindowMessage.args.message, message
     callRemote shellHandle, displayMessageIndex
-    
-    delAlloc intText1
-    delAlloc intText2
     delAlloc message
 END
 
@@ -224,6 +240,111 @@ END
 
 FUNC reqDelWindow, wsReqDelWindow.id, guarded
     call cleanUpAndQuit
+END
+
+FUNC increaseStringSize, 0, guarded
+    ARG stringBuilder, s32
+    ARG sizeOffset, s32
+    
+    VAR size, s32
+    VAR nextSize, s32
+    VAR alloc, s32
+    VAR allocSize, s32
+    wrt size, stringBuilder[4]:s32
+    add nextSize, size, sizeOffset
+    wrt stringBuilder[4]:s32, nextSize
+    wrt alloc, stringBuilder[0]:s32
+    allocSize allocSize, alloc
+    jmpG resizeAlloc, nextSize, allocSize
+    ret
+    
+    LBL resizeAlloc
+    VAR nextAlloc, s32
+    VAR nextAllocSize, s32
+    mul nextAllocSize, nextSize, 2
+    newAlloc nextAlloc, guardedAllocAttr, nextAllocSize
+    wrtBuff nextAlloc[0]:s8, alloc[0]:s8, size
+    wrt stringBuilder[0]:s32, nextAlloc
+    delAlloc alloc
+END
+
+FUNC addCharToString, 0, guarded
+    ARG stringBuilder, s32
+    ARG char, s8
+    
+    VAR index, s32
+    wrt index, stringBuilder[4]:s32
+    newArgFrame increaseStringSize.argsSize
+    wrt increaseStringSize.args.stringBuilder, stringBuilder
+    wrt increaseStringSize.args.sizeOffset, 1
+    call increaseStringSize
+    VAR alloc, s32
+    wrt alloc, stringBuilder[0]:s32
+    wrt alloc[index]:s8, char
+END
+
+FUNC addAppDataToString, 0, guarded
+    ARG stringBuilder, s32
+    ARG startOffset, s32
+    ARG endOffset, s32
+    
+    VAR index, s32
+    VAR size, s32
+    wrt index, stringBuilder[4]:s32
+    sub size, endOffset, startOffset
+    newArgFrame increaseStringSize.argsSize
+    wrt increaseStringSize.args.stringBuilder, stringBuilder
+    wrt increaseStringSize.args.sizeOffset, size
+    call increaseStringSize
+    VAR alloc, s32
+    wrt alloc, stringBuilder[0]:s32
+    wrtBuff alloc[index]:s8, appData[startOffset]:s8, size
+END
+
+FUNC addTextToString, 0, guarded
+    ARG stringBuilder, s32
+    ARG text, s32
+    
+    VAR index, s32
+    VAR size, s32
+    wrt index, stringBuilder[4]:s32
+    allocSize size, text
+    newArgFrame increaseStringSize.argsSize
+    wrt increaseStringSize.args.stringBuilder, stringBuilder
+    wrt increaseStringSize.args.sizeOffset, size
+    call increaseStringSize
+    VAR alloc, s32
+    wrt alloc, stringBuilder[0]:s32
+    wrtBuff alloc[index]:s8, text[0]:s8, size
+END
+
+FUNC addIntToString, 0, guarded
+    ARG stringBuilder, s32
+    ARG number, s32
+    
+    VAR text, s32
+    newArgFrame convertIntToText.argsSize
+    wrt convertIntToText.args.number, number
+    call convertIntToText
+    wrt text, convertIntToText.args.dest
+    newArgFrame addTextToString.argsSize
+    wrt addTextToString.args.stringBuilder, stringBuilder
+    wrt addTextToString.args.text, text
+    call addTextToString
+END
+
+FUNC finishString, 0, guarded
+    ARG dest, s32
+    ARG stringBuilder, s32
+    
+    VAR alloc, s32
+    VAR size, s32
+    wrt alloc, stringBuilder[0]:s32
+    wrt size, stringBuilder[4]:s32
+    newAlloc dest, guardedAllocAttr, size
+    wrtBuff dest[0]:s32, alloc[0]:s8, size
+    delAlloc alloc
+    delAlloc stringBuilder
 END
 
 # TODO: Consider moving this into a library.
