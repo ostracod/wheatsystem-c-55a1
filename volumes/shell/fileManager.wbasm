@@ -43,6 +43,13 @@ MACRO finishString, dest, stringBuilder
     wrt dest, finishString.args.dest
 END
 
+MACRO getFileAttrs, dest, fileHandle
+    newAlloc dest, guardedAllocAttr, 3
+    fileType dest[0]:s8, fileHandle
+    fileIsGuarded dest[1]:s8, fileHandle
+    hasAdminPerm dest[2]:s8, fileHandle
+END
+
 VAR shellHandle, s32
 VAR window, s32
 VAR displayMessageIndex, s32
@@ -51,6 +58,8 @@ VAR promptTextIndex, s32
 
 VAR windowTitle, s32
 VAR allFilesTitle, s32
+VAR renameTitle, s32
+VAR renamedMessage, s32
 VAR rootOptions, s32
 VAR fileOptions, s32
 VAR launchableOptions, s32
@@ -66,6 +75,8 @@ FUNC init, wsInit.id, guarded
     
     newTextAlloc windowTitle, windowTitleStart, windowTitleEnd
     newTextAlloc allFilesTitle, allFilesTitleStart, allFilesTitleEnd
+    newTextAlloc renameTitle, renameTitleStart, renameTitleEnd
+    newTextAlloc renamedMessage, renamedMessageStart, renamedMessageEnd
     
     VAR text, s32
     
@@ -143,6 +154,7 @@ FUNC displayAllFiles, 0, guarded
     newArgFrame displayFile.argsSize
     wrt displayFile.args.name, fileNames[index]:s32
     call displayFile
+    wrt fileNames[index]:s32, displayFile.args.name
     wrt shouldBreak, 0
     LBL skipName
     
@@ -202,6 +214,7 @@ FUNC displayFile, 0, guarded
     LBL skipLaunchableOption
     
     jmpE viewInfoOption, index, 0
+    jmpE renameOption, index, 2
     # TODO: Handle other options.
     closeFile fileHandle
     ret
@@ -211,6 +224,15 @@ FUNC displayFile, 0, guarded
     wrt displayFileInfo.args.name, name
     wrt displayFileInfo.args.fileHandle, fileHandle
     call displayFileInfo
+    jmp menuLoop
+    
+    LBL renameOption
+    newArgFrame renameFile.argsSize
+    wrt renameFile.args.name, name
+    wrt renameFile.args.fileHandle, fileHandle
+    call renameFile
+    wrt name, renameFile.args.name
+    wrt fileHandle, renameFile.args.fileHandle
     jmp menuLoop
 END
 
@@ -287,6 +309,89 @@ FUNC displayFileInfo, 0, guarded
     wrt wsDisplayWindowMessage.args.message, message
     callRemote shellHandle, displayMessageIndex
     delAlloc message
+END
+
+FUNC renameFile, 0, guarded
+    ARG name, s32
+    ARG fileHandle, s32
+    
+    VAR newName, s32
+    newArgFrame wsPromptWindowText.argsSize
+    wrt wsPromptWindowText.args.window, window
+    wrt wsPromptWindowText.args.message, renameTitle
+    wrt wsPromptWindowText.args.startText, name
+    callRemote shellHandle, promptTextIndex
+    wrt newName, wsPromptWindowText.args.dest
+    jmpNZ compareNames, newName
+    ret
+    
+    LBL compareNames
+    newArgFrame textIsEqual.argsSize
+    wrt textIsEqual.args.text1, name
+    wrt textIsEqual.args.text2, newName
+    call textIsEqual
+    jmpZ skipReturn, textIsEqual.args.dest
+    ret
+    LBL skipReturn
+    
+    VAR fileAttrs, s32
+    VAR newFileHandle, s32
+    getFileAttrs fileAttrs, fileHandle
+    newArgFrame duplicateHelper.argsSize
+    wrt duplicateHelper.args.fileHandle, fileHandle
+    wrt duplicateHelper.args.name, newName
+    wrt duplicateHelper.args.fileAttrs, fileAttrs
+    call duplicateHelper
+    wrt newFileHandle, duplicateHelper.args.dest
+    
+    delAlloc fileAttrs
+    delAlloc name
+    delFile fileHandle
+    wrt name, newName
+    wrt fileHandle, newFileHandle
+    
+    newArgFrame wsDisplayWindowMessage.argsSize
+    wrt wsDisplayWindowMessage.args.window, window
+    wrt wsDisplayWindowMessage.args.message, renamedMessage
+    callRemote shellHandle, displayMessageIndex
+END
+
+FUNC duplicateHelper, 0, guarded
+    ARG dest, s32
+    ARG fileHandle, s32
+    ARG name, s32
+    ARG fileAttrs, s32
+    
+    VAR fileSize, s32
+    VAR newFileHandle, s32
+    fileSize fileSize, fileHandle
+    newFile name, fileAttrs[0]:s8, fileAttrs[1]:s8, fileSize
+    openFile newFileHandle, name
+    
+    jmpNZ handleAdminPerm, fileAttrs[2]:s8
+    delAdminPerm newFileHandle
+    jmp skipAdminPerm
+    LBL handleAdminPerm
+    giveAdminPerm newFileHandle
+    LBL skipAdminPerm
+    
+    VAR buffer, s8, 500
+    VAR index, s32
+    VAR sizeToCopy, s32
+    wrt index, 0
+    LBL copyLoop
+    sub sizeToCopy, fileSize, index
+    jmpNG breakCopy, sizeToCopy, 0
+    jmpNG skipClamp, sizeToCopy, 500
+    wrt sizeToCopy, 500
+    LBL skipClamp
+    readFile buffer, fileHandle, index, sizeToCopy
+    wrtFile newFileHandle, index, buffer, sizeToCopy
+    add index, prevArg, sizeToCopy
+    jmp copyLoop
+    LBL breakCopy
+    
+    wrt dest, newFileHandle
 END
 
 FUNC displayVolUsage, 0, guarded
@@ -491,6 +596,31 @@ FUNC convertIntToText, 0, guarded
     wrtBuff dest[destOffset]:s8, localFrame[bufferOffset]:s8, digitCount
 END
 
+FUNC textIsEqual, 0, guarded
+    ARG dest, s8
+    ARG text1, s32
+    ARG text2, s32
+    
+    VAR size1, s32
+    VAR size2, s32
+    allocSize size1, text1
+    allocSize size2, text2
+    jmpNE notEqual, size1, size2
+    
+    VAR index, s32
+    wrt index, 0
+    LBL charLoop
+    jmpNG breakChar, size1, index
+    jmpNE notEqual, text1[index]:s8, text2[index]:s8
+    inc index
+    LBL breakChar
+    wrt dest, 1
+    ret
+    
+    LBL notEqual
+    wrt dest, 0
+END
+
 APP_DATA
     LBL shellNameStart
     DATA "wsShell"
@@ -555,6 +685,12 @@ APP_DATA
     LBL notGuardedTextStart
     DATA "Not guarded"
     LBL notGuardedTextEnd
+    LBL renameTitleStart
+    DATA "Enter new name:"
+    LBL renameTitleEnd
+    LBL renamedMessageStart
+    DATA "Renamed file."
+    LBL renamedMessageEnd
 END
 
 
