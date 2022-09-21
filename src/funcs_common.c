@@ -407,21 +407,25 @@ void createFile(
     
     // Find a storage space gap which is large enough,
     // and ensure that there is no duplicate name.
-    storageOffset_t previousFileAddress = MISSING_FILE_ADDRESS;
-    storageOffset_t nextFileAddress = getFirstFileAddress();
     storageOffset_t newFileAddress = MISSING_FILE_ADDRESS;
+    storageOffset_t previousFileAddress;
+    storageOffset_t nextFileAddress;
+    storageOffset_t tempPreviousAddress = MISSING_FILE_ADDRESS;
+    storageOffset_t tempNextAddress = getFirstFileAddress();
     while (true) {
-        int8_t hasReachedEnd = (nextFileAddress == MISSING_FILE_ADDRESS);
+        int8_t hasReachedEnd = (tempNextAddress == MISSING_FILE_ADDRESS);
         if (newFileAddress == MISSING_FILE_ADDRESS) {
             storageOffset_t startAddress;
-            if (previousFileAddress == MISSING_FILE_ADDRESS) {
+            if (tempPreviousAddress == MISSING_FILE_ADDRESS) {
                 startAddress = sizeof(storageHeader_t);
             } else {
-                startAddress = previousFileAddress + getFileStorageSize(previousFileAddress);
+                startAddress = tempPreviousAddress + getFileStorageSize(tempPreviousAddress);
             }
-            storageOffset_t endAddress = hasReachedEnd ? STORAGE_SIZE : nextFileAddress;
+            storageOffset_t endAddress = hasReachedEnd ? STORAGE_SIZE : tempNextAddress;
             if (endAddress - startAddress >= fileStorageSize) {
                 newFileAddress = startAddress;
+                previousFileAddress = tempPreviousAddress;
+                nextFileAddress = tempNextAddress;
             }
         }
         if (hasReachedEnd) {
@@ -430,13 +434,13 @@ void createFile(
         if (heapMemNameEqualsStorageName(
             nameAllocAddress,
             nameSize,
-            getFileNameAddress(nextFileAddress),
-            getFileHeaderMember(nextFileAddress, nameSize)
+            getFileNameAddress(tempNextAddress),
+            getFileHeaderMember(tempNextAddress, nameSize)
         )) {
             throw(DATA_ERR_CODE);
         }
-        previousFileAddress = nextFileAddress;
-        nextFileAddress = getFileHeaderMember(previousFileAddress, next);
+        tempPreviousAddress = tempNextAddress;
+        tempNextAddress = getFileHeaderMember(tempPreviousAddress, next);
     }
     if (newFileAddress == MISSING_FILE_ADDRESS) {
         throw(CAPACITY_ERR_CODE);
