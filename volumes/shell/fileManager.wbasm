@@ -14,11 +14,11 @@ MACRO addCharToString, stringBuilder, char
     call addCharToString
 END
 
-MACRO addAppDataToString, stringBuilder, startLbl, endLbl
+MACRO addAppDataToString, stringBuilder, startOffset, endOffset
     newArgFrame addAppDataToString.argsSize
     wrt addAppDataToString.args.stringBuilder, stringBuilder
-    wrt addAppDataToString.args.startOffset, ?startLbl
-    wrt addAppDataToString.args.endOffset, ?endLbl
+    wrt addAppDataToString.args.startOffset, startOffset
+    wrt addAppDataToString.args.endOffset, endOffset
     call addAppDataToString
 END
 
@@ -162,19 +162,20 @@ END
 FUNC displayFile, 0, guarded
     ARG name, s32
     
-    VAR isLaunchable, s8
     VAR fileHandle, s32
     VAR fileType, s8
-    VAR isRunning, s8
-    wrt isLaunchable, 0
     openFile fileHandle, name
     fileType fileType, fileHandle
+    
+    LBL menuLoop
+    VAR isLaunchable, s8
+    VAR isRunning, s8
+    wrt isLaunchable, 0
     jmpZ skipLaunchable, fileType
     appIsRunning isRunning, fileHandle
     jmpNZ skipLaunchable, isRunning
     wrt isLaunchable, 1
     LBL skipLaunchable
-    closeFile fileHandle
     
     VAR options, s32
     jmpNZ handleLaunchableOptions, isLaunchable
@@ -191,8 +192,101 @@ FUNC displayFile, 0, guarded
     wrt wsPromptWindowOption.args.options, options
     callRemote shellHandle, promptOptionIndex
     wrt index, wsPromptWindowOption.args.dest
-    # TODO: Handle the selected option.
     
+    jmpZ skipLaunchableOption, isLaunchable
+    jmpNE skipLaunchOption, index, 0
+    launch fileHandle
+    jmp menuLoop
+    LBL skipLaunchOption
+    dec index
+    LBL skipLaunchableOption
+    
+    jmpE viewInfoOption, index, 0
+    # TODO: Handle other options.
+    closeFile fileHandle
+    ret
+    
+    LBL viewInfoOption
+    newArgFrame displayFileInfo.argsSize
+    wrt displayFileInfo.args.name, name
+    wrt displayFileInfo.args.fileHandle, fileHandle
+    call displayFileInfo
+    jmp menuLoop
+END
+
+FUNC displayFileInfo, 0, guarded
+    ARG name, s32
+    ARG fileHandle, s32
+    
+    VAR fileType, s8
+    VAR typeTextStart, s32
+    VAR typeTextEnd, s32
+    fileType fileType, fileHandle
+    jmpE handleBytecodeApp, fileType, 1
+    jmpE handleSystemApp, fileType, 2
+    wrt typeTextStart, ?genericFileTextStart
+    wrt typeTextEnd, ?genericFileTextEnd
+    jmp finishFileType
+    LBL handleBytecodeApp
+    wrt typeTextStart, ?bytecodeAppTextStart
+    wrt typeTextEnd, ?bytecodeAppTextEnd
+    jmp finishFileType
+    LBL handleSystemApp
+    wrt typeTextStart, ?systemAppTextStart
+    wrt typeTextEnd, ?systemAppTextEnd
+    LBL finishFileType
+    
+    VAR fileSize, s32
+    VAR isGuarded, s8
+    VAR isGuardedTextStart, s32
+    VAR isGuardedTextEnd, s32
+    fileSize fileSize, fileHandle
+    fileIsGuarded isGuarded, fileHandle
+    jmpNZ handleGuarded, isGuarded
+    wrt isGuardedTextStart, ?notGuardedTextStart
+    wrt isGuardedTextEnd, ?notGuardedTextEnd
+    jmp skipGuarded
+    LBL handleGuarded
+    wrt isGuardedTextStart, ?guardedTextStart
+    wrt isGuardedTextEnd, ?guardedTextEnd
+    LBL skipGuarded
+    
+    VAR stringBuilder, s32
+    VAR message, s32
+    createStringBuilder stringBuilder
+    addTextToString stringBuilder, name
+    addCharToString stringBuilder, 10
+    addAppDataToString stringBuilder, typeTextStart, typeTextEnd
+    addCharToString stringBuilder, 10
+    addIntToString stringBuilder, fileSize
+    addAppDataToString stringBuilder, ?bytesTextStart, ?bytesTextEnd
+    addCharToString stringBuilder, 10
+    
+    jmpZ skipPerm, fileType
+    VAR hasAdminPerm, s8
+    VAR permTextStart, s32
+    VAR permTextEnd, s32
+    hasAdminPerm hasAdminPerm, fileHandle
+    jmpNZ handleAdminPerm, hasAdminPerm
+    wrt permTextStart, ?noAdminPermTextStart
+    wrt permTextEnd, ?noAdminPermTextEnd
+    jmp skipAdminPerm
+    LBL handleAdminPerm
+    wrt permTextStart, ?hasAdminPermTextStart
+    wrt permTextEnd, ?hasAdminPermTextEnd
+    LBL skipAdminPerm
+    addAppDataToString stringBuilder, permTextStart, permTextEnd
+    addCharToString stringBuilder, 10
+    LBL skipPerm
+    
+    addAppDataToString stringBuilder, isGuardedTextStart, isGuardedTextEnd
+    finishString message, stringBuilder
+    
+    newArgFrame wsDisplayWindowMessage.argsSize
+    wrt wsDisplayWindowMessage.args.window, window
+    wrt wsDisplayWindowMessage.args.message, message
+    callRemote shellHandle, displayMessageIndex
+    delAlloc message
 END
 
 FUNC displayVolUsage, 0, guarded
@@ -206,15 +300,15 @@ FUNC displayVolUsage, 0, guarded
     VAR stringBuilder, s32
     VAR message, s32
     createStringBuilder stringBuilder
-    addAppDataToString stringBuilder, spaceUsedTextStart, spaceUsedTextEnd
+    addAppDataToString stringBuilder, ?spaceUsedTextStart, ?spaceUsedTextEnd
     addCharToString stringBuilder, 10
     addIntToString stringBuilder, volSizeUsed
-    addAppDataToString stringBuilder, bytesTextStart, bytesTextEnd
+    addAppDataToString stringBuilder, ?bytesTextStart, ?bytesTextEnd
     addCharToString stringBuilder, 10
-    addAppDataToString stringBuilder, spaceFreeTextStart, spaceFreeTextEnd
+    addAppDataToString stringBuilder, ?spaceFreeTextStart, ?spaceFreeTextEnd
     addCharToString stringBuilder, 10
     addIntToString stringBuilder, volSizeLeft
-    addAppDataToString stringBuilder, bytesTextStart, bytesTextEnd
+    addAppDataToString stringBuilder, ?bytesTextStart, ?bytesTextEnd
     finishString message, stringBuilder
     
     newArgFrame wsDisplayWindowMessage.argsSize
@@ -440,6 +534,27 @@ APP_DATA
     LBL deleteOptionStart
     DATA "Delete"
     LBL deleteOptionEnd
+    LBL genericFileTextStart
+    DATA "Generic file"
+    LBL genericFileTextEnd
+    LBL bytecodeAppTextStart
+    DATA "Bytecode app"
+    LBL bytecodeAppTextEnd
+    LBL systemAppTextStart
+    DATA "System app"
+    LBL systemAppTextEnd
+    LBL hasAdminPermTextStart
+    DATA "Has admin perm"
+    LBL hasAdminPermTextEnd
+    LBL noAdminPermTextStart
+    DATA "No admin perm"
+    LBL noAdminPermTextEnd
+    LBL guardedTextStart
+    DATA "Guarded"
+    LBL guardedTextEnd
+    LBL notGuardedTextStart
+    DATA "Not guarded"
+    LBL notGuardedTextEnd
 END
 
 

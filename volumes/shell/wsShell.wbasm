@@ -114,8 +114,7 @@ FUNC init, wsInit.id, guarded
     # Initialize various global variables.
     thisApp thisApp
     newGate windowsMutex, 1
-    newGate mainMenuGate, 1
-    closeGate mainMenuGate
+    newGate mainMenuGate, 0
     newGate delWindowGate, 1
     closeGate delWindowGate
     newGate cleanUpGate, 1
@@ -1390,6 +1389,7 @@ FUNC runShellMenu, 0, guarded
     
     # Focus the window.
     LBL viewWindow
+    closeGate mainMenuGate
     newArgFrame focusWindow.argsSize
     wrt focusWindow.args.window, window
     call focusWindow
@@ -1443,6 +1443,7 @@ FUNC runShellMenu, 0, guarded
     LBL launchFileManager
     appIsRunning cond, fileManagerHandle
     jmpNZ mainMenu, cond
+    closeGate mainMenuGate
     launch fileManagerHandle
     jmp waitForFocus
     
