@@ -55,18 +55,27 @@ VAR window, s32
 VAR displayMessageIndex, s32
 VAR promptOptionIndex, s32
 VAR promptTextIndex, s32
+VAR tempFileName, s32
 
 VAR windowTitle, s32
 VAR allFilesTitle, s32
 VAR renameTitle, s32
 VAR attrToEditTitle, s32
+VAR chooseTypeTitle, s32
+VAR choosePermTitle, s32
+VAR chooseGuardTitle, s32
+
 VAR renamedMessage, s32
+VAR updatedAttrMessage, s32
 
 VAR rootOptions, s32
 VAR fileOptions, s32
 VAR launchableOptions, s32
 VAR attrOptions, s32
 VAR permableOptions, s32
+VAR typeOptions, s32
+VAR permOptions, s32
+VAR guardOptions, s32
 
 FUNC init, wsInit.id, guarded
     VAR shellName, s32
@@ -76,12 +85,18 @@ FUNC init, wsInit.id, guarded
     findFunc displayMessageIndex, shellHandle, wsDisplayWindowMessage.id
     findFunc promptOptionIndex, shellHandle, wsPromptWindowOption.id
     findFunc promptTextIndex, shellHandle, wsPromptWindowText.id
+    newTextAlloc tempFileName, tempFileNameStart, tempFileNameEnd
     
     newTextAlloc windowTitle, windowTitleStart, windowTitleEnd
     newTextAlloc allFilesTitle, allFilesTitleStart, allFilesTitleEnd
     newTextAlloc renameTitle, renameTitleStart, renameTitleEnd
-    newTextAlloc renamedMessage, renamedMessageStart, renamedMessageEnd
     newTextAlloc attrToEditTitle, attrToEditTitleStart, attrToEditTitleEnd
+    newTextAlloc chooseTypeTitle, chooseTypeTitleStart, chooseTypeTitleEnd
+    newTextAlloc choosePermTitle, choosePermTitleStart, choosePermTitleEnd
+    newTextAlloc chooseGuardTitle, chooseGuardTitleStart, chooseGuardTitleEnd
+    
+    newTextAlloc renamedMessage, renamedMessageStart, renamedMessageEnd
+    newTextAlloc updatedAttrMessage, updatedAttrMessageStart, updatedAttrMessageEnd
     
     VAR text, s32
     
@@ -121,6 +136,26 @@ FUNC init, wsInit.id, guarded
     newTextAlloc text, guardOptionStart, guardOptionEnd
     wrt attrOptions[4]:s32, text
     wrt permableOptions[8]:s32, text
+    
+    newAlloc typeOptions, guardedAllocAttr, 12
+    newTextAlloc text, genericFileTextStart, genericFileTextEnd
+    wrt typeOptions[0]:s32, text
+    newTextAlloc text, bytecodeAppTextStart, bytecodeAppTextEnd
+    wrt typeOptions[4]:s32, text
+    newTextAlloc text, systemAppTextStart, systemAppTextEnd
+    wrt typeOptions[8]:s32, text
+    
+    newAlloc permOptions, guardedAllocAttr, 8
+    newTextAlloc text, noAdminPermTextStart, noAdminPermTextEnd
+    wrt permOptions[0]:s32, text
+    newTextAlloc text, hasAdminPermTextStart, hasAdminPermTextEnd
+    wrt permOptions[4]:s32, text
+    
+    newAlloc guardOptions, guardedAllocAttr, 8
+    newTextAlloc text, notGuardedTextStart, notGuardedTextEnd
+    wrt guardOptions[0]:s32, text
+    newTextAlloc text, guardedTextStart, guardedTextEnd
+    wrt guardOptions[4]:s32, text
     
     VAR newWindowIndex, s32
     findFunc newWindowIndex, shellHandle, wsNewWindow.id
@@ -396,20 +431,114 @@ FUNC editFileType, 0, guarded
     ARG name, s32
     ARG fileHandle, s32
     
-    # TODO: Implement.
+    VAR fileType, s8
+    newArgFrame wsPromptWindowOption.argsSize
+    wrt wsPromptWindowOption.args.window, window
+    wrt wsPromptWindowOption.args.message, chooseTypeTitle
+    wrt wsPromptWindowOption.args.options, typeOptions
+    callRemote shellHandle, promptOptionIndex
+    wrt fileType, wsPromptWindowOption.args.dest
+    jmpNG skipReturn, 0, fileType
+    ret
+    LBL skipReturn
+    
+    VAR fileAttrs, s32
+    getFileAttrs fileAttrs, fileHandle
+    wrt fileAttrs[0]:s8, fileType
+    newArgFrame setFileAttrs.argsSize
+    wrt setFileAttrs.args.name, name
+    wrt setFileAttrs.args.fileHandle, fileHandle
+    wrt setFileAttrs.args.fileAttrs, fileAttrs
+    call setFileAttrs
+    wrt fileHandle, setFileAttrs.args.fileHandle
+    delAlloc fileAttrs
+    
+    newArgFrame wsDisplayWindowMessage.argsSize
+    wrt wsDisplayWindowMessage.args.window, window
+    wrt wsDisplayWindowMessage.args.message, updatedAttrMessage
+    callRemote shellHandle, displayMessageIndex
 END
 
 FUNC editFilePerm, 0, guarded
     ARG fileHandle, s32
     
-    # TODO: Implement.
+    VAR hasAdminPerm, s8
+    newArgFrame wsPromptWindowOption.argsSize
+    wrt wsPromptWindowOption.args.window, window
+    wrt wsPromptWindowOption.args.message, choosePermTitle
+    wrt wsPromptWindowOption.args.options, permOptions
+    callRemote shellHandle, promptOptionIndex
+    wrt hasAdminPerm, wsPromptWindowOption.args.dest
+    jmpNG skipReturn, 0, hasAdminPerm
+    ret
+    LBL skipReturn
+    
+    jmpNZ handleAdminPerm, hasAdminPerm
+    delAdminPerm fileHandle
+    jmp skipAdminPerm
+    LBL handleAdminPerm
+    giveAdminPerm fileHandle
+    LBL skipAdminPerm
+    
+    newArgFrame wsDisplayWindowMessage.argsSize
+    wrt wsDisplayWindowMessage.args.window, window
+    wrt wsDisplayWindowMessage.args.message, updatedAttrMessage
+    callRemote shellHandle, displayMessageIndex
 END
 
 FUNC editFileGuard, 0, guarded
     ARG name, s32
     ARG fileHandle, s32
     
-    # TODO: Implement.
+    VAR isGuarded, s8
+    newArgFrame wsPromptWindowOption.argsSize
+    wrt wsPromptWindowOption.args.window, window
+    wrt wsPromptWindowOption.args.message, chooseGuardTitle
+    wrt wsPromptWindowOption.args.options, guardOptions
+    callRemote shellHandle, promptOptionIndex
+    wrt isGuarded, wsPromptWindowOption.args.dest
+    jmpNG skipReturn, 0, isGuarded
+    ret
+    LBL skipReturn
+    
+    VAR fileAttrs, s32
+    getFileAttrs fileAttrs, fileHandle
+    wrt fileAttrs[1]:s8, isGuarded
+    newArgFrame setFileAttrs.argsSize
+    wrt setFileAttrs.args.name, name
+    wrt setFileAttrs.args.fileHandle, fileHandle
+    wrt setFileAttrs.args.fileAttrs, fileAttrs
+    call setFileAttrs
+    wrt fileHandle, setFileAttrs.args.fileHandle
+    delAlloc fileAttrs
+    
+    newArgFrame wsDisplayWindowMessage.argsSize
+    wrt wsDisplayWindowMessage.args.window, window
+    wrt wsDisplayWindowMessage.args.message, updatedAttrMessage
+    callRemote shellHandle, displayMessageIndex
+END
+
+FUNC setFileAttrs, 0, guarded
+    ARG name, s32
+    ARG fileHandle, s32
+    ARG fileAttrs, s32
+    
+    VAR tempFileHandle, s32
+    newArgFrame duplicateHelper.argsSize
+    wrt duplicateHelper.args.fileHandle, fileHandle
+    wrt duplicateHelper.args.name, tempFileName
+    wrt duplicateHelper.args.fileAttrs, fileAttrs
+    call duplicateHelper
+    wrt tempFileHandle, duplicateHelper.args.dest
+    delFile fileHandle
+    
+    newArgFrame duplicateHelper.argsSize
+    wrt duplicateHelper.args.fileHandle, tempFileHandle
+    wrt duplicateHelper.args.name, name
+    wrt duplicateHelper.args.fileAttrs, fileAttrs
+    call duplicateHelper
+    wrt fileHandle, duplicateHelper.args.dest
+    delFile tempFileHandle
 END
 
 FUNC renameFile, 0, guarded
@@ -726,6 +855,9 @@ APP_DATA
     LBL shellNameStart
     DATA "wsShell"
     LBL shellNameEnd
+    LBL tempFileNameStart
+    DATA "fileManagerTemp"
+    LBL tempFileNameEnd
     LBL windowTitleStart
     DATA "File Manager"
     LBL windowTitleEnd
@@ -804,6 +936,18 @@ APP_DATA
     LBL guardOptionStart
     DATA "Guard"
     LBL guardOptionEnd
+    LBL chooseTypeTitleStart
+    DATA "Choose type:"
+    LBL chooseTypeTitleEnd
+    LBL choosePermTitleStart
+    DATA "Choose perm:"
+    LBL choosePermTitleEnd
+    LBL chooseGuardTitleStart
+    DATA "Choose guard:"
+    LBL chooseGuardTitleEnd
+    LBL updatedAttrMessageStart
+    DATA "Updated attr."
+    LBL updatedAttrMessageEnd
 END
 
 
