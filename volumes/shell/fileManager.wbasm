@@ -59,10 +59,14 @@ VAR promptTextIndex, s32
 VAR windowTitle, s32
 VAR allFilesTitle, s32
 VAR renameTitle, s32
+VAR attrToEditTitle, s32
 VAR renamedMessage, s32
+
 VAR rootOptions, s32
 VAR fileOptions, s32
 VAR launchableOptions, s32
+VAR attrOptions, s32
+VAR permableOptions, s32
 
 FUNC init, wsInit.id, guarded
     VAR shellName, s32
@@ -77,6 +81,7 @@ FUNC init, wsInit.id, guarded
     newTextAlloc allFilesTitle, allFilesTitleStart, allFilesTitleEnd
     newTextAlloc renameTitle, renameTitleStart, renameTitleEnd
     newTextAlloc renamedMessage, renamedMessageStart, renamedMessageEnd
+    newTextAlloc attrToEditTitle, attrToEditTitleStart, attrToEditTitleEnd
     
     VAR text, s32
     
@@ -105,6 +110,17 @@ FUNC init, wsInit.id, guarded
     newTextAlloc text, deleteOptionStart, deleteOptionEnd
     wrt fileOptions[16]:s32, text
     wrt launchableOptions[20]:s32, text
+    
+    newAlloc attrOptions, guardedAllocAttr, 8
+    newAlloc permableOptions, guardedAllocAttr, 12
+    newTextAlloc text, typeOptionStart, typeOptionEnd
+    wrt attrOptions[0]:s32, text
+    wrt permableOptions[0]:s32, text
+    newTextAlloc text, permOptionStart, permOptionEnd
+    wrt permableOptions[4]:s32, text
+    newTextAlloc text, guardOptionStart, guardOptionEnd
+    wrt attrOptions[4]:s32, text
+    wrt permableOptions[8]:s32, text
     
     VAR newWindowIndex, s32
     findFunc newWindowIndex, shellHandle, wsNewWindow.id
@@ -214,6 +230,7 @@ FUNC displayFile, 0, guarded
     LBL skipLaunchableOption
     
     jmpE viewInfoOption, index, 0
+    jmpE editAttrs, index, 1
     jmpE renameOption, index, 2
     # TODO: Handle other options.
     closeFile fileHandle
@@ -224,6 +241,15 @@ FUNC displayFile, 0, guarded
     wrt displayFileInfo.args.name, name
     wrt displayFileInfo.args.fileHandle, fileHandle
     call displayFileInfo
+    jmp menuLoop
+    
+    LBL editAttrs
+    newArgFrame editFileAttrs.argsSize
+    wrt editFileAttrs.args.name, name
+    wrt editFileAttrs.args.fileHandle, fileHandle
+    call editFileAttrs
+    wrt fileHandle, editFileAttrs.args.fileHandle
+    fileType fileType, fileHandle
     jmp menuLoop
     
     LBL renameOption
@@ -309,6 +335,81 @@ FUNC displayFileInfo, 0, guarded
     wrt wsDisplayWindowMessage.args.message, message
     callRemote shellHandle, displayMessageIndex
     delAlloc message
+END
+
+FUNC editFileAttrs, 0, guarded
+    ARG name, s32
+    ARG fileHandle, s32
+    
+    LBL menuLoop
+    VAR fileType, s8
+    VAR options, s32
+    fileType fileType, fileHandle
+    jmpNZ handlePermableOptions, fileType
+    wrt options, attrOptions
+    jmp skipPermableOptions
+    LBL handlePermableOptions
+    wrt options, permableOptions
+    LBL skipPermableOptions
+    
+    VAR index, s8
+    newArgFrame wsPromptWindowOption.argsSize
+    wrt wsPromptWindowOption.args.window, window
+    wrt wsPromptWindowOption.args.message, attrToEditTitle
+    wrt wsPromptWindowOption.args.options, options
+    callRemote shellHandle, promptOptionIndex
+    wrt index, wsPromptWindowOption.args.dest
+    
+    jmpE editType, index, 0
+    jmpNZ handlePermableOption, fileType
+    jmpE editGuard, index, 1
+    ret
+    LBL handlePermableOption
+    jmpE editPerm, index, 1
+    jmpE editGuard, index, 2
+    ret
+    
+    LBL editType
+    newArgFrame editFileType.argsSize
+    wrt editFileType.args.name, name
+    wrt editFileType.args.fileHandle, fileHandle
+    call editFileType
+    wrt fileHandle, editFileType.args.fileHandle
+    jmp menuLoop
+    
+    LBL editPerm
+    newArgFrame editFilePerm.argsSize
+    wrt editFilePerm.args.fileHandle, fileHandle
+    call editFilePerm
+    jmp menuLoop
+    
+    LBL editGuard
+    newArgFrame editFileGuard.argsSize
+    wrt editFileGuard.args.name, name
+    wrt editFileGuard.args.fileHandle, fileHandle
+    call editFileGuard
+    wrt fileHandle, editFileGuard.args.fileHandle
+    jmp menuLoop
+END
+
+FUNC editFileType, 0, guarded
+    ARG name, s32
+    ARG fileHandle, s32
+    
+    # TODO: Implement.
+END
+
+FUNC editFilePerm, 0, guarded
+    ARG fileHandle, s32
+    
+    # TODO: Implement.
+END
+
+FUNC editFileGuard, 0, guarded
+    ARG name, s32
+    ARG fileHandle, s32
+    
+    # TODO: Implement.
 END
 
 FUNC renameFile, 0, guarded
@@ -691,6 +792,18 @@ APP_DATA
     LBL renamedMessageStart
     DATA "Renamed file."
     LBL renamedMessageEnd
+    LBL attrToEditTitleStart
+    DATA "Attr to edit:"
+    LBL attrToEditTitleEnd
+    LBL typeOptionStart
+    DATA "Type"
+    LBL typeOptionEnd
+    LBL permOptionStart
+    DATA "Permission"
+    LBL permOptionEnd
+    LBL guardOptionStart
+    DATA "Guard"
+    LBL guardOptionEnd
 END
 
 
