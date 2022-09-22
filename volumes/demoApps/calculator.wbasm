@@ -8,6 +8,16 @@ INCLUDE "../macros.wbasm"
 # Absolute value of significand must be between 0x20000000 and 0x3FFFFFFF inclusive.
 # FP number value = (significand / 0x20000000) * 2^exponent
 
+MACRO removeSign, dest, value
+    jmpG @handleNegative, 0, value
+    wrt value, 0
+    jmp @skipNegative
+    LBL @handleNegative
+    sub value, 0, value
+    wrt dest, 1
+    LBL @skipNegative
+END
+
 VAR shellHandle, s32
 VAR window, s32
 
@@ -23,6 +33,22 @@ FUNC init, wsInit.id, guarded
     callRemote shellHandle, newWindowIndex
     wrt window, wsNewWindow.args.dest
     
+    VAR fpNumber, s32
+    VAR text, s32
+    newAlloc fpNumber, guardedAllocAttr, 5
+    wrt fpNumber[0]:s32, 0x20000000
+    wrt fpNumber[4]:s8, 0
+    newArgFrame convertFpNumberToText.argsSize
+    wrt convertFpNumberToText.args.fpNumber, fpNumber
+    call convertFpNumberToText
+    wrt text, convertFpNumberToText.args.dest
+    
+    VAR displayWindowMessageIndex, s32
+    findFunc displayWindowMessageIndex, shellHandle, wsDisplayWindowMessage.id
+    newArgFrame wsDisplayWindowMessage.argsSize
+    wrt wsDisplayWindowMessage.args.window, window
+    wrt wsDisplayWindowMessage.args.message, text
+    callRemote shellHandle, displayWindowMessageIndex
 END
 
 FUNC addFpNumbers
@@ -65,7 +91,6 @@ FUNC addFpNumbers
     newAlloc dest, guardedAllocAttr, 5
     wrt dest[0]:s32, resultSignificand
     wrt dest[4]:s8, resultExponent
-    
     newArgFrame clampFpNumber.argsSize
     wrt clampFpNumber.args.fpNumber, dest
     call clampFpNumber
@@ -99,6 +124,101 @@ FUNC subtractFpNumbers
     delAlloc tempNumber
 END
 
+FUNC multiplyFpNumbers
+    ARG dest, s32
+    ARG fpNumber1, s32
+    ARG fpNumber2, s32
+    
+    VAR significand1, s32
+    VAR significand2, s32
+    VAR exponent1, s8
+    VAR exponent2, s8
+    VAR isNegative1, s8
+    VAR isNegative2, s8
+    wrt significand1, fpNumber1[0]:s32
+    wrt significand2, fpNumber2[0]:s32
+    wrt exponent1, fpNumber1[4]:s8
+    wrt exponent2, fpNumber2[4]:s8
+    removeSign isNegative1, significand1
+    removeSign isNegative2, significand2
+    
+    VAR resultSignificand, s32
+    VAR mask, s32
+    wrt resultSignificand, 0
+    wrt mask, 0x20000000
+    LBL shiftLoop
+    VAR maskResult, s32
+    bAnd maskResult, significand1, mask
+    jmpZ skipAdd, maskResult
+    add resultSignificand, prevArg, significand2
+    LBL skipAdd
+    bRight significand2, prevArg, 1
+    bRight mask, prevArg, 1
+    jmpNZ shiftLoop, significand2
+    
+    VAR resultIsNegative, s8
+    VAR resultExponent, s8
+    bXor resultIsNegative, isNegative1, isNegative2
+    jmpZ skipNegate, resultIsNegative
+    sub resultSignificand, 0, resultSignificand
+    LBL skipNegate
+    add resultExponent, exponent1, exponent2
+    
+    newAlloc dest, guardedAllocAttr, 5
+    wrt dest[0]:s32, resultSignificand
+    wrt dest[4]:s8, resultExponent
+    newArgFrame clampFpNumber.argsSize
+    wrt clampFpNumber.args.fpNumber, dest
+    call clampFpNumber
+END
+
+FUNC divideFpNumbers
+    ARG dest, s32
+    ARG fpNumber1, s32
+    ARG fpNumber2, s32
+    
+    VAR significand1, s32
+    VAR significand2, s32
+    VAR exponent1, s8
+    VAR exponent2, s8
+    VAR isNegative1, s8
+    VAR isNegative2, s8
+    wrt significand1, fpNumber1[0]:s32
+    wrt significand2, fpNumber2[0]:s32
+    wrt exponent1, fpNumber1[4]:s8
+    wrt exponent2, fpNumber2[4]:s8
+    removeSign isNegative1, significand1
+    removeSign isNegative2, significand2
+    
+    VAR resultSignificand, s32
+    VAR mask, s32
+    wrt resultSignificand, 0
+    wrt mask, 0x20000000
+    LBL shiftLoop
+    jmpG skipSub, significand2, significand1
+    sub significand1, prevArg, significand2
+    bOr resultSignificand, prevArg, mask
+    LBL skipSub
+    bRight significand2, prevArg, 1
+    bRight mask, prevArg, 1
+    jmpNZ shiftLoop, significand2
+    
+    VAR resultIsNegative, s8
+    VAR resultExponent, s8
+    bXor resultIsNegative, isNegative1, isNegative2
+    jmpZ skipNegate, resultIsNegative
+    sub resultSignificand, 0, resultSignificand
+    LBL skipNegate
+    sub resultExponent, exponent1, exponent2
+    
+    newAlloc dest, guardedAllocAttr, 5
+    wrt dest[0]:s32, resultSignificand
+    wrt dest[4]:s8, resultExponent
+    newArgFrame clampFpNumber.argsSize
+    wrt clampFpNumber.args.fpNumber, dest
+    call clampFpNumber
+END
+
 FUNC clampFpNumber
     ARG fpNumber, s32
     
@@ -107,18 +227,11 @@ FUNC clampFpNumber
     VAR isNegative, s8
     wrt significand, fpNumber[0]:s32
     wrt exponent, fpNumber[4]:s8
+    removeSign isNegative, significand
     
     jmpNZ skipZero, significand
     ret
     LBL skipZero
-    
-    jmpG handleNegative, 0, significand
-    wrt isNegative, 0
-    jmp skipNegative
-    LBL handleNegative
-    sub significand, 0, significand
-    wrt isNegative, 1
-    LBL skipNegative
     
     LBL shiftRightLoop
     jmpNG breakShiftRight, significand, 0x3FFFFFFF
@@ -140,6 +253,70 @@ FUNC clampFpNumber
     
     wrt fpNumber[0]:s32, significand
     wrt fpNumber[4]:s8, exponent
+END
+
+# -1 indicates that fpNumber1 < fpNumber2
+# 0 indicates that fpNumber1 == fpNumber2
+# 1 indicates that fpNumber1 > fpNumber2
+FUNC compareFpNumbers
+    ARG dest, s8
+    ARG fpNumber1, s32
+    ARG fpNumber2, s32
+    
+    VAR significand1, s32
+    VAR significand2, s32
+    VAR exponent1, s8
+    VAR exponent2, s8
+    VAR isNegative1, s8
+    VAR isNegative2, s8
+    wrt significand1, fpNumber1[0]:s32
+    wrt significand2, fpNumber2[0]:s32
+    wrt exponent1, fpNumber1[4]:s8
+    wrt exponent2, fpNumber2[4]:s8
+    
+    jmpG handlePositive, significand1, 0
+    jmpG handleNegative, 0, significand1
+    jmpG returnLessThan, significand2, 0
+    jmpG returnGreaterThan, 0, significand2
+    jmp returnEqual
+    
+    LBL handlePositive
+    jmpG positivePositive, significand2, 0
+    jmp returnGreaterThan
+    
+    LBL positivePositive
+    jmpG returnGreaterThan, exponent1, exponent2
+    jmpG returnLessThan, exponent2, exponent1
+    jmpG returnGreaterThan, significand1, significand2
+    jmpG returnLessThan, significand2, significand1
+    jmp returnEqual
+    
+    LBL handleNegative
+    jmpG negativeNegative, 0, significand2
+    jmp returnLessThan
+    
+    LBL negativeNegative
+    jmpG returnLessThan, exponent1, exponent2
+    jmpG returnGreaterThan, exponent2, exponent1
+    jmpG returnGreaterThan, significand1, significand2
+    jmpG returnLessThan, significand2, significand1
+    jmp returnEqual
+    
+    LBL returnLessThan
+    wrt dest, -1
+    ret
+    LBL returnEqual
+    wrt dest, 0
+    ret
+    LBL returnGreaterThan
+    wrt dest, 1
+END
+
+FUNC convertFpNumberToText
+    ARG dest, s32
+    ARG fpNumber, s32
+    
+    # TODO: Implement.
 END
 
 APP_DATA
