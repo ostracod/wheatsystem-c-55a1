@@ -1,0 +1,106 @@
+
+INCLUDE "../macros.wbasm"
+INCLUDE "../utils.wbasm"
+
+VAR shellHandle, s32
+VAR utilsHandle, s32
+VAR wrtWindowTermIndex, s32
+VAR convertIntToTextIndex, s32
+VAR window, s32
+
+FUNC init, wsInit.id, guarded
+    VAR shellName, s32
+    newTextAlloc shellName, shellNameStart, shellNameEnd
+    openFile shellHandle, shellName
+    delAlloc shellName
+    findFunc wrtWindowTermIndex, shellHandle, wsWrtWindowTerm.id
+    
+    VAR utilsName, s32
+    newTextAlloc utilsName, utilsNameStart, utilsNameEnd
+    openFile utilsHandle, utilsName
+    delAlloc utilsName
+    launch utilsHandle
+    findFunc convertIntToTextIndex, utilsHandle, convertIntToText.id
+    
+    VAR newWindowIndex, s32
+    findFunc newWindowIndex, shellHandle, wsNewWindow.id
+    newArgFrame wsNewWindow.argsSize
+    callRemote shellHandle, newWindowIndex
+    wrt window, wsNewWindow.args.dest
+    
+    VAR title, s32
+    newTextAlloc title, titleStart, titleEnd
+    newArgFrame wsWrtWindowTerm.argsSize
+    wrt wsWrtWindowTerm.args.window, window
+    wrt wsWrtWindowTerm.args.x, 0
+    wrt wsWrtWindowTerm.args.y, 0
+    wrt wsWrtWindowTerm.args.text, title
+    callRemote shellHandle, wrtWindowTermIndex
+    delAlloc title
+    
+    call generatePrimes
+END
+
+FUNC generatePrimes
+    VAR number, s16
+    VAR squareRoot, s16
+    VAR square, s16
+    wrt number, 5
+    wrt squareRoot, 3
+    wrt square, 9
+    
+    LBL numberLoop
+    VAR remainder, s16
+    mod remainder, number, 2
+    jmpZ skipDisplay, remainder
+    VAR factor, s16
+    wrt factor, 3
+    
+    LBL factorLoop
+    mod remainder, number, factor
+    jmpZ skipDisplay, remainder
+    add factor, prevArg, 2
+    jmpNG factorLoop, factor, squareRoot
+    
+    newArgFrame displayPrime.argsSize
+    wrt displayPrime.args.number, number
+    call displayPrime
+    
+    LBL skipDisplay
+    add number, prevArg, 2
+    jmpNG numberLoop, number, square
+    inc squareRoot
+    mul square, squareRoot, prevArg
+    jmp numberLoop
+END
+
+FUNC displayPrime
+    ARG number, s16
+    
+    VAR text, s32
+    newArgFrame convertIntToText.argsSize
+    wrt convertIntToText.args.number, number
+    callRemote utilsHandle, convertIntToTextIndex
+    wrt text, convertIntToText.args.dest
+    
+    newArgFrame wsWrtWindowTerm.argsSize
+    wrt wsWrtWindowTerm.args.window, window
+    wrt wsWrtWindowTerm.args.y, 1
+    wrt wsWrtWindowTerm.args.text, text
+    callRemote shellHandle, wrtWindowTermIndex
+    delAlloc text
+END
+
+APP_DATA
+    LBL shellNameStart
+    DATA "wsShell"
+    LBL shellNameEnd
+    LBL utilsNameStart
+    DATA "utils"
+    LBL utilsNameEnd
+    LBL titleStart
+    DATA "Prime number:"
+    LBL titleEnd
+END
+
+

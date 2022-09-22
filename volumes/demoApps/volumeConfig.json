@@ -34,6 +34,12 @@
             "type": "bytecodeApp",
             "hasAdminPerm": true,
             "isGuarded": true
+        },
+        {
+            "name": "primes",
+            "type": "bytecodeApp",
+            "hasAdminPerm": false,
+            "isGuarded": false
         }
     ]
 }

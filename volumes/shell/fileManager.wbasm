@@ -55,6 +55,7 @@ FUNC init, wsInit.id, guarded
     VAR utilsName, s32
     newTextAlloc utilsName, utilsNameStart, utilsNameEnd
     openFile utilsHandle, utilsName
+    delAlloc utilsName
     launch utilsHandle
     findFunc textIsEqualIndex, utilsHandle, textIsEqual.id
     initStringBuilderVars
