@@ -1,0 +1,157 @@
+
+INCLUDE "../macros.wbasm"
+
+# Floating-point number = [
+#    s32 significand
+#    s8 exponent
+# ]
+# Absolute value of significand must be between 0x20000000 and 0x3FFFFFFF inclusive.
+# FP number value = (significand / 0x20000000) * 2^exponent
+
+VAR shellHandle, s32
+VAR window, s32
+
+FUNC init, wsInit.id, guarded
+    VAR shellName, s32
+    newTextAlloc shellName, shellNameStart, shellNameEnd
+    openFile shellHandle, shellName
+    delAlloc shellName
+    
+    VAR newWindowIndex, s32
+    findFunc newWindowIndex, shellHandle, wsNewWindow.id
+    newArgFrame wsNewWindow.argsSize
+    callRemote shellHandle, newWindowIndex
+    wrt window, wsNewWindow.args.dest
+    
+END
+
+FUNC addFpNumbers
+    ARG dest, s32
+    ARG fpNumber1, s32
+    ARG fpNumber2, s32
+    
+    VAR significand1, s32
+    VAR significand2, s32
+    VAR exponent1, s8
+    VAR exponent2, s8
+    wrt significand1, fpNumber1[0]:s32
+    wrt significand2, fpNumber2[0]:s32
+    wrt exponent1, fpNumber1[4]:s8
+    wrt exponent2, fpNumber2[4]:s8
+    
+    jmpNG skipSwap, exponent2, exponent1
+    VAR tempSignificand, s32
+    VAR tempExponent, s8
+    wrt tempSignificand, significand1
+    wrt significand1, significand2
+    wrt significand2, tempSignificand
+    wrt tempExponent, exponent1
+    wrt exponent1, exponent2
+    wrt exponent2, tempExponent
+    LBL skipSwap
+    
+    LBL shiftLoop
+    jmpNG breakShift, exponent1, exponent2
+    bRight significand2, prevArg, 1
+    inc exponent2
+    jmp shiftLoop
+    LBL breakShift
+    
+    VAR resultSignificand, s32
+    VAR resultExponent, s8
+    add resultSignificand, significand1, significand2
+    wrt resultExponent, exponent1
+    
+    newAlloc dest, guardedAllocAttr, 5
+    wrt dest[0]:s32, resultSignificand
+    wrt dest[4]:s8, resultExponent
+    
+    newArgFrame clampFpNumber.argsSize
+    wrt clampFpNumber.args.fpNumber, dest
+    call clampFpNumber
+END
+
+FUNC negateFpNumber
+    ARG dest, s32
+    ARG fpNumber, s32
+    
+    newAlloc dest, guardedAllocAttr, 5
+    sub dest[0]:s32, 0, fpNumber[0]:s32
+    wrt dest[4]:s8, fpNumber[4]:s8
+END
+
+FUNC subtractFpNumbers
+    ARG dest, s32
+    ARG fpNumber1, s32
+    ARG fpNumber2, s32
+    
+    VAR tempNumber, s32
+    newArgFrame negateFpNumber.argsSize
+    wrt negateFpNumber.args.fpNumber, fpNumber2
+    call negateFpNumber
+    wrt tempNumber, negateFpNumber.args.dest
+    
+    newArgFrame addFpNumbers.argsSize
+    wrt addFpNumbers.args.fpNumber1, fpNumber1
+    wrt addFpNumbers.args.fpNumber2, tempNumber
+    call addFpNumbers
+    wrt dest, addFpNumbers.args.dest
+    delAlloc tempNumber
+END
+
+FUNC clampFpNumber
+    ARG fpNumber, s32
+    
+    VAR significand, s32
+    VAR exponent, s8
+    VAR isNegative, s8
+    wrt significand, fpNumber[0]:s32
+    wrt exponent, fpNumber[4]:s8
+    
+    jmpNZ skipZero, significand
+    ret
+    LBL skipZero
+    
+    jmpG handleNegative, 0, significand
+    wrt isNegative, 0
+    jmp skipNegative
+    LBL handleNegative
+    sub significand, 0, significand
+    wrt isNegative, 1
+    LBL skipNegative
+    
+    LBL shiftRightLoop
+    jmpNG breakShiftRight, significand, 0x3FFFFFFF
+    bRight significand, prevArg, 1
+    inc exponent
+    jmp shiftRightLoop
+    LBL breakShiftRight
+    
+    LBL shiftLeftLoop
+    jmpNG breakShiftLeft, 0x20000000, significand
+    bLeft significand, prevArg, 1
+    dec exponent
+    jmp shiftLeftLoop
+    LBL breakShiftLeft
+    
+    jmpZ skipNegate, isNegative
+    sub significand, 0, significand
+    LBL skipNegate
+    
+    wrt fpNumber[0]:s32, significand
+    wrt fpNumber[4]:s8, exponent
+END
+
+APP_DATA
+    LBL shellNameStart
+    DATA "wsShell"
+    LBL shellNameEnd
+    LBL utilsNameStart
+    DATA "utils"
+    LBL utilsNameEnd
+    LBL titleStart
+    DATA "Prime number:"
+    LBL titleEnd
+END
+
+

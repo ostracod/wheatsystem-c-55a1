@@ -40,6 +40,12 @@
             "type": "bytecodeApp",
             "hasAdminPerm": false,
             "isGuarded": false
+        },
+        {
+            "name": "calculator",
+            "type": "bytecodeApp",
+            "hasAdminPerm": false,
+            "isGuarded": false
         }
     ]
 }
