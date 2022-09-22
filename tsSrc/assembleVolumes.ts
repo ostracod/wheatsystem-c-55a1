@@ -9,6 +9,7 @@ interface FileConfig {
     type: string;
     hasAdminPerm: boolean;
     isGuarded: boolean;
+    path?: string;
 }
 
 interface VolumeConfig {
@@ -72,6 +73,28 @@ class WheatSystemVolume {
         this.address += buffer.length;
     }
     
+    addFileByConfig(config: FileConfig, directoryPath: string) {
+        const { name } = config;
+        let { path } = config;
+        if (typeof path === 'undefined') {
+            path = pathUtils.join(directoryPath, name);
+        } else if (!pathUtils.isAbsolute(path)) {
+            path = pathUtils.join(directoryPath, path);
+        }
+        let pathToRead: string;
+        if (config.type === "bytecodeApp") {
+            const assemblyPath = path + ".wbasm";
+            pathToRead = path + ".dat";
+            assembleBytecodeFile(assemblyPath, pathToRead);
+        } else {
+            pathToRead = path
+        }
+        const attributes = createFileAttributes(config);
+        const content = fs.readFileSync(pathToRead);
+        const file = new WheatSystemFile(name, attributes, content);
+        this.addFile(file);
+    }
+    
     createBuffer(): Buffer {
         return Buffer.concat(this.buffers);
     }
@@ -131,28 +154,15 @@ const assembleBytecodeFile = (sourcePath: string, destinationPath: string): void
     logPop(`Finished assembling file "${sourceName}".`);
 };
 
-const assembleVolume = (volumeDirectoryPath: string): string => {
+const assembleVolume = (directoryPath: string): string => {
     const volume = new WheatSystemVolume();
-    const volumeConfigPath = pathUtils.join(volumeDirectoryPath, "volumeConfig.json");
-    const volumeConfigText = fs.readFileSync(volumeConfigPath, "utf8");
-    const volumeConfig = JSON.parse(volumeConfigText) as VolumeConfig;
+    const configPath = pathUtils.join(directoryPath, "volumeConfig.json");
+    const configText = fs.readFileSync(configPath, "utf8");
+    const volumeConfig = JSON.parse(configText) as VolumeConfig;
     volumeConfig.files.forEach((fileConfig) => {
-        const fileName = fileConfig.name;
-        const filePath = pathUtils.join(volumeDirectoryPath, fileName);
-        let pathToRead: string;
-        if (fileConfig.type === "bytecodeApp") {
-            const assemblyFilePath = filePath + ".wbasm";
-            pathToRead = filePath + ".dat";
-            assembleBytecodeFile(assemblyFilePath, pathToRead);
-        } else {
-            pathToRead = filePath
-        }
-        const fileAttributes = createFileAttributes(fileConfig);
-        const fileContent = fs.readFileSync(pathToRead);
-        const file = new WheatSystemFile(fileName, fileAttributes, fileContent);
-        volume.addFile(file);
+        volume.addFileByConfig(fileConfig, directoryPath);
     });
-    const volumePath = volumeDirectoryPath + ".dat";
+    const volumePath = directoryPath + ".dat";
     const volumeBuffer = volume.createBuffer();
     fs.writeFileSync(volumePath, volumeBuffer);
     return volumePath;

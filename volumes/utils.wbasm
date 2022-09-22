@@ -1,0 +1,37 @@
+
+FUNC_TYPE convertIntToText, -1
+    ARG dest, s32
+    ARG number, s32
+END
+
+FUNC_TYPE textIsEqual, -2
+    ARG dest, s8
+    ARG text1, s32
+    ARG text2, s32
+END
+
+FUNC_TYPE createStringBuilder, -3
+    ARG dest, s32
+END
+
+FUNC_TYPE addCharToString, -4
+    ARG stringBuilder, s32
+    ARG char, s8
+END
+
+FUNC_TYPE addTextToString, -5
+    ARG stringBuilder, s32
+    ARG text, s32
+END
+
+FUNC_TYPE addIntToString, -6
+    ARG stringBuilder, s32
+    ARG number, s32
+END
+
+FUNC_TYPE finishString, -7
+    ARG dest, s32
+    ARG stringBuilder, s32
+END
+
+

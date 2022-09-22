@@ -1,0 +1,60 @@
+
+VAR createStringBuilderIndex, s32
+VAR addCharToStringIndex, s32
+VAR addTextToStringIndex, s32
+VAR addIntToStringIndex, s32
+VAR finishStringIndex, s32
+
+# These macros require the global variables `utilsHandle`.
+
+MACRO initStringBuilderVars
+    findFunc createStringBuilderIndex, utilsHandle, createStringBuilder.id
+    findFunc addCharToStringIndex, utilsHandle, addCharToString.id
+    findFunc addTextToStringIndex, utilsHandle, addTextToString.id
+    findFunc addIntToStringIndex, utilsHandle, addIntToString.id
+    findFunc finishStringIndex, utilsHandle, finishString.id
+END
+
+MACRO createStringBuilder, dest
+    newArgFrame createStringBuilder.argsSize
+    callRemote utilsHandle, createStringBuilderIndex
+    wrt dest, createStringBuilder.args.dest
+END
+
+MACRO addCharToString, stringBuilder, char
+    newArgFrame addCharToString.argsSize
+    wrt addCharToString.args.stringBuilder, stringBuilder
+    wrt addCharToString.args.char, char
+    callRemote utilsHandle, addCharToStringIndex
+END
+
+MACRO addTextToString, stringBuilder, text
+    newArgFrame addTextToString.argsSize
+    wrt addTextToString.args.stringBuilder, stringBuilder
+    wrt addTextToString.args.text, text
+    callRemote utilsHandle, addTextToStringIndex
+END
+
+MACRO addAppDataToString, stringBuilder, startOffset, endOffset
+    sub stringBuilder[8]:s32, endOffset, startOffset
+    newAlloc stringBuilder[12]:s32, guardedAllocAttr, stringBuilder[8]:s32
+    wrtBuff (stringBuilder[12]:s32)[0]:s8, appData[startOffset]:s8, stringBuilder[8]:s32
+    addTextToString stringBuilder, stringBuilder[12]:s32
+    delAlloc stringBuilder[12]:s32
+END
+
+MACRO addIntToString, stringBuilder, number
+    newArgFrame addIntToString.argsSize
+    wrt addIntToString.args.stringBuilder, stringBuilder
+    wrt addIntToString.args.number, number
+    callRemote utilsHandle, addIntToStringIndex
+END
+
+MACRO finishString, dest, stringBuilder
+    newArgFrame finishString.argsSize
+    wrt finishString.args.stringBuilder, stringBuilder
+    callRemote utilsHandle, finishStringIndex
+    wrt dest, finishString.args.dest
+END
+
+

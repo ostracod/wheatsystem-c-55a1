@@ -2,45 +2,38 @@
     "files": [
         {
             "name": "wsBoot",
+            "path": "../shell/wsBoot",
             "type": "bytecodeApp",
             "hasAdminPerm": true,
             "isGuarded": true
         },
         {
             "name": "wsTerm",
+            "path": "../shell/wsTerm",
             "type": "systemApp",
             "hasAdminPerm": true,
             "isGuarded": true
         },
         {
             "name": "wsShell",
+            "path": "../shell/wsShell",
             "type": "bytecodeApp",
             "hasAdminPerm": true,
             "isGuarded": true
         },
         {
             "name": "utils",
+            "path": "../shell/utils",
             "type": "bytecodeApp",
             "hasAdminPerm": true,
             "isGuarded": true
         },
         {
             "name": "fileManager",
+            "path": "../shell/fileManager",
             "type": "bytecodeApp",
             "hasAdminPerm": true,
             "isGuarded": true
-        },
-        {
-            "name": "dummy",
-            "type": "bytecodeApp",
-            "hasAdminPerm": false,
-            "isGuarded": false
-        },
-        {
-            "name": "myData",
-            "type": "generic",
-            "hasAdminPerm": false,
-            "isGuarded": false
         }
     ]
 }

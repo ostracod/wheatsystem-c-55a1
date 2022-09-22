@@ -1,47 +1,7 @@
 
 INCLUDE "../macros.wbasm"
-
-MACRO createStringBuilder, dest
-    newAlloc dest, guardedAllocAttr, 8
-    newAlloc dest[0]:s32, guardedAllocAttr, 10
-    wrt dest[4]:s32, 0
-END
-
-MACRO addCharToString, stringBuilder, char
-    newArgFrame addCharToString.argsSize
-    wrt addCharToString.args.stringBuilder, stringBuilder
-    wrt addCharToString.args.char, char
-    call addCharToString
-END
-
-MACRO addAppDataToString, stringBuilder, startOffset, endOffset
-    newArgFrame addAppDataToString.argsSize
-    wrt addAppDataToString.args.stringBuilder, stringBuilder
-    wrt addAppDataToString.args.startOffset, startOffset
-    wrt addAppDataToString.args.endOffset, endOffset
-    call addAppDataToString
-END
-
-MACRO addTextToString, stringBuilder, text
-    newArgFrame addTextToString.argsSize
-    wrt addTextToString.args.stringBuilder, stringBuilder
-    wrt addTextToString.args.text, text
-    call addTextToString
-END
-
-MACRO addIntToString, stringBuilder, number
-    newArgFrame addIntToString.argsSize
-    wrt addIntToString.args.stringBuilder, stringBuilder
-    wrt addIntToString.args.number, number
-    call addIntToString
-END
-
-MACRO finishString, dest, stringBuilder
-    newArgFrame finishString.argsSize
-    wrt finishString.args.stringBuilder, stringBuilder
-    call finishString
-    wrt dest, finishString.args.dest
-END
+INCLUDE "../utils.wbasm"
+INCLUDE "../stringBuilder.wbasm"
 
 MACRO getFileAttrs, dest, fileHandle
     newAlloc dest, guardedAllocAttr, 3
@@ -51,10 +11,12 @@ MACRO getFileAttrs, dest, fileHandle
 END
 
 VAR shellHandle, s32
+VAR utilsHandle, s32
 VAR window, s32
 VAR displayMessageIndex, s32
 VAR promptOptionIndex, s32
 VAR promptTextIndex, s32
+VAR textIsEqualIndex, s32
 VAR tempFileName, s32
 
 VAR windowTitle, s32
@@ -89,6 +51,14 @@ FUNC init, wsInit.id, guarded
     findFunc displayMessageIndex, shellHandle, wsDisplayWindowMessage.id
     findFunc promptOptionIndex, shellHandle, wsPromptWindowOption.id
     findFunc promptTextIndex, shellHandle, wsPromptWindowText.id
+    
+    VAR utilsName, s32
+    newTextAlloc utilsName, utilsNameStart, utilsNameEnd
+    openFile utilsHandle, utilsName
+    launch utilsHandle
+    findFunc textIsEqualIndex, utilsHandle, textIsEqual.id
+    initStringBuilderVars
+    
     newTextAlloc tempFileName, tempFileNameStart, tempFileNameEnd
     
     newTextAlloc windowTitle, windowTitleStart, windowTitleEnd
@@ -587,7 +557,7 @@ FUNC renameFile, 0, guarded
     newArgFrame textIsEqual.argsSize
     wrt textIsEqual.args.text1, name
     wrt textIsEqual.args.text2, newName
-    call textIsEqual
+    callRemote utilsHandle, textIsEqualIndex
     jmpZ skipReturn, textIsEqual.args.dest
     ret
     LBL skipReturn
@@ -632,7 +602,7 @@ FUNC duplicateFile, 0, guarded
     newArgFrame textIsEqual.argsSize
     wrt textIsEqual.args.text1, name
     wrt textIsEqual.args.text2, newName
-    call textIsEqual
+    callRemote utilsHandle, textIsEqualIndex
     jmpZ skipReturn, textIsEqual.args.dest
     ret
     LBL skipReturn
@@ -763,6 +733,7 @@ FUNC cleanUpAndQuit, 0, guarded
     wrt wsDelWindow.args.window, window
     callRemote shellHandle, delWindowIndex
     closeFile shellHandle
+    closeFile utilsHandle
     quitApp
 END
 
@@ -774,190 +745,13 @@ FUNC reqDelWindow, wsReqDelWindow.id, guarded
     call cleanUpAndQuit
 END
 
-FUNC increaseStringSize, 0, guarded
-    ARG stringBuilder, s32
-    ARG sizeOffset, s32
-    
-    VAR size, s32
-    VAR nextSize, s32
-    VAR alloc, s32
-    VAR allocSize, s32
-    wrt size, stringBuilder[4]:s32
-    add nextSize, size, sizeOffset
-    wrt stringBuilder[4]:s32, nextSize
-    wrt alloc, stringBuilder[0]:s32
-    allocSize allocSize, alloc
-    jmpG resizeAlloc, nextSize, allocSize
-    ret
-    
-    LBL resizeAlloc
-    VAR nextAlloc, s32
-    VAR nextAllocSize, s32
-    mul nextAllocSize, nextSize, 2
-    newAlloc nextAlloc, guardedAllocAttr, nextAllocSize
-    wrtBuff nextAlloc[0]:s8, alloc[0]:s8, size
-    wrt stringBuilder[0]:s32, nextAlloc
-    delAlloc alloc
-END
-
-FUNC addCharToString, 0, guarded
-    ARG stringBuilder, s32
-    ARG char, s8
-    
-    VAR index, s32
-    wrt index, stringBuilder[4]:s32
-    newArgFrame increaseStringSize.argsSize
-    wrt increaseStringSize.args.stringBuilder, stringBuilder
-    wrt increaseStringSize.args.sizeOffset, 1
-    call increaseStringSize
-    VAR alloc, s32
-    wrt alloc, stringBuilder[0]:s32
-    wrt alloc[index]:s8, char
-END
-
-FUNC addAppDataToString, 0, guarded
-    ARG stringBuilder, s32
-    ARG startOffset, s32
-    ARG endOffset, s32
-    
-    VAR index, s32
-    VAR size, s32
-    wrt index, stringBuilder[4]:s32
-    sub size, endOffset, startOffset
-    newArgFrame increaseStringSize.argsSize
-    wrt increaseStringSize.args.stringBuilder, stringBuilder
-    wrt increaseStringSize.args.sizeOffset, size
-    call increaseStringSize
-    VAR alloc, s32
-    wrt alloc, stringBuilder[0]:s32
-    wrtBuff alloc[index]:s8, appData[startOffset]:s8, size
-END
-
-FUNC addTextToString, 0, guarded
-    ARG stringBuilder, s32
-    ARG text, s32
-    
-    VAR index, s32
-    VAR size, s32
-    wrt index, stringBuilder[4]:s32
-    allocSize size, text
-    newArgFrame increaseStringSize.argsSize
-    wrt increaseStringSize.args.stringBuilder, stringBuilder
-    wrt increaseStringSize.args.sizeOffset, size
-    call increaseStringSize
-    VAR alloc, s32
-    wrt alloc, stringBuilder[0]:s32
-    wrtBuff alloc[index]:s8, text[0]:s8, size
-END
-
-FUNC addIntToString, 0, guarded
-    ARG stringBuilder, s32
-    ARG number, s32
-    
-    VAR text, s32
-    newArgFrame convertIntToText.argsSize
-    wrt convertIntToText.args.number, number
-    call convertIntToText
-    wrt text, convertIntToText.args.dest
-    newArgFrame addTextToString.argsSize
-    wrt addTextToString.args.stringBuilder, stringBuilder
-    wrt addTextToString.args.text, text
-    call addTextToString
-END
-
-FUNC finishString, 0, guarded
-    ARG dest, s32
-    ARG stringBuilder, s32
-    
-    VAR alloc, s32
-    VAR size, s32
-    wrt alloc, stringBuilder[0]:s32
-    wrt size, stringBuilder[4]:s32
-    newAlloc dest, guardedAllocAttr, size
-    wrtBuff dest[0]:s32, alloc[0]:s8, size
-    delAlloc alloc
-    delAlloc stringBuilder
-END
-
-# TODO: Consider moving this into a library.
-FUNC convertIntToText, 0, guarded
-    ARG dest, s32
-    ARG number, s32
-    
-    VAR buffer, s8, 10
-    VAR bufferOffset, s8
-    VAR isNegative, s8
-    VAR digitCount, s8
-    
-    jmpG handleNegative, 0, number
-    jmpNZ skipZero, number
-    newAlloc dest, guardedAllocAttr, 1
-    wrt dest[0]:s8, 48
-    ret
-    LBL skipZero
-    wrt isNegative, 0
-    jmp skipNegative
-    LBL handleNegative
-    wrt isNegative, 1
-    sub number, 0, number
-    LBL skipNegative
-    
-    VAR digit, s8
-    wrt digitCount, 0
-    wrt bufferOffset, ?buffer + 10
-    LBL digitLoop
-    inc digitCount
-    mod digit, number, 10
-    add digit, prevArg, 48
-    dec bufferOffset
-    wrt localFrame[bufferOffset]:s8, digit
-    div number, prevArg, 10
-    jmpNZ digitLoop, number
-    
-    VAR destOffset, s8
-    VAR destSize, s8
-    jmpNZ handleHyphen, isNegative
-    newAlloc dest, guardedAllocAttr, digitCount
-    wrt destOffset, 0
-    jmp skipHyphen
-    LBL handleHyphen
-    add destSize, digitCount, 1
-    newAlloc dest, guardedAllocAttr, destSize
-    wrt dest[0]:s8, 45
-    wrt destOffset, 1
-    LBL skipHyphen
-    wrtBuff dest[destOffset]:s8, localFrame[bufferOffset]:s8, digitCount
-END
-
-FUNC textIsEqual, 0, guarded
-    ARG dest, s8
-    ARG text1, s32
-    ARG text2, s32
-    
-    VAR size1, s32
-    VAR size2, s32
-    allocSize size1, text1
-    allocSize size2, text2
-    jmpNE notEqual, size1, size2
-    
-    VAR index, s32
-    wrt index, 0
-    LBL charLoop
-    jmpNG breakChar, size1, index
-    jmpNE notEqual, text1[index]:s8, text2[index]:s8
-    inc index
-    LBL breakChar
-    wrt dest, 1
-    ret
-    
-    LBL notEqual
-    wrt dest, 0
-END
-
 APP_DATA
     LBL shellNameStart
     DATA "wsShell"
     LBL shellNameEnd
+    LBL utilsNameStart
+    DATA "utils"
+    LBL utilsNameEnd
     LBL tempFileNameStart
     DATA "fileManagerTemp"
     LBL tempFileNameEnd

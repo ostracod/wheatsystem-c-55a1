@@ -1,0 +1,172 @@
+
+FUNC convertIntToText, -1
+    ARG dest, s32
+    ARG number, s32
+    
+    VAR buffer, s8, 10
+    VAR bufferOffset, s8
+    VAR isNegative, s8
+    VAR digitCount, s8
+    
+    jmpG handleNegative, 0, number
+    jmpNZ skipZero, number
+    newAlloc dest, 0, 1
+    wrt dest[0]:s8, 48
+    ret
+    LBL skipZero
+    wrt isNegative, 0
+    jmp skipNegative
+    LBL handleNegative
+    wrt isNegative, 1
+    sub number, 0, number
+    LBL skipNegative
+    
+    VAR digit, s8
+    wrt digitCount, 0
+    wrt bufferOffset, ?buffer + 10
+    LBL digitLoop
+    inc digitCount
+    mod digit, number, 10
+    add digit, prevArg, 48
+    dec bufferOffset
+    wrt localFrame[bufferOffset]:s8, digit
+    div number, prevArg, 10
+    jmpNZ digitLoop, number
+    
+    VAR destOffset, s8
+    VAR destSize, s8
+    jmpNZ handleHyphen, isNegative
+    newAlloc dest, 0, digitCount
+    wrt destOffset, 0
+    jmp skipHyphen
+    LBL handleHyphen
+    add destSize, digitCount, 1
+    newAlloc dest, 0, destSize
+    wrt dest[0]:s8, 45
+    wrt destOffset, 1
+    LBL skipHyphen
+    wrtBuff dest[destOffset]:s8, localFrame[bufferOffset]:s8, digitCount
+END
+
+FUNC textIsEqual, -2
+    ARG dest, s8
+    ARG text1, s32
+    ARG text2, s32
+    
+    VAR size1, s32
+    VAR size2, s32
+    allocSize size1, text1
+    allocSize size2, text2
+    jmpNE notEqual, size1, size2
+    
+    VAR index, s32
+    wrt index, 0
+    LBL charLoop
+    jmpNG breakChar, size1, index
+    jmpNE notEqual, text1[index]:s8, text2[index]:s8
+    inc index
+    LBL breakChar
+    wrt dest, 1
+    ret
+    
+    LBL notEqual
+    wrt dest, 0
+END
+
+FUNC createStringBuilder, -3
+    ARG dest, s32
+    # The last 8 bytes of the string builder alloc are reserved
+    # for the addAppDataToString macro.
+    newAlloc dest, guardedAllocAttr, 16
+    newAlloc dest[0]:s32, guardedAllocAttr, 10
+    wrt dest[4]:s32, 0
+END
+
+FUNC increaseStringSize, 0, guarded
+    ARG stringBuilder, s32
+    ARG sizeOffset, s32
+    
+    VAR size, s32
+    VAR nextSize, s32
+    VAR alloc, s32
+    VAR allocSize, s32
+    wrt size, stringBuilder[4]:s32
+    add nextSize, size, sizeOffset
+    wrt stringBuilder[4]:s32, nextSize
+    wrt alloc, stringBuilder[0]:s32
+    allocSize allocSize, alloc
+    jmpG resizeAlloc, nextSize, allocSize
+    ret
+    
+    LBL resizeAlloc
+    VAR nextAlloc, s32
+    VAR nextAllocSize, s32
+    mul nextAllocSize, nextSize, 2
+    newAlloc nextAlloc, guardedAllocAttr, nextAllocSize
+    wrtBuff nextAlloc[0]:s8, alloc[0]:s8, size
+    wrt stringBuilder[0]:s32, nextAlloc
+    delAlloc alloc
+END
+
+FUNC addCharToString, -4
+    ARG stringBuilder, s32
+    ARG char, s8
+    
+    VAR index, s32
+    wrt index, stringBuilder[4]:s32
+    newArgFrame increaseStringSize.argsSize
+    wrt increaseStringSize.args.stringBuilder, stringBuilder
+    wrt increaseStringSize.args.sizeOffset, 1
+    call increaseStringSize
+    VAR alloc, s32
+    wrt alloc, stringBuilder[0]:s32
+    wrt alloc[index]:s8, char
+END
+
+FUNC addTextToString, -5
+    ARG stringBuilder, s32
+    ARG text, s32
+    
+    VAR index, s32
+    VAR size, s32
+    wrt index, stringBuilder[4]:s32
+    allocSize size, text
+    newArgFrame increaseStringSize.argsSize
+    wrt increaseStringSize.args.stringBuilder, stringBuilder
+    wrt increaseStringSize.args.sizeOffset, size
+    call increaseStringSize
+    VAR alloc, s32
+    wrt alloc, stringBuilder[0]:s32
+    wrtBuff alloc[index]:s8, text[0]:s8, size
+END
+
+FUNC addIntToString, -6
+    ARG stringBuilder, s32
+    ARG number, s32
+    
+    VAR text, s32
+    newArgFrame convertIntToText.argsSize
+    wrt convertIntToText.args.number, number
+    call convertIntToText
+    wrt text, convertIntToText.args.dest
+    newArgFrame addTextToString.argsSize
+    wrt addTextToString.args.stringBuilder, stringBuilder
+    wrt addTextToString.args.text, text
+    call addTextToString
+END
+
+FUNC finishString, -7
+    ARG dest, s32
+    ARG stringBuilder, s32
+    
+    VAR alloc, s32
+    VAR size, s32
+    wrt alloc, stringBuilder[0]:s32
+    wrt size, stringBuilder[4]:s32
+    newAlloc dest, 0, size
+    wrtBuff dest[0]:s32, alloc[0]:s8, size
+    delAlloc alloc
+    delAlloc stringBuilder
+END
+
+
