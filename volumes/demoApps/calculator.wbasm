@@ -10,7 +10,7 @@ INCLUDE "../macros.wbasm"
 
 MACRO removeSign, dest, value
     jmpG @handleNegative, 0, value
-    wrt value, 0
+    wrt dest, 0
     jmp @skipNegative
     LBL @handleNegative
     sub value, 0, value
@@ -36,8 +36,8 @@ FUNC init, wsInit.id, guarded
     VAR fpNumber, s32
     VAR text, s32
     newAlloc fpNumber, guardedAllocAttr, 5
-    wrt fpNumber[0]:s32, 0x20000000
-    wrt fpNumber[4]:s8, 0
+    wrt fpNumber[0]:s32, 0x20800000
+    wrt fpNumber[4]:s8, 8
     newArgFrame convertFpNumberToText.argsSize
     wrt convertFpNumberToText.args.fpNumber, fpNumber
     call convertFpNumberToText
@@ -78,7 +78,7 @@ FUNC addFpNumbers
     
     LBL shiftLoop
     jmpNG breakShift, exponent1, exponent2
-    bRight significand2, prevArg, 1
+    div significand2, prevArg, 2
     inc exponent2
     jmp shiftLoop
     LBL breakShift
@@ -267,8 +267,6 @@ FUNC compareFpNumbers
     VAR significand2, s32
     VAR exponent1, s8
     VAR exponent2, s8
-    VAR isNegative1, s8
-    VAR isNegative2, s8
     wrt significand1, fpNumber1[0]:s32
     wrt significand2, fpNumber2[0]:s32
     wrt exponent1, fpNumber1[4]:s8
@@ -316,7 +314,100 @@ FUNC convertFpNumberToText
     ARG dest, s32
     ARG fpNumber, s32
     
-    # TODO: Implement.
+    VAR tempNumber, s32
+    VAR isNegative, s8
+    jmpG handleNegative, 0, fpNumber[0]:s32
+    newAlloc tempNumber, guardedAllocAttr, 5
+    wrtBuff tempNumber[0]:s8, fpNumber[0]:s8, 5
+    wrt isNegative, 0
+    jmp skipNegative
+    LBL handleNegative
+    newArgFrame negateFpNumber.argsSize
+    wrt negateFpNumber.args.fpNumber, fpNumber
+    call negateFpNumber
+    wrt tempNumber, negateFpNumber.args.dest
+    wrt isNegative, 1
+    LBL skipNegative
+    
+    VAR unit, s32
+    VAR ten, s32
+    newAlloc unit, guardedAllocAttr, 5
+    wrt unit[0]:s32, 0x20000000
+    wrt unit[4]:s8, 0
+    newAlloc ten, guardedAllocAttr, 5
+    wrt ten[0]:s32, 0x28000000
+    wrt ten[4]:s8, 3
+    
+    VAR index, s8
+    VAR units, s32, 10
+    VAR offset, s32
+    VAR nextUnit, s32
+    wrt units, unit
+    wrt index, 0
+    LBL shiftLeftLoop
+    newArgFrame multiplyFpNumbers.argsSize
+    wrt multiplyFpNumbers.args.fpNumber1, unit
+    wrt multiplyFpNumbers.args.fpNumber2, ten
+    call multiplyFpNumbers
+    wrt nextUnit, multiplyFpNumbers.args.dest
+    newArgFrame compareFpNumbers.argsSize
+    wrt compareFpNumbers.args.fpNumber1, nextUnit
+    wrt compareFpNumbers.args.fpNumber2, tempNumber
+    call compareFpNumbers
+    jmpG breakShiftLeft, compareFpNumbers.args.dest, 0
+    wrt unit, nextUnit
+    inc index
+    mul offset, index, 4
+    add offset, prevArg, ?units
+    wrt localFrame[offset]:s32, unit
+    jmp shiftLeftLoop
+    LBL breakShiftLeft
+    delAlloc nextUnit
+    
+    VAR text, s32
+    VAR textIndex, s8
+    newAlloc text, guardedAllocAttr, 10
+    fillBuff text[0]:s8, 10, 35:s8
+    jmpNZ handleHyphen, isNegative
+    wrt textIndex, 0
+    jmp skipHyphen
+    LBL handleHyphen
+    wrt text[0]:s8, 45
+    wrt textIndex, 1
+    LBL skipHyphen
+    
+    LBL digitLoop
+    mul offset, index, 4
+    add offset, prevArg, ?units
+    wrt unit, localFrame[offset]:s32
+    VAR digit, s8
+    wrt digit, 48
+    LBL subLoop
+    newArgFrame compareFpNumbers.argsSize
+    wrt compareFpNumbers.args.fpNumber1, unit
+    wrt compareFpNumbers.args.fpNumber2, tempNumber
+    call compareFpNumbers
+    jmpG breakSub, compareFpNumbers.args.dest, 0
+    newArgFrame subtractFpNumbers.argsSize
+    wrt subtractFpNumbers.args.fpNumber1, tempNumber
+    wrt subtractFpNumbers.args.fpNumber2, unit
+    call subtractFpNumbers
+    delAlloc tempNumber
+    wrt tempNumber, subtractFpNumbers.args.dest
+    inc digit
+    jmp subLoop
+    LBL breakSub
+    delAlloc unit
+    wrt text[textIndex]:s8, digit
+    inc textIndex
+    dec index
+    jmpNG digitLoop, 0, index
+    
+    # TODO: Show digits after decimal point and trim text.
+    wrt dest, text
+    
+    delAlloc tempNumber
+    delAlloc ten
 END
 
 APP_DATA

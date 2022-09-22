@@ -251,7 +251,12 @@ void handleTestInstructionHelper(int8_t opcodeOffset) {
         // logTestData.
         int32_t value = readArgInt(0);
         testPacket_t packet = {LOGGED_TEST_PACKET_TYPE, sizeof(value), (int8_t *)&value};
-        sendTestPacket(packet);
+        if (isIntegrationTest) {
+            sendTestPacket(packet);
+        }
+        if (window != NULL) {
+            mvwprintw(window, 10, 0, "%d          ", value);
+        }
     } else if (opcodeOffset == 0x1) {
         // haltTest.
         systemShouldHalt = true;

@@ -2,7 +2,7 @@
 import * as fs from "fs";
 import * as pathUtils from "path";
 import { fileURLToPath } from "url";
-import { Assembler } from "wheatbytecode-asm";
+import { Assembler, InstructionType } from "wheatbytecode-asm";
 
 interface FileConfig {
     name: string;
@@ -24,6 +24,7 @@ const fileTypeSet = {
     bytecodeApp: 1,
     systemApp: 2,
 };
+const extraInstructionTypes = [new InstructionType("logTestData", 0xC0, 1)];
 
 let logIndentationLevel = 0;
 
@@ -143,7 +144,7 @@ const assembleBytecodeFile = (sourcePath: string, destinationPath: string): void
     if (fs.existsSync(destinationPath)) {
         fs.unlinkSync(destinationPath);
     }
-    const assembler = new Assembler({ shouldPrintLog: false });
+    const assembler = new Assembler({ shouldPrintLog: false, extraInstructionTypes });
     assembler.catchAssemblyError(() => {
         assembler.assembleCodeFile(sourcePath, destinationPath);
     });
