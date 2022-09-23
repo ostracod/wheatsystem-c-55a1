@@ -1,5 +1,7 @@
 
 INCLUDE "../macros.wbasm"
+INCLUDE "../utils.wbasm"
+INCLUDE "../stringBuilder.wbasm"
 
 # Floating-point number = [
 #    s32 significand
@@ -19,6 +21,9 @@ MACRO removeSign, dest, value
 END
 
 VAR shellHandle, s32
+VAR utilsHandle, s32
+VAR displayMessageIndex, s32
+VAR promptTextIndex, s32
 VAR window, s32
 
 FUNC init, wsInit.id, guarded
@@ -26,6 +31,15 @@ FUNC init, wsInit.id, guarded
     newTextAlloc shellName, shellNameStart, shellNameEnd
     openFile shellHandle, shellName
     delAlloc shellName
+    findFunc displayMessageIndex, shellHandle, wsDisplayWindowMessage.id
+    findFunc promptTextIndex, shellHandle, wsPromptWindowText.id
+    
+    VAR utilsName, s32
+    newTextAlloc utilsName, utilsNameStart, utilsNameEnd
+    openFile utilsHandle, utilsName
+    delAlloc utilsName
+    launch utilsHandle
+    initStringBuilderVars
     
     VAR newWindowIndex, s32
     findFunc newWindowIndex, shellHandle, wsNewWindow.id
@@ -33,22 +47,58 @@ FUNC init, wsInit.id, guarded
     callRemote shellHandle, newWindowIndex
     wrt window, wsNewWindow.args.dest
     
+    VAR promptMessage, s32
+    newTextAlloc promptMessage, promptMessageStart, promptMessageEnd
+    
+    LBL mainLoop
+    VAR expression, s32
+    newArgFrame wsPromptWindowText.argsSize
+    wrt wsPromptWindowText.args.window, window
+    wrt wsPromptWindowText.args.message, promptMessage
+    callRemote shellHandle, promptTextIndex
+    wrt expression, wsPromptWindowText.args.dest
+    jmpZ mainLoop, expression
+    
     VAR fpNumber, s32
-    VAR text, s32
-    newAlloc fpNumber, guardedAllocAttr, 5
-    wrt fpNumber[0]:s32, 0x20800000
-    wrt fpNumber[4]:s8, 8
+    newArgFrame evaluateExpression.argsSize
+    wrt evaluateExpression.args.expression, expression
+    call evaluateExpression
+    wrt fpNumber, evaluateExpression.args.dest
+    
+    VAR fpNumberText, s32
     newArgFrame convertFpNumberToText.argsSize
     wrt convertFpNumberToText.args.fpNumber, fpNumber
     call convertFpNumberToText
-    wrt text, convertFpNumberToText.args.dest
+    wrt fpNumberText, convertFpNumberToText.args.dest
     
-    VAR displayWindowMessageIndex, s32
-    findFunc displayWindowMessageIndex, shellHandle, wsDisplayWindowMessage.id
+    VAR stringBuilder, s32
+    VAR resultMessage, s32
+    createStringBuilder stringBuilder
+    addTextToString stringBuilder, expression
+    addAppDataToString stringBuilder, ?equalTextStart, ?equalTextEnd
+    addTextToString stringBuilder, fpNumberText
+    finishString resultMessage, stringBuilder
+    
     newArgFrame wsDisplayWindowMessage.argsSize
     wrt wsDisplayWindowMessage.args.window, window
-    wrt wsDisplayWindowMessage.args.message, text
-    callRemote shellHandle, displayWindowMessageIndex
+    wrt wsDisplayWindowMessage.args.message, resultMessage
+    callRemote shellHandle, displayMessageIndex
+    
+    delAlloc expression
+    delAlloc fpNumber
+    delAlloc fpNumberText
+    delAlloc resultMessage
+    jmp mainLoop
+END
+
+FUNC evaluateExpression
+    ARG dest, s32
+    ARG expression, s32
+    
+    # TODO: Implement.
+    newAlloc dest, guardedAllocAttr, 5
+    wrt dest[0]:s32, 0x20800000
+    wrt dest[4]:s8, 2
 END
 
 FUNC addFpNumbers
@@ -366,8 +416,8 @@ FUNC convertFpNumberToText
     
     VAR text, s32
     VAR textIndex, s8
-    newAlloc text, guardedAllocAttr, 10
-    fillBuff text[0]:s8, 10, 35:s8
+    newAlloc text, guardedAllocAttr, 30
+    fillBuff text[0]:s8, 30, 35:s8
     jmpNZ handleHyphen, isNegative
     wrt textIndex, 0
     jmp skipHyphen
@@ -403,11 +453,52 @@ FUNC convertFpNumberToText
     dec index
     jmpNG digitLoop, 0, index
     
-    # TODO: Show digits after decimal point and trim text.
-    wrt dest, text
+    VAR shouldAddPeriod, s8
+    newAlloc unit, guardedAllocAttr, 5
+    wrt unit[0]:s32, 0x33333333
+    wrt unit[4]:s8, -4
+    wrt shouldAddPeriod, 1
+    LBL shiftRightLoop
+    jmpZ breakShiftRight, tempNumber[0]:s32
+    jmpNG breakShiftRight, tempNumber[4]:s8, -22
+    jmpZ skipPeriod, shouldAddPeriod
+    wrt text[textIndex]:s8, 46
+    inc textIndex
+    wrt shouldAddPeriod, 0
+    LBL skipPeriod
+    wrt digit, 48
+    LBL subLoop2
+    newArgFrame compareFpNumbers.argsSize
+    wrt compareFpNumbers.args.fpNumber1, unit
+    wrt compareFpNumbers.args.fpNumber2, tempNumber
+    call compareFpNumbers
+    jmpG breakSub2, compareFpNumbers.args.dest, 0
+    newArgFrame subtractFpNumbers.argsSize
+    wrt subtractFpNumbers.args.fpNumber1, tempNumber
+    wrt subtractFpNumbers.args.fpNumber2, unit
+    call subtractFpNumbers
+    delAlloc tempNumber
+    wrt tempNumber, subtractFpNumbers.args.dest
+    inc digit
+    jmp subLoop2
+    LBL breakSub2
+    wrt text[textIndex]:s8, digit
+    inc textIndex
+    newArgFrame divideFpNumbers.argsSize
+    wrt divideFpNumbers.args.fpNumber1, unit
+    wrt divideFpNumbers.args.fpNumber2, ten
+    call divideFpNumbers
+    delAlloc unit
+    wrt unit, divideFpNumbers.args.dest
+    jmpG shiftRightLoop, unit[4]:s8, -17
+    LBL breakShiftRight
     
+    newAlloc dest, guardedAllocAttr, textIndex
+    wrtBuff dest[0]:s8, text[0]:s8, textIndex
     delAlloc tempNumber
     delAlloc ten
+    delAlloc unit
+    delAlloc text
 END
 
 FUNC cleanUpAndQuit, 0, guarded
@@ -417,6 +508,7 @@ FUNC cleanUpAndQuit, 0, guarded
     wrt wsDelWindow.args.window, window
     callRemote shellHandle, delWindowIndex
     closeFile shellHandle
+    closeFile utilsHandle
     quitApp
 END
 
@@ -435,9 +527,12 @@ APP_DATA
     LBL utilsNameStart
     DATA "utils"
     LBL utilsNameEnd
-    LBL titleStart
-    DATA "Prime number:"
-    LBL titleEnd
+    LBL promptMessageStart
+    DATA "Enter expr:"
+    LBL promptMessageEnd
+    LBL equalTextStart
+    DATA " = "
+    LBL equalTextEnd
 END
 
 
