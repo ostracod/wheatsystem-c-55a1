@@ -91,6 +91,25 @@ FUNC displayPrime
     delAlloc text
 END
 
+FUNC cleanUpAndQuit, 0, guarded
+    VAR delWindowIndex, s32
+    findFunc delWindowIndex, shellHandle, wsDelWindow.id
+    newArgFrame wsDelWindow.argsSize
+    wrt wsDelWindow.args.window, window
+    callRemote shellHandle, delWindowIndex
+    closeFile shellHandle
+    closeFile utilsHandle
+    quitApp
+END
+
+FUNC kill, wsKill.id, guarded
+    call cleanUpAndQuit
+END
+
+FUNC reqDelWindow, wsReqDelWindow.id, guarded
+    call cleanUpAndQuit
+END
+
 APP_DATA
     LBL shellNameStart
     DATA "wsShell"
