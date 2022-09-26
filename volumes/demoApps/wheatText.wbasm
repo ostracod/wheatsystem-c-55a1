@@ -1,6 +1,8 @@
 
 INCLUDE "../macros.wbasm"
 
+DEF keyBufferSize, 5
+
 VAR shellHandle, s32
 VAR wrtWindowTermIndex, s32
 VAR window, s32
@@ -12,6 +14,11 @@ VAR scrollLineIndex, s16
 VAR scrollCharIndex, s16
 VAR cursorLineIndex, s16
 VAR cursorCharIndex, s16
+VAR keyBuffer, s8, keyBufferSize
+VAR keyIndex, s8
+VAR lastKeyIndex, s8
+VAR keyMutex, s32
+VAR keyReadyGate, s32
 
 # Line = [
 #    s32 pointer to text allocation
@@ -37,6 +44,11 @@ FUNC init, wsInit.id, guarded
     wrt scrollCharIndex, 0
     wrt cursorLineIndex, 0
     wrt cursorCharIndex, 0
+    wrt keyIndex, 0
+    wrt lastKeyIndex, 0
+    newGate keyMutex, 1
+    newGate keyReadyGate, 1
+    closeGate keyReadyGate
     
     VAR newWindowIndex, s32
     findFunc newWindowIndex, shellHandle, wsNewWindow.id
@@ -52,11 +64,61 @@ FUNC init, wsInit.id, guarded
     wrt windowWidth, wsWindowTermSize.args.widthDest
     wrt windowHeight, wsWindowTermSize.args.heightDest
     
+    call runEditor
+END
+
+FUNC runEditor
+    LBL editorLoop
     call drawLines
+    LBL keyLoop
+    waitGate keyReadyGate
+    VAR key, s8
+    waitGate keyMutex
+    jmpNE handleKey, keyIndex, lastKeyIndex
+    wrt key, 0
+    jmp skipKey
+    LBL handleKey
+    inc lastKeyIndex
+    jmpG skipWrap, keyBufferSize, lastKeyIndex
+    wrt lastKeyIndex, 0
+    LBL skipWrap
+    VAR offset, s16
+    add offset, ?keyBuffer, lastKeyIndex
+    wrt key, globalFrame[offset]:s8
+    LBL skipKey
+    openGate keyMutex
+    jmpZ keyLoop, key
+    
+    VAR line, s32
+    VAR text, s32
+    VAR textSize, s16
+    VAR nextTextSize, s16
+    VAR allocSize, s16
+    wrt line, lines[cursorLineIndex]:s32
+    wrt text, line[0]:s32
+    wrt textSize, line[4]:s16
+    allocSize allocSize, text
+    add nextTextSize, textSize, 1
+    jmpNG skipResize, nextTextSize, allocSize
+    mul allocSize, prevArg, 2
+    VAR nextText, s32
+    newAlloc nextText, guardedAllocAttr, allocSize
+    wrtBuff nextText[0]:s8, text[0]:s8, textSize
+    delAlloc text
+    wrt text, nextText
+    wrt line[0]:s32, text
+    LBL skipResize
+    wrt textSize, nextTextSize
+    wrt line[4]:s16, textSize
+    wrt text[cursorCharIndex]:s8, key
+    inc cursorCharIndex
+    
+    jmp editorLoop
 END
 
 FUNC drawLines
     VAR offset, s32
+    VAR size, s16
     
     VAR lineIndex, s16
     VAR charIndex, s16
@@ -83,6 +145,16 @@ FUNC drawLines
     wrt text, line[0]:s32
     wrt textSize, line[4]:s16
     add nextCharIndex, charIndex, windowWidth
+    jmpG handleOverflow, nextCharIndex, textSize
+    wrt offset, nextCharIndex
+    jmp skipOverflow
+    LBL handleOverflow
+    wrt offset, textSize
+    LBL skipOverflow
+    sub size, offset, charIndex
+    jmpZ skipCopy, size
+    wrtBuff windowLine[0]:s8, text[charIndex]:s8, size
+    LBL skipCopy
     jmpNE skipCursor, lineIndex, cursorLineIndex
     jmpG skipCursor, charIndex, cursorCharIndex
     jmpNG skipCursor, nextCharIndex, cursorCharIndex
@@ -108,6 +180,22 @@ FUNC drawLines
     jmpG drawLoop, windowHeight, posY
     
     delAlloc windowLine
+END
+
+FUNC windowKeyPressed, wsWindowKeyPressed.id, guarded
+    ARG window, s32
+    ARG key, s8
+    
+    waitGate keyMutex
+    inc keyIndex
+    jmpG skipWrap, keyBufferSize, keyIndex
+    wrt keyIndex, 0
+    LBL skipWrap
+    VAR offset, s16
+    add offset, ?keyBuffer, keyIndex
+    wrt globalFrame[offset]:s8, key
+    openGate keyMutex
+    openGate keyReadyGate
 END
 
 FUNC cleanUpAndQuit, 0, guarded
