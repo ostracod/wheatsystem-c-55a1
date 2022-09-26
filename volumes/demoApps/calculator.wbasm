@@ -25,6 +25,7 @@ VAR utilsHandle, s32
 VAR displayMessageIndex, s32
 VAR promptTextIndex, s32
 VAR window, s32
+VAR ten, s32
 
 FUNC init, wsInit.id, guarded
     VAR shellName, s32
@@ -49,6 +50,9 @@ FUNC init, wsInit.id, guarded
     
     VAR promptMessage, s32
     newTextAlloc promptMessage, promptMessageStart, promptMessageEnd
+    newAlloc ten, guardedAllocAttr, 5
+    wrt ten[0]:s32, 0x28000000
+    wrt ten[4]:s8, 3
     
     LBL mainLoop
     VAR expression, s32
@@ -96,9 +100,120 @@ FUNC evaluateExpression
     ARG expression, s32
     
     # TODO: Implement.
+    newArgFrame parseFpNumber.argsSize
+    wrt parseFpNumber.args.expression, expression
+    wrt parseFpNumber.args.expressionIndex, 0
+    call parseFpNumber
+    wrt dest, parseFpNumber.args.dest
+END
+
+FUNC parseFpNumber
+    ARG dest, s32
+    ARG expression, s32
+    ARG expressionIndex, s16
+    
+    VAR char, s8
+    VAR digit, s8
+    VAR unit, s32
+    VAR fpNumber, s32
+    
+    VAR expressionSize, s16
+    VAR startIndex, s16
+    allocSize expressionSize, expression
+    wrt startIndex, expressionIndex
+    
+    LBL intLoop
+    jmpNG breakInt, expressionSize, expressionIndex
+    wrt char, expression[expressionIndex]:s8
+    jmpG breakInt, 48, char
+    jmpG breakInt, char, 57
+    inc expressionIndex
+    jmp intLoop
+    LBL breakInt
+    
     newAlloc dest, guardedAllocAttr, 5
-    wrt dest[0]:s32, 0x20800000
-    wrt dest[4]:s8, 2
+    wrt dest[0]:s32, 0
+    wrt dest[4]:s8, 0
+    newAlloc unit, guardedAllocAttr, 5
+    wrt unit[0]:s32, 0x20000000
+    wrt unit[4]:s8, 0
+    newAlloc fpNumber, guardedAllocAttr, 5
+    
+    VAR index, s16
+    wrt index, expressionIndex
+    LBL shiftLeftLoop
+    jmpNG breakShiftLeft, index, startIndex
+    dec index
+    sub digit, expression[index]:s8, 48
+    mul fpNumber[0]:s32, 0x08000000, digit
+    wrt fpNumber[4]:s8, 2
+    newArgFrame clampFpNumber.argsSize
+    wrt clampFpNumber.args.fpNumber, fpNumber
+    call clampFpNumber
+    newArgFrame multiplyFpNumbers.argsSize
+    wrt multiplyFpNumbers.args.fpNumber1, fpNumber
+    wrt multiplyFpNumbers.args.fpNumber2, unit
+    call multiplyFpNumbers
+    delAlloc fpNumber
+    wrt fpNumber, multiplyFpNumbers.args.dest
+    newArgFrame addFpNumbers.argsSize
+    wrt addFpNumbers.args.fpNumber1, dest
+    wrt addFpNumbers.args.fpNumber2, fpNumber
+    call addFpNumbers
+    delAlloc dest
+    wrt dest, addFpNumbers.args.dest
+    newArgFrame multiplyFpNumbers.argsSize
+    wrt multiplyFpNumbers.args.fpNumber1, unit
+    wrt multiplyFpNumbers.args.fpNumber2, ten
+    call multiplyFpNumbers
+    delAlloc unit
+    wrt unit, multiplyFpNumbers.args.dest
+    jmp shiftLeftLoop
+    LBL breakShiftLeft
+    
+    jmpNG cleanUp, expressionSize, expressionIndex
+    wrt char, expression[expressionIndex]:s8
+    jmpNE cleanUp, char, 46
+    inc expressionIndex
+    wrt unit[0]:s32, 0x33333333
+    wrt unit[4]:s8, -4
+    
+    LBL shiftRightLoop
+    jmpNG breakShiftRight, expressionSize, expressionIndex
+    wrt char, expression[expressionIndex]:s8
+    jmpG breakShiftRight, 48, char
+    jmpG breakShiftRight, char, 57
+    inc expressionIndex
+    sub digit, char, 48
+    mul fpNumber[0]:s32, 0x08000000, digit
+    wrt fpNumber[4]:s8, 2
+    newArgFrame clampFpNumber.argsSize
+    wrt clampFpNumber.args.fpNumber, fpNumber
+    call clampFpNumber
+    newArgFrame multiplyFpNumbers.argsSize
+    wrt multiplyFpNumbers.args.fpNumber1, fpNumber
+    wrt multiplyFpNumbers.args.fpNumber2, unit
+    call multiplyFpNumbers
+    delAlloc fpNumber
+    wrt fpNumber, multiplyFpNumbers.args.dest
+    newArgFrame addFpNumbers.argsSize
+    wrt addFpNumbers.args.fpNumber1, dest
+    wrt addFpNumbers.args.fpNumber2, fpNumber
+    call addFpNumbers
+    delAlloc dest
+    wrt dest, addFpNumbers.args.dest
+    newArgFrame divideFpNumbers.argsSize
+    wrt divideFpNumbers.args.fpNumber1, unit
+    wrt divideFpNumbers.args.fpNumber2, ten
+    call divideFpNumbers
+    delAlloc unit
+    wrt unit, divideFpNumbers.args.dest
+    jmp shiftRightLoop
+    LBL breakShiftRight
+    
+    LBL cleanUp
+    delAlloc unit
+    delAlloc fpNumber
 END
 
 FUNC addFpNumbers
@@ -380,13 +495,9 @@ FUNC convertFpNumberToText
     LBL skipNegative
     
     VAR unit, s32
-    VAR ten, s32
     newAlloc unit, guardedAllocAttr, 5
     wrt unit[0]:s32, 0x20000000
     wrt unit[4]:s8, 0
-    newAlloc ten, guardedAllocAttr, 5
-    wrt ten[0]:s32, 0x28000000
-    wrt ten[4]:s8, 3
     
     VAR index, s8
     VAR units, s32, 10
@@ -433,6 +544,7 @@ FUNC convertFpNumberToText
     VAR digit, s8
     wrt digit, 48
     LBL subLoop
+    jmpNG breakSub, 57, digit
     newArgFrame compareFpNumbers.argsSize
     wrt compareFpNumbers.args.fpNumber1, unit
     wrt compareFpNumbers.args.fpNumber2, tempNumber
@@ -468,6 +580,7 @@ FUNC convertFpNumberToText
     LBL skipPeriod
     wrt digit, 48
     LBL subLoop2
+    jmpNG breakSub2, 57, digit
     newArgFrame compareFpNumbers.argsSize
     wrt compareFpNumbers.args.fpNumber1, unit
     wrt compareFpNumbers.args.fpNumber2, tempNumber
@@ -496,7 +609,6 @@ FUNC convertFpNumberToText
     newAlloc dest, guardedAllocAttr, textIndex
     wrtBuff dest[0]:s8, text[0]:s8, textIndex
     delAlloc tempNumber
-    delAlloc ten
     delAlloc unit
     delAlloc text
 END
