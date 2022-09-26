@@ -1,0 +1,137 @@
+
+INCLUDE "../macros.wbasm"
+
+VAR shellHandle, s32
+VAR wrtWindowTermIndex, s32
+VAR window, s32
+VAR windowWidth, s16
+VAR windowHeight, s16
+VAR lines, s32
+VAR lineCount, s16
+VAR scrollLineIndex, s16
+VAR scrollCharIndex, s16
+VAR cursorLineIndex, s16
+VAR cursorCharIndex, s16
+
+# Line = [
+#    s32 pointer to text allocation
+#    s16 text length
+# ]
+
+FUNC init, wsInit.id, guarded
+    VAR shellName, s32
+    newTextAlloc shellName, shellNameStart, shellNameEnd
+    openFile shellHandle, shellName
+    delAlloc shellName
+    findFunc wrtWindowTermIndex, shellHandle, wsWrtWindowTerm.id
+    
+    newAlloc lines, guardedAllocAttr, 20
+    VAR line, s32
+    newAlloc line, guardedAllocAttr, 6
+    newAlloc line[0]:s32, guardedAllocAttr, 10
+    wrt line[4]:s16, 0
+    wrt lines[0]:s32, line
+    wrt lineCount, 1
+    
+    wrt scrollLineIndex, 0
+    wrt scrollCharIndex, 0
+    wrt cursorLineIndex, 0
+    wrt cursorCharIndex, 0
+    
+    VAR newWindowIndex, s32
+    findFunc newWindowIndex, shellHandle, wsNewWindow.id
+    newArgFrame wsNewWindow.argsSize
+    callRemote shellHandle, newWindowIndex
+    wrt window, wsNewWindow.args.dest
+    
+    VAR windowSizeIndex, s32
+    findFunc windowSizeIndex, shellHandle, wsWindowTermSize.id
+    newArgFrame wsWindowTermSize.argsSize
+    wrt wsWindowTermSize.args.window, window
+    callRemote shellHandle, windowSizeIndex
+    wrt windowWidth, wsWindowTermSize.args.widthDest
+    wrt windowHeight, wsWindowTermSize.args.heightDest
+    
+    call drawLines
+END
+
+FUNC drawLines
+    VAR offset, s32
+    
+    VAR lineIndex, s16
+    VAR charIndex, s16
+    VAR windowLine, s32
+    VAR posY, s16
+    wrt lineIndex, scrollLineIndex
+    wrt charIndex, scrollCharIndex
+    newAlloc windowLine, guardedAllocAttr, windowWidth
+    wrt posY, 0
+    
+    LBL drawLoop
+    fillBuff windowLine[0]:s8, windowWidth, 32:s8
+    
+    VAR line, s32
+    VAR text, s32
+    VAR textSize, s16
+    VAR nextCharIndex, s16
+    jmpG handleLine, lineCount, lineIndex
+    wrt line, 0
+    jmp skipLine
+    LBL handleLine
+    mul offset, lineIndex, 4
+    wrt line, lines[offset]:s32
+    wrt text, line[0]:s32
+    wrt textSize, line[4]:s16
+    add nextCharIndex, charIndex, windowWidth
+    jmpNE skipCursor, lineIndex, cursorLineIndex
+    jmpG skipCursor, charIndex, cursorCharIndex
+    jmpNG skipCursor, nextCharIndex, cursorCharIndex
+    sub offset, cursorCharIndex, charIndex
+    wrt windowLine[offset]:s8, 95
+    LBL skipCursor
+    LBL skipLine
+    
+    newArgFrame wsWrtWindowTerm.argsSize
+    wrt wsWrtWindowTerm.args.window, window
+    wrt wsWrtWindowTerm.args.x, 0
+    wrt wsWrtWindowTerm.args.y, posY
+    wrt wsWrtWindowTerm.args.text, windowLine
+    callRemote shellHandle, wrtWindowTermIndex
+    
+    jmpZ skipAdvance, line
+    wrt charIndex, nextCharIndex
+    jmpNG skipAdvance, charIndex, textSize
+    wrt charIndex, 0
+    inc lineIndex
+    LBL skipAdvance
+    inc posY
+    jmpG drawLoop, windowHeight, posY
+    
+    delAlloc windowLine
+END
+
+FUNC cleanUpAndQuit, 0, guarded
+    VAR delWindowIndex, s32
+    findFunc delWindowIndex, shellHandle, wsDelWindow.id
+    newArgFrame wsDelWindow.argsSize
+    wrt wsDelWindow.args.window, window
+    callRemote shellHandle, delWindowIndex
+    closeFile shellHandle
+    quitApp
+END
+
+FUNC kill, wsKill.id, guarded
+    call cleanUpAndQuit
+END
+
+FUNC reqDelWindow, wsReqDelWindow.id, guarded
+    call cleanUpAndQuit
+END
+
+APP_DATA
+    LBL shellNameStart
+    DATA "wsShell"
+    LBL shellNameEnd
+END
+
+

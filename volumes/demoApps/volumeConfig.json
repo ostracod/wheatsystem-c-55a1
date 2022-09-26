@@ -46,6 +46,12 @@
             "type": "bytecodeApp",
             "hasAdminPerm": false,
             "isGuarded": false
+        },
+        {
+            "name": "wheatText",
+            "type": "bytecodeApp",
+            "hasAdminPerm": false,
+            "isGuarded": false
         }
     ]
 }
