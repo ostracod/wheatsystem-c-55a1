@@ -26,6 +26,8 @@ VAR displayMessageIndex, s32
 VAR promptTextIndex, s32
 VAR window, s32
 VAR ten, s32
+VAR errorStartOffset, s32
+VAR errorEndOffset, s32
 
 FUNC init, wsInit.id, guarded
     VAR shellName, s32
@@ -54,6 +56,11 @@ FUNC init, wsInit.id, guarded
     wrt ten[0]:s32, 0x28000000
     wrt ten[4]:s8, 3
     
+    VAR message, s32
+    VAR size, s16
+    VAR err, s8
+    setErrJmp handleErr
+    
     LBL mainLoop
     VAR expression, s32
     newArgFrame wsPromptWindowText.argsSize
@@ -69,6 +76,24 @@ FUNC init, wsInit.id, guarded
     call evaluateExpression
     wrt fpNumber, evaluateExpression.args.dest
     
+    jmp skipErr
+    LBL handleErr
+    err err
+    jmpE skipThrow, err, -1
+    throw err
+    LBL skipThrow
+    sub size, errorEndOffset, errorStartOffset
+    newAlloc message, guardedAllocAttr, size
+    wrtBuff message[0]:s8, appData[errorStartOffset]:s8, size
+    newArgFrame wsDisplayWindowMessage.argsSize
+    wrt wsDisplayWindowMessage.args.window, window
+    wrt wsDisplayWindowMessage.args.message, message
+    callRemote shellHandle, displayMessageIndex
+    delAlloc expression
+    delAlloc message
+    jmp mainLoop
+    LBL skipErr
+    
     VAR fpNumberText, s32
     newArgFrame convertFpNumberToText.argsSize
     wrt convertFpNumberToText.args.fpNumber, fpNumber
@@ -76,22 +101,21 @@ FUNC init, wsInit.id, guarded
     wrt fpNumberText, convertFpNumberToText.args.dest
     
     VAR stringBuilder, s32
-    VAR resultMessage, s32
     createStringBuilder stringBuilder
     addTextToString stringBuilder, expression
     addAppDataToString stringBuilder, ?equalTextStart, ?equalTextEnd
     addTextToString stringBuilder, fpNumberText
-    finishString resultMessage, stringBuilder
+    finishString message, stringBuilder
     
     newArgFrame wsDisplayWindowMessage.argsSize
     wrt wsDisplayWindowMessage.args.window, window
-    wrt wsDisplayWindowMessage.args.message, resultMessage
+    wrt wsDisplayWindowMessage.args.message, message
     callRemote shellHandle, displayMessageIndex
     
     delAlloc expression
     delAlloc fpNumber
     delAlloc fpNumberText
-    delAlloc resultMessage
+    delAlloc message
     jmp mainLoop
 END
 
@@ -99,12 +123,85 @@ FUNC evaluateExpression
     ARG dest, s32
     ARG expression, s32
     
-    # TODO: Implement.
+    newArgFrame evaluateExpressionHelper.argsSize
+    wrt evaluateExpressionHelper.args.expression, expression
+    wrt evaluateExpressionHelper.args.expressionIndex, 0
+    wrt evaluateExpressionHelper.args.precedence, 99
+    call evaluateExpressionHelper
+    wrt dest, evaluateExpressionHelper.args.dest
+END
+
+FUNC evaluateExpressionHelper
+    ARG dest, s32
+    ARG expression, s32
+    ARG expressionIndex, s32
+    ARG precedence, s8
+    
+    VAR expressionSize, s16
+    allocSize expressionSize, expression
+    jmpG skipErr, expressionSize, expressionIndex
+    wrt errorStartOffset, ?malformedErrorStart
+    wrt errorEndOffset, ?malformedErrorEnd
+    throw -1
+    LBL skipErr
+    
+    VAR char, s8
+    wrt char, expression[expressionIndex]:s8
+    jmpE handleDigit, char, 46
+    jmpG skipDigit, char, 57
+    jmpG handleDigit, char, 47
+    LBL skipDigit
+    jmpE handleNegation, char, 45
+    jmpE handleParentheses, char, 40
+    wrt errorStartOffset, ?badCharErrorStart
+    wrt errorEndOffset, ?badCharErrorEnd
+    throw -1
+    
+    LBL handleDigit
     newArgFrame parseFpNumber.argsSize
     wrt parseFpNumber.args.expression, expression
-    wrt parseFpNumber.args.expressionIndex, 0
+    wrt parseFpNumber.args.expressionIndex, expressionIndex
     call parseFpNumber
     wrt dest, parseFpNumber.args.dest
+    wrt expressionIndex, parseFpNumber.args.expressionIndex
+    jmp binaryOperator
+    
+    LBL handleNegation
+    inc expressionIndex
+    newArgFrame evaluateExpressionHelper.argsSize
+    wrt evaluateExpressionHelper.args.expression, expression
+    wrt evaluateExpressionHelper.args.expressionIndex, expressionIndex
+    wrt evaluateExpressionHelper.args.precedence, 2
+    call evaluateExpressionHelper
+    wrt dest, evaluateExpressionHelper.args.dest
+    wrt expressionIndex, evaluateExpressionHelper.args.expressionIndex
+    newArgFrame negateFpNumber.argsSize
+    wrt negateFpNumber.args.fpNumber, dest
+    call negateFpNumber
+    delAlloc dest
+    wrt dest, negateFpNumber.args.dest
+    jmp binaryOperator
+    
+    LBL handleParentheses
+    inc expressionIndex
+    newArgFrame evaluateExpressionHelper.argsSize
+    wrt evaluateExpressionHelper.args.expression, expression
+    wrt evaluateExpressionHelper.args.expressionIndex, expressionIndex
+    wrt evaluateExpressionHelper.args.precedence, 99
+    call evaluateExpressionHelper
+    wrt dest, evaluateExpressionHelper.args.dest
+    wrt expressionIndex, evaluateExpressionHelper.args.expressionIndex
+    jmpNG throwErr2, expressionSize, expressionIndex
+    wrt char, expression[expressionIndex]:s8
+    inc expressionIndex
+    jmpE skipErr2, char, 41
+    LBL throwErr2
+    wrt errorStartOffset, ?missingParenErrorStart
+    wrt errorEndOffset, ?missingParenErrorEnd
+    throw -1
+    LBL skipErr2
+    
+    LBL binaryOperator
 END
 
 FUNC parseFpNumber
@@ -645,6 +742,15 @@ APP_DATA
     LBL equalTextStart
     DATA " = "
     LBL equalTextEnd
+    LBL malformedErrorStart
+    DATA "Malformed expression."
+    LBL malformedErrorEnd
+    LBL badCharErrorStart
+    DATA "Unexpected character."
+    LBL badCharErrorEnd
+    LBL missingParenErrorStart
+    DATA "Missing parenthesis."
+    LBL missingParenErrorEnd
 END
 
 
