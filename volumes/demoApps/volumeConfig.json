@@ -48,6 +48,12 @@
             "isGuarded": false
         },
         {
+            "name": "textFile",
+            "type": "generic",
+            "hasAdminPerm": false,
+            "isGuarded": false
+        },
+        {
             "name": "wheatText",
             "type": "bytecodeApp",
             "hasAdminPerm": false,

@@ -11,9 +11,11 @@ DEF keyBufferSize, 5
 
 VAR shellHandle, s32
 VAR wrtWindowTermIndex, s32
+VAR promptOptionIndex, s32
 VAR window, s32
 VAR windowWidth, s16
 VAR windowHeight, s16
+
 VAR lines, s32
 VAR lineCount, s16
 VAR scrollLineIndex, s16
@@ -26,6 +28,12 @@ VAR lastKeyIndex, s8
 VAR keyMutex, s32
 VAR keyReadyGate, s32
 
+VAR fileName, s32
+VAR newFileTitle, s32
+VAR openTitle, s32
+VAR newFileOptions, s32
+VAR oldFileOptions, s32
+
 # Line = [
 #    s32 pointer to text allocation
 #    s16 text length
@@ -37,6 +45,7 @@ FUNC init, wsInit.id, guarded
     openFile shellHandle, shellName
     delAlloc shellName
     findFunc wrtWindowTermIndex, shellHandle, wsWrtWindowTerm.id
+    findFunc promptOptionIndex, shellHandle, wsPromptWindowOption.id
     
     newAlloc lines, guardedAllocAttr, 20
     VAR line, s32
@@ -55,6 +64,21 @@ FUNC init, wsInit.id, guarded
     newGate keyMutex, 1
     newGate keyReadyGate, 1
     closeGate keyReadyGate
+    
+    VAR text, s32
+    wrt fileName, null
+    newTextAlloc newFileTitle, newFileTitleStart, newFileTitleEnd
+    newTextAlloc openTitle, openTitleStart, openTitleEnd
+    newAlloc newFileOptions, guardedAllocAttr, 8
+    newAlloc oldFileOptions, guardedAllocAttr, 12
+    newTextAlloc text, saveOptionStart, saveOptionEnd
+    wrt oldFileOptions[0]:s32, text
+    newTextAlloc text, saveAsOptionStart, saveAsOptionEnd
+    wrt newFileOptions[0]:s32, text
+    wrt oldFileOptions[4]:s32, text
+    newTextAlloc text, openOptionStart, openOptionEnd
+    wrt newFileOptions[4]:s32, text
+    wrt oldFileOptions[8]:s32, text
     
     VAR newWindowIndex, s32
     findFunc newWindowIndex, shellHandle, wsNewWindow.id
@@ -108,6 +132,7 @@ FUNC runEditor
     jmpE handleDown, key, -4
     jmpE handleReturn, key, 10
     jmpE handleDelete, key, 127
+    jmpE handleEscape, key, 27
     jmpG keyLoop, 32, key
     newArgFrame insertChar.argsSize
     wrt insertChar.args.char, key
@@ -178,6 +203,10 @@ FUNC runEditor
     
     LBL handleDelete
     call deleteChar
+    jmp editorLoop
+    
+    LBL handleEscape
+    call showMenu
     jmp editorLoop
 END
 
@@ -346,6 +375,72 @@ FUNC deleteChar
     dec lineCount
 END
 
+FUNC showMenu
+    LBL menuLoop
+    VAR title, s32
+    VAR options, s32
+    jmpZ handleNewFileOptions, fileName
+    wrt title, fileName
+    wrt options, oldFileOptions
+    jmp skipNewFileOptions
+    LBL handleNewFileOptions
+    wrt title, newFileTitle
+    wrt options, newFileOptions
+    LBL skipNewFileOptions
+    
+    VAR index, s8
+    newArgFrame wsPromptWindowOption.argsSize
+    wrt wsPromptWindowOption.args.window, window
+    wrt wsPromptWindowOption.args.message, title
+    wrt wsPromptWindowOption.args.options, options
+    callRemote shellHandle, promptOptionIndex
+    wrt index, wsPromptWindowOption.args.dest
+    jmpZ skipOldFileOption, fileName
+    jmpE handleSave, index, 0
+    dec index
+    LBL skipOldFileOption
+    jmpE handleSaveAs, index, 0
+    jmpE handleOpen, index, 1
+    ret
+    
+    LBL handleSave
+    ret
+    
+    LBL handleSaveAs
+    ret
+    
+    LBL handleOpen
+    call openFile
+    jmp menuLoop
+END
+
+FUNC openFile
+    VAR names, s32
+    VAR index, s32
+    VAR offset, s32
+    allFileNames names
+    newArgFrame wsPromptWindowOption.argsSize
+    wrt wsPromptWindowOption.args.window, window
+    wrt wsPromptWindowOption.args.message, openTitle
+    wrt wsPromptWindowOption.args.options, names
+    callRemote shellHandle, promptOptionIndex
+    wrt index, wsPromptWindowOption.args.dest
+    jmpG cleanUp, 0, index
+    
+    VAR name, s32
+    mul offset, index, 4
+    wrt name, names[offset]:s32
+    # TODO: Open the file.
+    
+    LBL cleanUp
+    allocSize offset, names
+    LBL deleteLoop
+    sub offset, prevArg, 4
+    delAlloc names[offset]:s32
+    jmpNZ deleteLoop, offset
+    delAlloc names
+END
+
 FUNC scrollToCursor
     VAR offset, s16
     VAR line, s32
@@ -497,6 +592,21 @@ APP_DATA
     LBL shellNameStart
     DATA "wsShell"
     LBL shellNameEnd
+    LBL newFileTitleStart
+    DATA "New file"
+    LBL newFileTitleEnd
+    LBL saveOptionStart
+    DATA "Save"
+    LBL saveOptionEnd
+    LBL saveAsOptionStart
+    DATA "Save as..."
+    LBL saveAsOptionEnd
+    LBL openOptionStart
+    DATA "Open"
+    LBL openOptionEnd
+    LBL openTitleStart
+    DATA "Open file:"
+    LBL openTitleEnd
 END
 
 
