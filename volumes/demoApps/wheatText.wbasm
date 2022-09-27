@@ -68,10 +68,16 @@ FUNC init, wsInit.id, guarded
 END
 
 FUNC runEditor
+    VAR line, s32
+    VAR text, s32
+    VAR textSize, s16
+    VAR nextIndex, s16
+    VAR offset, s16
+    
     LBL editorLoop
+    call scrollToCursor
     call drawLines
     LBL keyLoop
-    waitGate keyReadyGate
     VAR key, s8
     waitGate keyMutex
     jmpNE handleKey, keyIndex, lastKeyIndex
@@ -82,16 +88,19 @@ FUNC runEditor
     jmpG skipWrap, keyBufferSize, lastKeyIndex
     wrt lastKeyIndex, 0
     LBL skipWrap
-    VAR offset, s16
     add offset, ?keyBuffer, lastKeyIndex
     wrt key, globalFrame[offset]:s8
     LBL skipKey
     openGate keyMutex
-    jmpZ keyLoop, key
+    jmpNZ skipWait, key
+    waitGate keyReadyGate
+    jmp keyLoop
+    LBL skipWait
+    jmpE handleLeft, key, -1
+    jmpE handleRight, key, -2
+    jmpE handleUp, key, -3
+    jmpE handleDown, key, -4
     
-    VAR line, s32
-    VAR text, s32
-    VAR textSize, s16
     VAR nextTextSize, s16
     VAR allocSize, s16
     wrt line, lines[cursorLineIndex]:s32
@@ -112,8 +121,118 @@ FUNC runEditor
     wrt line[4]:s16, textSize
     wrt text[cursorCharIndex]:s8, key
     inc cursorCharIndex
-    
     jmp editorLoop
+    
+    LBL handleLeft
+    jmpZ handlePrevLine, cursorCharIndex
+    dec cursorCharIndex
+    jmp editorLoop
+    LBL handlePrevLine
+    jmpZ keyLoop, cursorLineIndex
+    dec cursorLineIndex
+    wrt line, lines[cursorLineIndex]:s32
+    wrt textSize, line[4]:s16
+    wrt cursorCharIndex, textSize
+    jmp editorLoop
+    
+    LBL handleRight
+    wrt line, lines[cursorLineIndex]:s32
+    wrt textSize, line[4]:s16
+    jmpNG handleNextLine, textSize, cursorCharIndex
+    inc cursorCharIndex
+    jmp editorLoop
+    LBL handleNextLine
+    add nextIndex, cursorLineIndex, 1
+    jmpNG keyLoop, lineCount, nextIndex
+    wrt cursorLineIndex, nextIndex
+    wrt cursorCharIndex, 0
+    jmp editorLoop
+    
+    LBL handleUp
+    sub nextIndex, cursorCharIndex, windowWidth
+    jmpG handleUnderflow, 0, nextIndex
+    wrt cursorCharIndex, nextIndex
+    jmp editorLoop
+    LBL handleUnderflow
+    jmpNZ handlePrevLine2, cursorLineIndex
+    wrt cursorCharIndex, 0
+    jmp editorLoop
+    LBL handlePrevLine2
+    dec cursorLineIndex
+    wrt line, lines[cursorLineIndex]:s32
+    wrt textSize, line[4]:s16
+    mod offset, textSize, windowWidth
+    sub nextIndex, textSize, offset
+    add cursorCharIndex, prevArg, nextIndex
+    jmpNG editorLoop, cursorCharIndex, textSize
+    wrt cursorCharIndex, textSize
+    jmp editorLoop
+    
+    LBL handleDown
+    add cursorCharIndex, prevArg, windowWidth
+    wrt line, lines[cursorLineIndex]:s32
+    wrt textSize, line[4]:s16
+    jmpNG editorLoop, cursorCharIndex, textSize
+    add nextIndex, cursorLineIndex, 1
+    jmpG handleNextLine2, lineCount, nextIndex
+    wrt cursorCharIndex, textSize
+    jmp editorLoop
+    LBL handleNextLine2
+    wrt cursorLineIndex, nextIndex
+    mod cursorCharIndex, prevArg, windowWidth
+    wrt line, lines[cursorLineIndex]:s32
+    wrt textSize, line[4]:s16
+    jmpNG editorLoop, cursorCharIndex, textSize
+    wrt cursorCharIndex, textSize
+    jmp editorLoop
+END
+
+FUNC scrollToCursor
+    VAR offset, s16
+    VAR line, s32
+    VAR textSize, s16
+    
+    jmpG skipScroll, cursorLineIndex, scrollLineIndex
+    jmpG handleScroll, scrollLineIndex, cursorLineIndex
+    jmpNG skipScroll, scrollCharIndex, cursorCharIndex
+    LBL handleScroll
+    wrt scrollLineIndex, cursorLineIndex
+    mod offset, cursorCharIndex, windowWidth
+    sub scrollCharIndex, cursorCharIndex, offset
+    ret
+    LBL skipScroll
+    
+    VAR startLineIndex, s16
+    VAR startCharIndex, s16
+    VAR posY, s16
+    wrt startLineIndex, cursorLineIndex
+    mod offset, cursorCharIndex, windowWidth
+    sub startCharIndex, cursorCharIndex, offset
+    sub posY, windowHeight, 1
+    LBL findStartLoop
+    jmpZ breakFindStart, posY
+    jmpZ handlePrevLine, startCharIndex
+    sub startCharIndex, prevArg, windowWidth
+    jmp skipPrevLine
+    LBL handlePrevLine
+    jmpZ breakFindStart, startLineIndex
+    dec startLineIndex
+    wrt line, lines[startLineIndex]:s32
+    wrt textSize, line[4]:s16
+    mod offset, textSize, windowWidth
+    sub startCharIndex, textSize, offset
+    LBL skipPrevLine
+    dec posY
+    jmp findStartLoop
+    LBL breakFindStart
+    
+    jmpG skipScroll2, scrollLineIndex, startLineIndex
+    jmpG handleScroll2, startLineIndex, scrollLineIndex
+    jmpNG skipScroll2, startCharIndex, scrollCharIndex
+    LBL handleScroll2
+    wrt scrollLineIndex, startLineIndex
+    wrt scrollCharIndex, startCharIndex
+    LBL skipScroll2
 END
 
 FUNC drawLines
