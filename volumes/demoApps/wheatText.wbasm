@@ -1,6 +1,12 @@
 
 INCLUDE "../macros.wbasm"
 
+MACRO getLineSize, dest, lineIndex
+    mul offset, lineIndex, 4
+    wrt line, lines[offset]:s32
+    wrt dest, line[4]:s16
+END
+
 DEF keyBufferSize, 5
 
 VAR shellHandle, s32
@@ -69,7 +75,6 @@ END
 
 FUNC runEditor
     VAR line, s32
-    VAR text, s32
     VAR textSize, s16
     VAR nextIndex, s16
     VAR offset, s16
@@ -96,31 +101,16 @@ FUNC runEditor
     waitGate keyReadyGate
     jmp keyLoop
     LBL skipWait
+    
     jmpE handleLeft, key, -1
     jmpE handleRight, key, -2
     jmpE handleUp, key, -3
     jmpE handleDown, key, -4
-    
-    VAR nextTextSize, s16
-    VAR allocSize, s16
-    wrt line, lines[cursorLineIndex]:s32
-    wrt text, line[0]:s32
-    wrt textSize, line[4]:s16
-    allocSize allocSize, text
-    add nextTextSize, textSize, 1
-    jmpNG skipResize, nextTextSize, allocSize
-    mul allocSize, prevArg, 2
-    VAR nextText, s32
-    newAlloc nextText, guardedAllocAttr, allocSize
-    wrtBuff nextText[0]:s8, text[0]:s8, textSize
-    delAlloc text
-    wrt text, nextText
-    wrt line[0]:s32, text
-    LBL skipResize
-    wrt textSize, nextTextSize
-    wrt line[4]:s16, textSize
-    wrt text[cursorCharIndex]:s8, key
-    inc cursorCharIndex
+    jmpE handleReturn, key, 10
+    jmpG keyLoop, 32, key
+    newArgFrame insertChar.argsSize
+    wrt insertChar.args.char, key
+    call insertChar
     jmp editorLoop
     
     LBL handleLeft
@@ -130,14 +120,12 @@ FUNC runEditor
     LBL handlePrevLine
     jmpZ keyLoop, cursorLineIndex
     dec cursorLineIndex
-    wrt line, lines[cursorLineIndex]:s32
-    wrt textSize, line[4]:s16
+    getLineSize textSize, cursorLineIndex
     wrt cursorCharIndex, textSize
     jmp editorLoop
     
     LBL handleRight
-    wrt line, lines[cursorLineIndex]:s32
-    wrt textSize, line[4]:s16
+    getLineSize textSize, cursorLineIndex
     jmpNG handleNextLine, textSize, cursorCharIndex
     inc cursorCharIndex
     jmp editorLoop
@@ -159,8 +147,7 @@ FUNC runEditor
     jmp editorLoop
     LBL handlePrevLine2
     dec cursorLineIndex
-    wrt line, lines[cursorLineIndex]:s32
-    wrt textSize, line[4]:s16
+    getLineSize textSize, cursorLineIndex
     mod offset, textSize, windowWidth
     sub nextIndex, textSize, offset
     add cursorCharIndex, prevArg, nextIndex
@@ -170,8 +157,7 @@ FUNC runEditor
     
     LBL handleDown
     add cursorCharIndex, prevArg, windowWidth
-    wrt line, lines[cursorLineIndex]:s32
-    wrt textSize, line[4]:s16
+    getLineSize textSize, cursorLineIndex
     jmpNG editorLoop, cursorCharIndex, textSize
     add nextIndex, cursorLineIndex, 1
     jmpG handleNextLine2, lineCount, nextIndex
@@ -180,11 +166,95 @@ FUNC runEditor
     LBL handleNextLine2
     wrt cursorLineIndex, nextIndex
     mod cursorCharIndex, prevArg, windowWidth
-    wrt line, lines[cursorLineIndex]:s32
-    wrt textSize, line[4]:s16
+    getLineSize textSize, cursorLineIndex
     jmpNG editorLoop, cursorCharIndex, textSize
     wrt cursorCharIndex, textSize
     jmp editorLoop
+    
+    LBL handleReturn
+    call insertNewline
+    jmp editorLoop
+END
+
+FUNC insertChar
+    ARG char, s8
+    
+    VAR line, s32
+    VAR text, s32
+    VAR textSize, s16
+    VAR nextTextSize, s16
+    VAR nextIndex, s16
+    VAR allocSize, s16
+    VAR offset, s16
+    VAR size, s16
+    
+    mul offset, cursorLineIndex, 4
+    wrt line, lines[offset]:s32
+    wrt text, line[0]:s32
+    wrt textSize, line[4]:s16
+    allocSize allocSize, text
+    add nextTextSize, textSize, 1
+    
+    jmpNG skipResize, nextTextSize, allocSize
+    mul allocSize, prevArg, 2
+    VAR nextText, s32
+    newAlloc nextText, guardedAllocAttr, allocSize
+    wrtBuff nextText[0]:s8, text[0]:s8, textSize
+    delAlloc text
+    wrt text, nextText
+    wrt line[0]:s32, text
+    LBL skipResize
+    
+    wrt textSize, nextTextSize
+    wrt line[4]:s16, textSize
+    add nextIndex, cursorCharIndex, 1
+    sub size, textSize, nextIndex
+    jmpZ skipMoveText, size
+    wrtBuff text[nextIndex]:s8, text[cursorCharIndex]:s8, size
+    LBL skipMoveText
+    wrt text[cursorCharIndex]:s8, char
+    wrt cursorCharIndex, nextIndex
+END
+
+FUNC insertNewline
+    VAR offset1, s32
+    VAR offset2, s32
+    VAR offset3, s32
+    VAR linesSize, s32
+    VAR nextLinesSize, s32
+    VAR allocSize, s32
+    VAR sizeToMove, s32
+    
+    mul offset1, cursorLineIndex, 4
+    add offset2, offset1, 4
+    add offset3, offset2, 4
+    mul linesSize, lineCount, 4
+    add nextLinesSize, linesSize, 4
+    allocSize allocSize, lines
+    sub sizeToMove, linesSize, offset2
+    
+    jmpNG skipResize, nextLinesSize, allocSize
+    mul allocSize, nextLinesSize, 2
+    VAR nextLines, s32
+    newAlloc nextLines, guardedAllocAttr, allocSize
+    wrtBuff nextLines[0]:s8, lines[0]:s8, linesSize
+    delAlloc lines
+    wrt lines, nextLines
+    LBL skipResize
+    
+    jmpZ skipMove, sizeToMove
+    wrtBuff lines[offset3]:s8, lines[offset2]:s8, sizeToMove
+    LBL skipMove
+    VAR line, s32
+    VAR text, s32
+    newAlloc line, guardedAllocAttr, 6
+    newAlloc text, guardedAllocAttr, 10
+    wrt line[0]:s32, text
+    wrt line[4]:s16, 0
+    wrt lines[offset2]:s32, line
+    inc lineCount
+    inc cursorLineIndex
+    wrt cursorCharIndex, 0
 END
 
 FUNC scrollToCursor
@@ -217,8 +287,7 @@ FUNC scrollToCursor
     LBL handlePrevLine
     jmpZ breakFindStart, startLineIndex
     dec startLineIndex
-    wrt line, lines[startLineIndex]:s32
-    wrt textSize, line[4]:s16
+    getLineSize textSize, startLineIndex
     mod offset, textSize, windowWidth
     sub startCharIndex, textSize, offset
     LBL skipPrevLine
