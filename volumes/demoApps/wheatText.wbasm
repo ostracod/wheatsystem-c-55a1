@@ -107,6 +107,7 @@ FUNC runEditor
     jmpE handleUp, key, -3
     jmpE handleDown, key, -4
     jmpE handleReturn, key, 10
+    jmpE handleDelete, key, 127
     jmpG keyLoop, 32, key
     newArgFrame insertChar.argsSize
     wrt insertChar.args.char, key
@@ -173,6 +174,10 @@ FUNC runEditor
     
     LBL handleReturn
     call insertNewline
+    jmp editorLoop
+    
+    LBL handleDelete
+    call deleteChar
     jmp editorLoop
 END
 
@@ -246,15 +251,99 @@ FUNC insertNewline
     wrtBuff lines[offset3]:s8, lines[offset2]:s8, sizeToMove
     LBL skipMove
     VAR line, s32
+    VAR lastText, s32
+    VAR textSize, s16
+    wrt line, lines[offset1]:s32
+    wrt lastText, line[0]:s32
+    sub textSize, line[4]:s16, cursorCharIndex
+    wrt line[4]:s16, cursorCharIndex
+    jmpG handleShortLine, 10, textSize
+    wrt allocSize, textSize
+    jmp skipShortLine
+    LBL handleShortLine
+    wrt allocSize, 10
+    LBL skipShortLine
     VAR text, s32
     newAlloc line, guardedAllocAttr, 6
-    newAlloc text, guardedAllocAttr, 10
+    newAlloc text, guardedAllocAttr, allocSize
+    jmpZ skipCopy, textSize
+    wrtBuff text[0]:s8, lastText[cursorCharIndex]:s8, textSize
+    LBL skipCopy
     wrt line[0]:s32, text
-    wrt line[4]:s16, 0
+    wrt line[4]:s16, textSize
     wrt lines[offset2]:s32, line
     inc lineCount
     inc cursorLineIndex
     wrt cursorCharIndex, 0
+END
+
+FUNC deleteChar
+    VAR offset, s32
+    VAR line, s32
+    VAR text, s32
+    VAR textSize, s16
+    VAR prevIndex, s16
+    VAR sizeToMove, s32
+    mul offset, cursorLineIndex, 4
+    wrt line, lines[offset]:s32
+    wrt text, line[0]:s32
+    wrt textSize, line[4]:s16
+    jmpZ deleteNewline, cursorCharIndex
+    sub prevIndex, cursorCharIndex, 1
+    sub sizeToMove, textSize, cursorCharIndex
+    jmpZ skipMove, sizeToMove
+    wrtBuff text[prevIndex]:s8, text[cursorCharIndex]:s8, sizeToMove
+    LBL skipMove
+    dec textSize
+    wrt line[4]:s16, textSize
+    dec cursorCharIndex
+    ret
+    
+    LBL deleteNewline
+    jmpNZ skipReturn, cursorLineIndex
+    ret
+    LBL skipReturn
+    VAR offset2, s32
+    VAR line2, s32
+    VAR text2, s32
+    VAR textSize2, s16
+    VAR nextTextSize, s16
+    dec cursorLineIndex
+    mul offset2, cursorLineIndex, 4
+    wrt line2, lines[offset2]:s32
+    wrt text2, line2[0]:s32
+    wrt textSize2, line2[4]:s16
+    wrt cursorCharIndex, textSize2
+    
+    add nextTextSize, textSize, textSize2
+    VAR allocSize, s16
+    allocSize allocSize, text2
+    jmpNG skipResize, nextTextSize, allocSize
+    mul allocSize, nextTextSize, 2
+    VAR nextText, s32
+    newAlloc nextText, guardedAllocAttr, allocSize
+    wrtBuff nextText[0]:s8, text2[0]:s8, textSize2
+    delAlloc text2
+    wrt text2, nextText
+    wrt line2[0]:s32, text2
+    LBL skipResize
+    
+    jmpZ skipCopy, textSize
+    wrtBuff text2[textSize2]:s8, text[0]:s8, textSize
+    LBL skipCopy
+    wrt line2[4]:s16, nextTextSize
+    delAlloc text
+    delAlloc line
+    
+    VAR offset3, s32
+    VAR linesSize, s32
+    add offset3, offset, 4
+    mul linesSize, lineCount, 4
+    sub sizeToMove, linesSize, offset3
+    jmpZ skipMove2, sizeToMove
+    wrtBuff lines[offset]:s8, lines[offset3]:s8, sizeToMove
+    LBL skipMove2
+    dec lineCount
 END
 
 FUNC scrollToCursor
