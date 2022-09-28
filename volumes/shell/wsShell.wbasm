@@ -1170,6 +1170,7 @@ FUNC readWindowTerm, wsReadWindowTerm.id
     
     # Clean up the result if there was an error while reading the buffer.
     LBL cleanUpAlloc
+    clrErrJmp
     delAlloc dest
     VAR err, s8
     err err
