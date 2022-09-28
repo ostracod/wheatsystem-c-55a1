@@ -23,6 +23,7 @@ VAR window, s32
 
 VAR openTitle, s32
 VAR seekTitle, s32
+VAR dataTitle, s32
 VAR malformedMessage, s32
 VAR boundsMessage, s32
 VAR advanceOption, s32
@@ -57,6 +58,7 @@ FUNC init, wsInit.id, guarded
     
     newTextAlloc openTitle, openTitleStart, openTitleEnd
     newTextAlloc seekTitle, seekTitleStart, seekTitleEnd
+    newTextAlloc dataTitle, dataTitleStart, dataTitleEnd
     newTextAlloc malformedMessage, malformedMessageStart, malformedMessageEnd
     newTextAlloc boundsMessage, boundsMessageStart, boundsMessageEnd
     
@@ -90,6 +92,7 @@ FUNC runEditor
     VAR count, s8
     
     LBL editorLoop
+    setErrJmp handleErr
     VAR stringBuilder, s32
     VAR text, s32
     VAR message, s32
@@ -184,7 +187,9 @@ FUNC runEditor
     mul offset, index, 4
     wrt option, options[offset]:s32
     delAlloc options
+    jmpE handleAdvance, option, advanceOption
     jmpE handleSeek, option, seekOption
+    jmpE handleReplace, option, replaceOption
     jmpE handleOpen, option, openOption
     # TODO: Handle more options.
     jmp editorLoop
@@ -193,14 +198,34 @@ FUNC runEditor
     delAlloc options
     jmp editorLoop
     
+    LBL handleAdvance
+    wrt filePos, advancePos
+    jmp editorLoop
+    
     LBL handleSeek
     call seekToPos
+    jmp editorLoop
+    
+    LBL handleReplace
+    call replaceData
     jmp editorLoop
     
     LBL handleOpen
     call openFile
     jmp editorLoop
     
+    LBL handleErr
+    clrErrJmp
+    VAR err, s8
+    err err
+    jmpE skipThrow, err, -1
+    throw err
+    LBL skipThrow
+    newArgFrame wsDisplayWindowMessage.argsSize
+    wrt wsDisplayWindowMessage.args.window, window
+    wrt wsDisplayWindowMessage.args.message, malformedMessage
+    callRemote shellHandle, displayMessageIndex
+    jmp editorLoop
 END
 
 FUNC seekToPos
@@ -215,24 +240,11 @@ FUNC seekToPos
     LBL skipEscape
     
     VAR nextPos, s32
-    VAR unit, s32
-    VAR index, s8
-    setErrJmp handleErr
-    wrt nextPos, 0
-    wrt unit, 1
-    allocSize index, text
-    LBL charLoop
-    jmpZ breakChar, index
-    dec index
-    newArgFrame convertHexToNybble.argsSize
-    wrt convertHexToNybble.args.char, text[index]:s8
-    call convertHexToNybble
-    VAR value, s32
-    mul value, unit, convertHexToNybble.args.dest
-    add nextPos, prevArg, value
-    mul unit, prevArg, 16
-    jmp charLoop
-    LBL breakChar
+    setErrJmp cleanUp
+    newArgFrame convertHexToPos.argsSize
+    wrt convertHexToPos.args.text, text
+    call convertHexToPos
+    wrt nextPos, convertHexToPos.args.dest
     jmpG outOfBounds, nextPos, fileSize
     wrt filePos, nextPos
     jmp cleanUp
@@ -242,21 +254,38 @@ FUNC seekToPos
     wrt wsDisplayWindowMessage.args.window, window
     wrt wsDisplayWindowMessage.args.message, boundsMessage
     callRemote shellHandle, displayMessageIndex
-    jmp cleanUp
-    
-    LBL handleErr
-    VAR err, s8
-    err err
-    jmpE skipThrow, err, -1
-    throw err
-    LBL skipThrow
-    newArgFrame wsDisplayWindowMessage.argsSize
-    wrt wsDisplayWindowMessage.args.window, window
-    wrt wsDisplayWindowMessage.args.message, malformedMessage
-    callRemote shellHandle, displayMessageIndex
     
     LBL cleanUp
+    clrErrJmp
     delAlloc text
+    VAR err, s8
+    err err
+    jmpZ skipThrow, err
+    throw err
+    LBL skipThrow
+END
+
+FUNC replaceData
+    VAR buffer, s32
+    newArgFrame promptHexData.argsSize
+    call promptHexData
+    wrt buffer, promptHexData.args.dest
+    
+    VAR bufferSize, s16
+    VAR endPos, s32
+    allocSize bufferSize, buffer
+    add endPos, filePos, bufferSize
+    jmpNG skipOverflow, endPos, fileSize
+    newArgFrame wsDisplayWindowMessage.argsSize
+    wrt wsDisplayWindowMessage.args.window, window
+    wrt wsDisplayWindowMessage.args.message, boundsMessage
+    callRemote shellHandle, displayMessageIndex
+    jmp cleanUp
+    LBL skipOverflow
+    wrtBuff fileBuffer[filePos]:s8, buffer[0]:s8, bufferSize
+    
+    LBL cleanUp
+    delAlloc buffer
 END
 
 FUNC openFile
@@ -298,6 +327,73 @@ FUNC openFile
     LBL skipDelete
     jmpNZ deleteLoop, offset
     delAlloc names
+END
+
+FUNC promptHexData
+    ARG dest, s32
+    
+    VAR text, s32
+    newArgFrame wsPromptWindowText.argsSize
+    wrt wsPromptWindowText.args.window, window
+    wrt wsPromptWindowText.args.message, dataTitle
+    callRemote shellHandle, promptTextIndex
+    wrt text, wsPromptWindowText.args.dest
+    jmpNZ skipEscape, text
+    wrt dest, null
+    ret
+    LBL skipEscape
+    
+    VAR textSize, s16
+    VAR buffer, s32
+    VAR bufferSize, s16
+    allocSize textSize, text
+    newAlloc buffer, guardedAllocAttr, textSize
+    wrt bufferSize, 0
+    
+    VAR index, s16
+    wrt index, 0
+    setErrJmp handleErr
+    LBL parseLoop
+    jmpNG finishData, textSize, index
+    VAR char, s8
+    wrt char, text[index]:s8
+    inc index
+    jmpE parseLoop, char, 32
+    
+    VAR value, s8
+    newArgFrame convertHexToNybble.argsSize
+    wrt convertHexToNybble.args.char, char
+    call convertHexToNybble
+    bLeft value, convertHexToNybble.args.dest, 4
+    jmpG skipThrow, textSize, index
+    throw -1
+    LBL skipThrow
+    wrt char, text[index]:s8
+    inc index
+    newArgFrame convertHexToNybble.argsSize
+    wrt convertHexToNybble.args.char, char
+    call convertHexToNybble
+    add value, prevArg, convertHexToNybble.args.dest
+    
+    wrt buffer[bufferSize]:s8, value
+    inc bufferSize
+    jmp parseLoop
+    LBL breakParse
+    
+    LBL handleErr
+    clrErrJmp
+    delAlloc text
+    delAlloc buffer
+    wrt dest, null
+    VAR err, s8
+    err err
+    throw err
+    
+    LBL finishData
+    delAlloc text
+    newAlloc dest, guardedAllocAttr, bufferSize
+    wrtBuff dest[0]:s8, buffer[0]:s8, bufferSize
+    delAlloc buffer
 END
 
 FUNC convertByteToHex
@@ -354,6 +450,29 @@ FUNC convertHexToNybble
     ret
     LBL handleLowercase
     sub dest, char, 87
+END
+
+FUNC convertHexToPos
+    ARG dest, s32
+    ARG text, s32
+    
+    VAR unit, s32
+    VAR index, s8
+    wrt dest, 0
+    wrt unit, 1
+    allocSize index, text
+    LBL charLoop
+    jmpZ breakChar, index
+    dec index
+    newArgFrame convertHexToNybble.argsSize
+    wrt convertHexToNybble.args.char, text[index]:s8
+    call convertHexToNybble
+    VAR value, s32
+    mul value, unit, convertHexToNybble.args.dest
+    add dest, prevArg, value
+    mul unit, prevArg, 16
+    jmp charLoop
+    LBL breakChar
 END
 
 FUNC cleanUpAndQuit, 0, guarded
@@ -417,6 +536,9 @@ APP_DATA
     LBL boundsMessageStart
     DATA "Offset is out of bounds."
     LBL boundsMessageEnd
+    LBL dataTitleStart
+    DATA "Hex data:"
+    LBL dataTitleEnd
 END
 
 
