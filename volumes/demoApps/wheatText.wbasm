@@ -13,6 +13,8 @@ DEF fileReadBufferSize, 500
 VAR shellHandle, s32
 VAR wrtWindowTermIndex, s32
 VAR promptOptionIndex, s32
+VAR promptTextIndex, s32
+VAR displayMessageIndex, s32
 VAR window, s32
 VAR windowWidth, s16
 VAR windowHeight, s16
@@ -32,6 +34,8 @@ VAR keyReadyGate, s32
 VAR fileName, s32
 VAR newFileTitle, s32
 VAR openTitle, s32
+VAR nameTitle, s32
+VAR savedMessage, s32
 VAR newFileOptions, s32
 VAR oldFileOptions, s32
 
@@ -47,6 +51,8 @@ FUNC init, wsInit.id, guarded
     delAlloc shellName
     findFunc wrtWindowTermIndex, shellHandle, wsWrtWindowTerm.id
     findFunc promptOptionIndex, shellHandle, wsPromptWindowOption.id
+    findFunc promptTextIndex, shellHandle, wsPromptWindowText.id
+    findFunc displayMessageIndex, shellHandle, wsDisplayWindowMessage.id
     
     newAlloc lines, guardedAllocAttr, 20
     VAR line, s32
@@ -66,10 +72,13 @@ FUNC init, wsInit.id, guarded
     newGate keyReadyGate, 1
     closeGate keyReadyGate
     
-    VAR text, s32
     wrt fileName, null
     newTextAlloc newFileTitle, newFileTitleStart, newFileTitleEnd
     newTextAlloc openTitle, openTitleStart, openTitleEnd
+    newTextAlloc nameTitle, nameTitleStart, nameTitleEnd
+    newTextAlloc savedMessage, savedMessageStart, savedMessageEnd
+    
+    VAR text, s32
     newAlloc newFileOptions, guardedAllocAttr, 8
     newAlloc oldFileOptions, guardedAllocAttr, 12
     newTextAlloc text, saveOptionStart, saveOptionEnd
@@ -405,10 +414,12 @@ FUNC showMenu
     ret
     
     LBL handleSave
-    ret
+    call saveFile
+    jmp menuLoop
     
     LBL handleSaveAs
-    ret
+    call saveFileAs
+    jmp menuLoop
     
     LBL handleOpen
     newArgFrame openFile.argsSize
@@ -442,6 +453,9 @@ FUNC openFile
     
     VAR fileHandle, s32
     VAR fileSize, s32
+    jmpZ skipOldName, fileName
+    delAlloc fileName
+    LBL skipOldName
     mul offset, index, 4
     wrt fileName, names[offset]:s32
     openFile fileHandle, fileName
@@ -547,6 +561,78 @@ FUNC openFile
     LBL skipDelete
     jmpNZ deleteLoop2, offset
     delAlloc names
+END
+
+FUNC saveFile
+    VAR line, s32
+    VAR offset, s32
+    VAR endOffset, s32
+    VAR cond, s8
+    
+    VAR fileSize, s32
+    wrt fileSize, 0
+    wrt offset, 0
+    mul endOffset, lineCount, 4
+    LBL lineLoop
+    jmpZ skipNewline, offset
+    inc fileSize
+    LBL skipNewline
+    wrt line, lines[offset]:s32
+    add fileSize, prevArg, line[4]:s16
+    add offset, prevArg, 4
+    jmpG lineLoop, endOffset, offset
+    
+    VAR fileHandle, s32
+    fileExists cond, fileName
+    jmpZ skipDelete, cond
+    openFile fileHandle, fileName
+    delFile fileHandle
+    LBL skipDelete
+    newFile fileName, 0, 0, fileSize
+    openFile fileHandle, fileName
+    
+    VAR filePos, s32
+    wrt filePos, 0
+    wrt offset, 0
+    LBL lineLoop2
+    jmpZ skipNewline2, offset
+    wrtFile fileHandle, filePos, 10, 1
+    inc filePos
+    LBL skipNewline2
+    wrt line, lines[offset]:s32
+    VAR text, s32
+    VAR textSize, s16
+    wrt text, line[0]:s32
+    wrt textSize, line[4]:s16
+    jmpZ skipWrite, textSize
+    wrtFile fileHandle, filePos, text[0]:s8, textSize
+    LBL skipWrite
+    add filePos, prevArg, textSize
+    add offset, prevArg, 4
+    jmpG lineLoop2, endOffset, offset
+    
+    closeFile fileHandle
+    newArgFrame wsDisplayWindowMessage.argsSize
+    wrt wsDisplayWindowMessage.args.window, window
+    wrt wsDisplayWindowMessage.args.message, savedMessage
+    callRemote shellHandle, displayMessageIndex
+END
+
+FUNC saveFileAs
+    VAR newName, s32
+    newArgFrame wsPromptWindowText.argsSize
+    wrt wsPromptWindowText.args.window, window
+    wrt wsPromptWindowText.args.message, nameTitle
+    callRemote shellHandle, promptTextIndex
+    wrt newName, wsPromptWindowText.args.dest
+    jmpNZ skipEscape, newName
+    ret
+    LBL skipEscape
+    jmpZ skipDelete, fileName
+    delAlloc fileName
+    LBL skipDelete
+    wrt fileName, newName
+    call saveFile
 END
 
 FUNC scrollToCursor
@@ -715,6 +801,12 @@ APP_DATA
     LBL openTitleStart
     DATA "Open file:"
     LBL openTitleEnd
+    LBL savedMessageStart
+    DATA "Saved file."
+    LBL savedMessageEnd
+    LBL nameTitleStart
+    DATA "File name:"
+    LBL nameTitleEnd
 END
 
 
