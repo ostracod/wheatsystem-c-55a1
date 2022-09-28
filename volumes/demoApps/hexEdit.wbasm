@@ -1,0 +1,242 @@
+
+INCLUDE "../macros.wbasm"
+INCLUDE "../utils.wbasm"
+INCLUDE "../stringBuilder.wbasm"
+
+MACRO convertNybbleToHex, dest, value
+    jmpG @handleLetter, value, 9
+    add dest, value, 48
+    jmp @skipLetter
+    LBL @handleLetter
+    add dest, value, 55
+    LBL @skipLetter
+END
+
+DEF byteDisplayAmount, 10
+
+VAR shellHandle, s32
+VAR utilsHandle, s32
+VAR promptOptionIndex, s32
+VAR window, s32
+
+VAR advanceOption, s32
+VAR seekOption, s32
+VAR replaceOption, s32
+VAR insertOption, s32
+VAR deleteOption, s32
+VAR saveOption, s32
+VAR saveAsOption, s32
+VAR openOption, s32
+
+VAR fileName, s32
+VAR fileBuffer, s32
+VAR fileSize, s32
+VAR filePos, s32
+
+FUNC init, wsInit.id, guarded
+    VAR shellName, s32
+    newTextAlloc shellName, shellNameStart, shellNameEnd
+    openFile shellHandle, shellName
+    delAlloc shellName
+    findFunc promptOptionIndex, shellHandle, wsPromptWindowOption.id
+    
+    VAR utilsName, s32
+    newTextAlloc utilsName, utilsNameStart, utilsNameEnd
+    openFile utilsHandle, utilsName
+    delAlloc utilsName
+    launch utilsHandle
+    initStringBuilderVars
+    
+    newTextAlloc advanceOption, advanceOptionStart, advanceOptionEnd
+    newTextAlloc seekOption, seekOptionStart, seekOptionEnd
+    newTextAlloc replaceOption, replaceOptionStart, replaceOptionEnd
+    newTextAlloc insertOption, insertOptionStart, insertOptionEnd
+    newTextAlloc deleteOption, deleteOptionStart, deleteOptionEnd
+    newTextAlloc saveOption, saveOptionStart, saveOptionEnd
+    newTextAlloc saveAsOption, saveAsOptionStart, saveAsOptionEnd
+    newTextAlloc openOption, openOptionStart, openOptionEnd
+    
+    wrt fileName, null
+    newAlloc fileBuffer, guardedAllocAttr, 10
+    wrt fileSize, 0
+    wrt filePos, 0
+    
+    VAR newWindowIndex, s32
+    findFunc newWindowIndex, shellHandle, wsNewWindow.id
+    newArgFrame wsNewWindow.argsSize
+    callRemote shellHandle, newWindowIndex
+    wrt window, wsNewWindow.args.dest
+    
+    call runEditor
+END
+
+FUNC runEditor
+    VAR size, s16
+    VAR offset, s16
+    
+    LBL editorLoop
+    VAR stringBuilder, s32
+    VAR text, s32
+    VAR message, s32
+    createStringBuilder stringBuilder
+    newArgFrame convertPosToHex.argsSize
+    wrt convertPosToHex.args.pos, filePos
+    call convertPosToHex
+    wrt text, convertPosToHex.args.dest
+    addTextToString stringBuilder, text
+    delAlloc text
+    addCharToString stringBuilder, 47
+    newArgFrame convertPosToHex.argsSize
+    wrt convertPosToHex.args.pos, fileSize
+    call convertPosToHex
+    wrt text, convertPosToHex.args.dest
+    addTextToString stringBuilder, text
+    delAlloc text
+    addCharToString stringBuilder, 58
+    addCharToString stringBuilder, 10
+    finishString message, stringBuilder
+    
+    VAR optionAmount, s8
+    VAR advancePos, s32
+    VAR hasAdvanceOption, s8
+    wrt optionAmount, 6
+    add advancePos, filePos, byteDisplayAmount
+    jmpG handleInc, fileSize, advancePos
+    wrt hasAdvanceOption, 0
+    jmp skipInc
+    LBL handleInc
+    inc optionAmount
+    wrt hasAdvanceOption, 1
+    LBL skipInc
+    jmpZ skipInc2, fileName
+    inc optionAmount
+    LBL skipInc2
+    
+    VAR options, s32
+    mul size, optionAmount, 4
+    newAlloc options, guardedAllocAttr, size
+    wrt offset, 0
+    jmpZ skipOption, hasAdvanceOption
+    wrt options[offset]:s32, advanceOption
+    add offset, prevArg, 4
+    LBL skipOption
+    wrt options[offset]:s32, seekOption
+    add offset, prevArg, 4
+    wrt options[offset]:s32, replaceOption
+    add offset, prevArg, 4
+    wrt options[offset]:s32, insertOption
+    add offset, prevArg, 4
+    wrt options[offset]:s32, deleteOption
+    add offset, prevArg, 4
+    jmpZ skipOption2, hasAdvanceOption
+    wrt options[offset]:s32, saveOption
+    add offset, prevArg, 4
+    LBL skipOption2
+    wrt options[offset]:s32, saveAsOption
+    add offset, prevArg, 4
+    wrt options[offset]:s32, openOption
+    
+    VAR index, s8
+    VAR option, s32
+    newArgFrame wsPromptWindowOption.argsSize
+    wrt wsPromptWindowOption.args.window, window
+    wrt wsPromptWindowOption.args.message, message
+    wrt wsPromptWindowOption.args.options, options
+    callRemote shellHandle, promptOptionIndex
+    wrt index, wsPromptWindowOption.args.dest
+    delAlloc message
+    jmpG handleEscape, 0, index
+    mul offset, index, 4
+    wrt option, options[offset]:s32
+    delAlloc options
+    # TODO: Handle selected option.
+    jmp editorLoop
+    
+    LBL handleEscape
+    delAlloc options
+    jmp editorLoop
+END
+
+FUNC convertByteToHex
+    ARG dest, s16
+    ARG value, s8
+    
+    VAR nybble, s8
+    bRight nybble, value, 4
+    bAnd nybble, prevArg, 0x0F
+    convertNybbleToHex prevArgFrame[?dest]:s8, nybble
+    bAnd nybble, value, 0x0F
+    convertNybbleToHex prevArgFrame[?dest + 1]:s8, nybble
+END
+
+FUNC convertPosToHex
+    ARG dest, s32
+    ARG pos, s32
+    
+    newAlloc dest, guardedAllocAttr, 6
+    newArgFrame convertByteToHex.argsSize
+    wrt convertByteToHex.args.value, prevArgFrame[?pos + 2]:s8
+    call convertByteToHex
+    wrt dest[0]:s16, convertByteToHex.args.dest
+    newArgFrame convertByteToHex.argsSize
+    wrt convertByteToHex.args.value, prevArgFrame[?pos + 1]:s8
+    call convertByteToHex
+    wrt dest[2]:s16, convertByteToHex.args.dest
+    newArgFrame convertByteToHex.argsSize
+    wrt convertByteToHex.args.value, prevArgFrame[?pos]:s8
+    call convertByteToHex
+    wrt dest[4]:s16, convertByteToHex.args.dest
+END
+
+FUNC cleanUpAndQuit, 0, guarded
+    VAR delWindowIndex, s32
+    findFunc delWindowIndex, shellHandle, wsDelWindow.id
+    newArgFrame wsDelWindow.argsSize
+    wrt wsDelWindow.args.window, window
+    callRemote shellHandle, delWindowIndex
+    closeFile shellHandle
+    quitApp
+END
+
+FUNC kill, wsKill.id, guarded
+    call cleanUpAndQuit
+END
+
+FUNC reqDelWindow, wsReqDelWindow.id, guarded
+    call cleanUpAndQuit
+END
+
+APP_DATA
+    LBL shellNameStart
+    DATA "wsShell"
+    LBL shellNameEnd
+    LBL utilsNameStart
+    DATA "utils"
+    LBL utilsNameEnd
+    LBL advanceOptionStart
+    DATA "Advance"
+    LBL advanceOptionEnd
+    LBL seekOptionStart
+    DATA "Seek"
+    LBL seekOptionEnd
+    LBL replaceOptionStart
+    DATA "Replace bytes"
+    LBL replaceOptionEnd
+    LBL insertOptionStart
+    DATA "Insert bytes"
+    LBL insertOptionEnd
+    LBL deleteOptionStart
+    DATA "Delete bytes"
+    LBL deleteOptionEnd
+    LBL saveOptionStart
+    DATA "Save file"
+    LBL saveOptionEnd
+    LBL saveAsOptionStart
+    DATA "Save as"
+    LBL saveAsOptionEnd
+    LBL openOptionStart
+    DATA "Open file"
+    LBL openOptionEnd
+END
+
+

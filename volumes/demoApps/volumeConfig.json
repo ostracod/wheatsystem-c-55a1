@@ -58,6 +58,12 @@
             "type": "bytecodeApp",
             "hasAdminPerm": false,
             "isGuarded": false
+        },
+        {
+            "name": "hexEdit",
+            "type": "bytecodeApp",
+            "hasAdminPerm": false,
+            "isGuarded": false
         }
     ]
 }
