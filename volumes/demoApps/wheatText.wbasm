@@ -8,6 +8,7 @@ MACRO getLineSize, dest, lineIndex
 END
 
 DEF keyBufferSize, 5
+DEF fileReadBufferSize, 500
 
 VAR shellHandle, s32
 VAR wrtWindowTermIndex, s32
@@ -410,14 +411,20 @@ FUNC showMenu
     ret
     
     LBL handleOpen
+    newArgFrame openFile.argsSize
     call openFile
-    jmp menuLoop
+    jmpZ menuLoop, openFile.args.dest
 END
 
 FUNC openFile
-    VAR names, s32
+    ARG dest, s8
+    
     VAR index, s32
     VAR offset, s32
+    VAR line, s32
+    VAR size, s16
+    
+    VAR names, s32
     allFileNames names
     newArgFrame wsPromptWindowOption.argsSize
     wrt wsPromptWindowOption.args.window, window
@@ -425,19 +432,120 @@ FUNC openFile
     wrt wsPromptWindowOption.args.options, names
     callRemote shellHandle, promptOptionIndex
     wrt index, wsPromptWindowOption.args.dest
-    jmpG cleanUp, 0, index
+    jmpG handleEscape, 0, index
+    wrt dest, 1
+    jmp skipEscape
+    LBL handleEscape
+    wrt dest, 0
+    jmp cleanUp
+    LBL skipEscape
     
-    VAR name, s32
+    VAR fileHandle, s32
+    VAR fileSize, s32
     mul offset, index, 4
-    wrt name, names[offset]:s32
-    # TODO: Open the file.
+    wrt fileName, names[offset]:s32
+    openFile fileHandle, fileName
+    fileSize fileSize, fileHandle
+    
+    wrt index, 0
+    LBL deleteLoop
+    mul offset, index, 4
+    wrt line, lines[offset]:s32
+    delAlloc line[0]:s32
+    delAlloc line
+    inc index
+    jmpG deleteLoop, lineCount, index
+    
+    VAR linesAllocSize, s16
+    VAR textAllocSize, s16
+    VAR text, s32
+    VAR textSize, s16
+    allocSize linesAllocSize, lines
+    newAlloc line, guardedAllocAttr, 6
+    wrt textAllocSize, 10
+    newAlloc text, guardedAllocAttr, textAllocSize
+    wrt textSize, 0
+    wrt line[0]:s32, text
+    wrt line[4]:s16, textSize
+    wrt lines[0]:s32, line
+    wrt lineCount, 1
+    
+    VAR filePos, s32
+    VAR sizeToRead, s16
+    VAR buffer, s8, fileReadBufferSize
+    wrt filePos, 0
+    LBL readLoop
+    sub sizeToRead, fileSize, filePos
+    jmpZ breakRead, sizeToRead
+    jmpNG skipOverflow, sizeToRead, fileReadBufferSize
+    wrt sizeToRead, fileReadBufferSize
+    LBL skipOverflow
+    readFile buffer, fileHandle, filePos, sizeToRead
+    
+    VAR nextAlloc, s32
+    VAR nextSize, s16
+    wrt index, 0
+    LBL charLoop
+    jmpNG breakChar, sizeToRead, index
+    add offset, ?buffer, index
+    VAR char, s8
+    wrt char, localFrame[offset]:s8
+    
+    jmpE handleNewline, char, 10
+    add nextSize, textSize, 1
+    jmpNG skipResize, nextSize, textAllocSize
+    mul textAllocSize, nextSize, 2
+    newAlloc nextAlloc, guardedAllocAttr, textAllocSize
+    wrtBuff nextAlloc[0]:s8, text[0]:s8, textSize
+    delAlloc text
+    wrt text, nextAlloc
+    wrt line[0]:s32, text
+    LBL skipResize
+    wrt text[textSize]:s8, char
+    wrt textSize, nextSize
+    wrt line[4]:s16, textSize
+    jmp skipNewline
+    
+    LBL handleNewline
+    mul size, lineCount, 4
+    add nextSize, size, 4
+    jmpNG skipResize2, nextSize, linesAllocSize
+    mul linesAllocSize, nextSize, 2
+    newAlloc nextAlloc, guardedAllocAttr, linesAllocSize
+    wrtBuff nextAlloc[0]:s8, lines[0]:s8, size
+    delAlloc lines
+    wrt lines, nextAlloc
+    LBL skipResize2
+    newAlloc line, guardedAllocAttr, 6
+    wrt textAllocSize, 10
+    newAlloc text, guardedAllocAttr, textAllocSize
+    wrt textSize, 0
+    wrt line[0]:s32, text
+    wrt line[4]:s16, textSize
+    wrt lines[size]:s32, line
+    inc lineCount
+    LBL skipNewline
+    
+    inc index
+    jmp charLoop
+    LBL breakChar
+    
+    add filePos, prevArg, sizeToRead
+    jmp readLoop
+    LBL breakRead
+    
+    closeFile fileHandle
     
     LBL cleanUp
     allocSize offset, names
-    LBL deleteLoop
+    LBL deleteLoop2
     sub offset, prevArg, 4
-    delAlloc names[offset]:s32
-    jmpNZ deleteLoop, offset
+    VAR name, s32
+    wrt name, names[offset]:s32
+    jmpE skipDelete, name, fileName
+    delAlloc name
+    LBL skipDelete
+    jmpNZ deleteLoop2, offset
     delAlloc names
 END
 
