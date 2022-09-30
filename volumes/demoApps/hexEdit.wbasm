@@ -24,6 +24,7 @@ VAR window, s32
 VAR openTitle, s32
 VAR seekTitle, s32
 VAR dataTitle, s32
+VAR deleteTitle, s32
 VAR malformedMessage, s32
 VAR boundsMessage, s32
 VAR advanceOption, s32
@@ -59,6 +60,7 @@ FUNC init, wsInit.id, guarded
     newTextAlloc openTitle, openTitleStart, openTitleEnd
     newTextAlloc seekTitle, seekTitleStart, seekTitleEnd
     newTextAlloc dataTitle, dataTitleStart, dataTitleEnd
+    newTextAlloc deleteTitle, deleteTitleStart, deleteTitleEnd
     newTextAlloc malformedMessage, malformedMessageStart, malformedMessageEnd
     newTextAlloc boundsMessage, boundsMessageStart, boundsMessageEnd
     
@@ -190,6 +192,8 @@ FUNC runEditor
     jmpE handleAdvance, option, advanceOption
     jmpE handleSeek, option, seekOption
     jmpE handleReplace, option, replaceOption
+    jmpE handleInsert, option, insertOption
+    jmpE handleDelete, option, deleteOption
     jmpE handleOpen, option, openOption
     # TODO: Handle more options.
     jmp editorLoop
@@ -208,6 +212,14 @@ FUNC runEditor
     
     LBL handleReplace
     call replaceData
+    jmp editorLoop
+    
+    LBL handleInsert
+    call insertData
+    jmp editorLoop
+    
+    LBL handleDelete
+    call deleteData
     jmp editorLoop
     
     LBL handleOpen
@@ -270,6 +282,9 @@ FUNC replaceData
     newArgFrame promptHexData.argsSize
     call promptHexData
     wrt buffer, promptHexData.args.dest
+    jmpNZ skipReturn, buffer
+    ret
+    LBL skipReturn
     
     VAR bufferSize, s16
     VAR endPos, s32
@@ -286,6 +301,81 @@ FUNC replaceData
     
     LBL cleanUp
     delAlloc buffer
+END
+
+FUNC insertData
+    VAR buffer, s32
+    newArgFrame promptHexData.argsSize
+    call promptHexData
+    wrt buffer, promptHexData.args.dest
+    jmpNZ skipReturn, buffer
+    ret
+    LBL skipReturn
+    
+    VAR bufferSize, s16
+    VAR fileAllocSize, s16
+    VAR nextFileSize, s32
+    allocSize bufferSize, buffer
+    allocSize fileAllocSize, fileBuffer
+    add nextFileSize, fileSize, bufferSize
+    jmpNG skipResize, nextFileSize, fileAllocSize
+    add fileAllocSize, nextFileSize, 500
+    VAR nextFileBuffer, s32
+    newAlloc nextFileBuffer, guardedAllocAttr, fileAllocSize
+    wrtBuff nextFileBuffer[0]:s8, fileBuffer[0]:s8, fileSize
+    delAlloc fileBuffer
+    wrt nextFileBuffer, fileBuffer
+    LBL skipResize
+    
+    VAR endPos, s32
+    add endPos, filePos, bufferSize
+    wrtBuff fileBuffer[endPos]:s8, fileBuffer[filePos]:s8, bufferSize
+    wrtBuff fileBuffer[filePos]:s8, buffer[0]:s8, bufferSize
+    add fileSize, prevArg, bufferSize
+    delAlloc buffer
+END
+
+FUNC deleteData
+    VAR text, s32
+    newArgFrame wsPromptWindowText.argsSize
+    wrt wsPromptWindowText.args.window, window
+    wrt wsPromptWindowText.args.message, deleteTitle
+    callRemote shellHandle, promptTextIndex
+    wrt text, wsPromptWindowText.args.dest
+    jmpNZ skipEscape, text
+    ret
+    LBL skipEscape
+    
+    VAR amountToDelete, s32
+    VAR endPos, s32
+    setErrJmp cleanUp
+    newArgFrame convertHexToPos.argsSize
+    wrt convertHexToPos.args.text, text
+    call convertHexToPos
+    wrt amountToDelete, convertHexToPos.args.dest
+    add endPos, filePos, amountToDelete
+    jmpG outOfBounds, endPos, fileSize
+    
+    VAR amountToMove, s32
+    sub amountToMove, fileSize, endPos
+    wrtBuff fileBuffer[filePos]:s8, fileBuffer[endPos]:s8, amountToMove
+    sub fileSize, prevArg, amountToDelete
+    jmp cleanUp
+    
+    LBL outOfBounds
+    newArgFrame wsDisplayWindowMessage.argsSize
+    wrt wsDisplayWindowMessage.args.window, window
+    wrt wsDisplayWindowMessage.args.message, boundsMessage
+    callRemote shellHandle, displayMessageIndex
+    
+    LBL cleanUp
+    clrErrJmp
+    delAlloc text
+    VAR err, s8
+    err err
+    jmpZ skipThrow, err
+    throw err
+    LBL skipThrow
 END
 
 FUNC openFile
@@ -539,6 +629,9 @@ APP_DATA
     LBL dataTitleStart
     DATA "Hex data:"
     LBL dataTitleEnd
+    LBL deleteTitleStart
+    DATA "Hex amount:"
+    LBL deleteTitleEnd
 END
 
 
