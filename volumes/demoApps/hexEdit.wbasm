@@ -25,8 +25,10 @@ VAR openTitle, s32
 VAR seekTitle, s32
 VAR dataTitle, s32
 VAR deleteTitle, s32
+VAR nameTitle, s32
 VAR malformedMessage, s32
 VAR boundsMessage, s32
+VAR savedMessage, s32
 VAR advanceOption, s32
 VAR seekOption, s32
 VAR replaceOption, s32
@@ -61,8 +63,10 @@ FUNC init, wsInit.id, guarded
     newTextAlloc seekTitle, seekTitleStart, seekTitleEnd
     newTextAlloc dataTitle, dataTitleStart, dataTitleEnd
     newTextAlloc deleteTitle, deleteTitleStart, deleteTitleEnd
+    newTextAlloc nameTitle, nameTitleStart, nameTitleEnd
     newTextAlloc malformedMessage, malformedMessageStart, malformedMessageEnd
     newTextAlloc boundsMessage, boundsMessageStart, boundsMessageEnd
+    newTextAlloc savedMessage, savedMessageStart, savedMessageEnd
     
     newTextAlloc advanceOption, advanceOptionStart, advanceOptionEnd
     newTextAlloc seekOption, seekOptionStart, seekOptionEnd
@@ -194,8 +198,9 @@ FUNC runEditor
     jmpE handleReplace, option, replaceOption
     jmpE handleInsert, option, insertOption
     jmpE handleDelete, option, deleteOption
+    jmpE handleSave, option, saveOption
+    jmpE handleSaveAs, option, saveAsOption
     jmpE handleOpen, option, openOption
-    # TODO: Handle more options.
     jmp editorLoop
     
     LBL handleEscape
@@ -220,6 +225,14 @@ FUNC runEditor
     
     LBL handleDelete
     call deleteData
+    jmp editorLoop
+    
+    LBL handleSave
+    call saveFile
+    jmp editorLoop
+    
+    LBL handleSaveAs
+    call saveFileAs
     jmp editorLoop
     
     LBL handleOpen
@@ -376,6 +389,46 @@ FUNC deleteData
     jmpZ skipThrow, err
     throw err
     LBL skipThrow
+END
+
+FUNC saveFile
+    VAR cond, s8
+    VAR fileHandle, s32
+    VAR fileType, s8
+    fileExists cond, fileName
+    jmpNZ handleDelete, cond
+    wrt fileType, 0
+    jmp skipDelete
+    LBL handleDelete
+    openFile fileHandle, fileName
+    fileType fileType, fileHandle
+    delFile fileHandle
+    LBL skipDelete
+    newFile fileName, fileType, 0, fileSize
+    openFile fileHandle, fileName
+    wrtFile fileHandle, 0, fileBuffer[0]:s8, fileSize
+    closeFile fileHandle
+    newArgFrame wsDisplayWindowMessage.argsSize
+    wrt wsDisplayWindowMessage.args.window, window
+    wrt wsDisplayWindowMessage.args.message, savedMessage
+    callRemote shellHandle, displayMessageIndex
+END
+
+FUNC saveFileAs
+    VAR newName, s32
+    newArgFrame wsPromptWindowText.argsSize
+    wrt wsPromptWindowText.args.window, window
+    wrt wsPromptWindowText.args.message, nameTitle
+    callRemote shellHandle, promptTextIndex
+    wrt newName, wsPromptWindowText.args.dest
+    jmpNZ skipEscape, newName
+    ret
+    LBL skipEscape
+    jmpZ skipDelete, fileName
+    delAlloc fileName
+    LBL skipDelete
+    wrt fileName, newName
+    call saveFile
 END
 
 FUNC openFile
@@ -632,6 +685,12 @@ APP_DATA
     LBL deleteTitleStart
     DATA "Hex amount:"
     LBL deleteTitleEnd
+    LBL savedMessageStart
+    DATA "Saved file."
+    LBL savedMessageEnd
+    LBL nameTitleStart
+    DATA "File name:"
+    LBL nameTitleEnd
 END
 
 
