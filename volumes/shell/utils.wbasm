@@ -1,4 +1,27 @@
 
+INCLUDE "../macros.wbasm"
+
+VAR shellHandle, s32
+VAR clrWindowIndex, s32
+VAR wrtWindowIndex, s32
+VAR hasFinishedInit, s8
+VAR hasSeed, s8
+VAR isPromptingSeed, s8
+VAR randomStateA, s32
+VAR randomStateB, s32
+VAR randomStateC, s32
+VAR randomStateD, s32
+
+FUNC init, wsInit.id, guarded
+    VAR shellName, s32
+    newTextAlloc shellName, shellNameStart, shellNameEnd
+    openFile shellHandle, shellName
+    delAlloc shellName
+    findFunc clrWindowIndex, shellHandle, wsClrWindow.id
+    findFunc wrtWindowIndex, shellHandle, wsWrtWindowTerm.id
+    wrt hasFinishedInit, 1
+END
+
 FUNC convertIntToText, -1
     ARG dest, s32
     ARG number, s32
@@ -167,6 +190,91 @@ FUNC finishString, -7
     wrtBuff dest[0]:s32, alloc[0]:s8, size
     delAlloc alloc
     delAlloc stringBuilder
+END
+
+FUNC promptRandomSeed, -8
+    ARG window, s32
+    
+    jmpZ waitInit, hasSeed
+    ret
+    LBL waitInit
+    jmpZ waitInit, hasFinishedInit
+    wrt randomStateA, 0
+    wrt randomStateB, 0
+    wrt randomStateC, 0
+    wrt randomStateD, 0
+    
+    newArgFrame wsClrWindow.argsSize
+    wrt wsClrWindow.args.window, window
+    callRemote shellHandle, clrWindowIndex
+    VAR message, s32
+    newTextAlloc message, seedMessageStart, seedMessageEnd
+    newArgFrame wsWrtWindowTerm.argsSize
+    wrt wsWrtWindowTerm.args.window, window
+    wrt wsWrtWindowTerm.args.x, 0
+    wrt wsWrtWindowTerm.args.y, 0
+    wrt wsWrtWindowTerm.args.text, message
+    callRemote shellHandle, wrtWindowIndex
+    delAlloc message
+    
+    wrt isPromptingSeed, 1
+    LBL seedLoop
+    inc randomStateA
+    jmpNZ seedLoop, isPromptingSeed
+    wrt hasSeed, 1
+    newArgFrame wsClrWindow.argsSize
+    wrt wsClrWindow.args.window, window
+    callRemote shellHandle, clrWindowIndex
+    
+    VAR count, s8
+    wrt count, 30
+    LBL warmUpLoop
+    newArgFrame generateRandomInt.argsSize
+    wrt generateRandomInt.args.maximumValue, 100
+    call generateRandomInt
+    dec count
+    jmpNZ warmUpLoop, count
+END
+
+FUNC finishRandomSeed, -9
+    ARG key, s8
+    jmpZ skipReturn, hasSeed
+    ret
+    LBL skipReturn
+    wrt randomStateB, key
+    wrt isPromptingSeed, 0
+END
+
+FUNC generateRandomInt, -10
+    ARG dest, s32
+    ARG maximumValue, s32
+    # This is an implementation of sfc32 (Simple Fastest Counter) as provided here:
+    # https://stackoverflow.com/questions/521295/seeding-the-random-number-generator-in-javascript
+    
+    VAR temp1, s32
+    VAR temp2, s32
+    add dest, randomStateA, randomStateB
+    bRight randomStateA, randomStateB, 9
+    bXor randomStateA, prevArg, randomStateB
+    bLeft randomStateB, randomStateC, 3
+    add randomStateB, prevArg, randomStateC
+    bLeft temp1, randomStateC, 21
+    bRight temp2, randomStateC, 11
+    bOr randomStateC, temp1, temp2
+    inc randomStateD
+    add dest, prevArg, randomStateD
+    add randomStateC, prevArg, dest
+    bAnd dest, prevArg, 0x7FFFFFFF
+    mod dest, prevArg, maximumValue
+END
+
+APP_DATA
+    LBL shellNameStart
+    DATA "wsShell"
+    LBL shellNameEnd
+    LBL seedMessageStart
+    DATA "Press any key toset random seed."
+    LBL seedMessageEnd
 END
 
 

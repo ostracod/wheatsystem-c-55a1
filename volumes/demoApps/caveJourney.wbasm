@@ -1,0 +1,79 @@
+
+INCLUDE "../macros.wbasm"
+INCLUDE "../utils.wbasm"
+INCLUDE "../stringBuilder.wbasm"
+
+VAR shellHandle, s32
+VAR utilsHandle, s32
+VAR displayMessageIndex, s32
+VAR randomIntIndex, s32
+VAR window, s32
+
+FUNC init, wsInit.id, guarded
+    VAR shellName, s32
+    newTextAlloc shellName, shellNameStart, shellNameEnd
+    openFile shellHandle, shellName
+    delAlloc shellName
+    findFunc displayMessageIndex, shellHandle, wsDisplayWindowMessage.id
+    
+    VAR utilsName, s32
+    newTextAlloc utilsName, utilsNameStart, utilsNameEnd
+    openFile utilsHandle, utilsName
+    delAlloc utilsName
+    launch utilsHandle
+    initStringBuilderVars
+    findFunc randomIntIndex, utilsHandle, generateRandomInt.id
+    
+    VAR newWindowIndex, s32
+    findFunc newWindowIndex, shellHandle, wsNewWindow.id
+    newArgFrame wsNewWindow.argsSize
+    callRemote shellHandle, newWindowIndex
+    wrt window, wsNewWindow.args.dest
+    
+    VAR promptSeedIndex, s32
+    findFunc promptSeedIndex, utilsHandle, promptRandomSeed.id
+    newArgFrame promptRandomSeed.argsSize
+    wrt promptRandomSeed.args.window, window
+    callRemote utilsHandle, promptSeedIndex
+END
+
+FUNC windowKeyPressed, wsWindowKeyPressed.id, guarded
+    ARG window, s32
+    ARG key, s8
+    
+    VAR finishSeedIndex, s32
+    findFunc finishSeedIndex, utilsHandle, finishRandomSeed.id
+    newArgFrame finishRandomSeed.argsSize
+    wrt finishRandomSeed.args.key, key
+    callRemote utilsHandle, finishSeedIndex
+END
+
+FUNC cleanUpAndQuit, 0, guarded
+    VAR delWindowIndex, s32
+    findFunc delWindowIndex, shellHandle, wsDelWindow.id
+    newArgFrame wsDelWindow.argsSize
+    wrt wsDelWindow.args.window, window
+    callRemote shellHandle, delWindowIndex
+    closeFile shellHandle
+    closeFile utilsHandle
+    quitApp
+END
+
+FUNC kill, wsKill.id, guarded
+    call cleanUpAndQuit
+END
+
+FUNC reqDelWindow, wsReqDelWindow.id, guarded
+    call cleanUpAndQuit
+END
+
+APP_DATA
+    LBL shellNameStart
+    DATA "wsShell"
+    LBL shellNameEnd
+    LBL utilsNameStart
+    DATA "utils"
+    LBL utilsNameEnd
+END
+
+

@@ -34,4 +34,17 @@ FUNC_TYPE finishString, -7
     ARG stringBuilder, s32
 END
 
+FUNC_TYPE promptRandomSeed, -8
+    ARG window, s32
+END
+
+FUNC_TYPE finishRandomSeed, -9
+    ARG key, s8
+END
+
+FUNC_TYPE generateRandomInt, -10
+    ARG dest, s32
+    ARG maximumValue, s32
+END
+
 
