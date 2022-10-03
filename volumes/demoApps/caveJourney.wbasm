@@ -3,11 +3,28 @@ INCLUDE "../macros.wbasm"
 INCLUDE "../utils.wbasm"
 INCLUDE "../stringBuilder.wbasm"
 
+DEF maxHealthScale, 5
+DEF levelExperienceScale, 2
+DEF maxEnergy, 10
+
 VAR shellHandle, s32
 VAR utilsHandle, s32
 VAR displayMessageIndex, s32
+VAR promptOptionIndex, s32
 VAR randomIntIndex, s32
 VAR window, s32
+
+VAR restMessage, s32
+VAR travelOptions, s32
+
+VAR playerLevel, s8
+VAR playerExperience, s16
+VAR playerHealth, s16
+VAR playerEnergy, s16
+VAR playerPos, s8
+VAR enemySpecies, s8
+VAR enemyLevel, s8
+VAR enemyHealth, s16
 
 FUNC init, wsInit.id, guarded
     VAR shellName, s32
@@ -15,6 +32,7 @@ FUNC init, wsInit.id, guarded
     openFile shellHandle, shellName
     delAlloc shellName
     findFunc displayMessageIndex, shellHandle, wsDisplayWindowMessage.id
+    findFunc promptOptionIndex, shellHandle, wsPromptWindowOption.id
     
     VAR utilsName, s32
     newTextAlloc utilsName, utilsNameStart, utilsNameEnd
@@ -23,6 +41,18 @@ FUNC init, wsInit.id, guarded
     launch utilsHandle
     initStringBuilderVars
     findFunc randomIntIndex, utilsHandle, generateRandomInt.id
+    
+    newTextAlloc restMessage, restMessageStart, restMessageEnd
+    
+    VAR text, s32
+    
+    newAlloc travelOptions, guardedAllocAttr, 12
+    newTextAlloc text, restOptionStart, restOptionEnd
+    wrt travelOptions[0]:s32, text
+    newTextAlloc text, forwardOptionStart, forwardOptionEnd
+    wrt travelOptions[4]:s32, text
+    newTextAlloc text, backwardOptionStart, backwardOptionEnd
+    wrt travelOptions[8]:s32, text
     
     VAR newWindowIndex, s32
     findFunc newWindowIndex, shellHandle, wsNewWindow.id
@@ -35,6 +65,114 @@ FUNC init, wsInit.id, guarded
     newArgFrame promptRandomSeed.argsSize
     wrt promptRandomSeed.args.window, window
     callRemote utilsHandle, promptSeedIndex
+    
+    LBL runLoop
+    call runGame
+    jmp runLoop
+END
+
+FUNC runGame
+    VAR message, s32
+    
+    wrt playerLevel, 5
+    wrt playerExperience, 0
+    wrt playerEnergy, maxEnergy
+    wrt playerPos, 0
+    
+    newTextAlloc message, introMessageStart, introMessageEnd
+    newArgFrame wsDisplayWindowMessage.argsSize
+    wrt wsDisplayWindowMessage.args.window, window
+    wrt wsDisplayWindowMessage.args.message, message
+    callRemote shellHandle, displayMessageIndex
+    delAlloc message
+    
+    LBL gameLoop
+    mul playerHealth, playerLevel, maxHealthScale
+    call performTravel
+    jmpG handleCoward, 0, playerPos
+    jmpNG handleVictory, 10, playerPos
+    call performBattle
+    jmpNG handleDeath, playerHealth, 0
+    jmp gameLoop
+    
+    LBL handleCoward
+    newTextAlloc message, cowardMessageStart, cowardMessageEnd
+    jmp displayMessage
+    LBL handleDeath
+    newTextAlloc message, deathMessageStart, deathMessageEnd
+    jmp displayMessage
+    LBL handleVictory
+    newTextAlloc message, victoryMessageStart, victoryMessageEnd
+    LBL displayMessage
+    newArgFrame wsDisplayWindowMessage.argsSize
+    wrt wsDisplayWindowMessage.args.window, window
+    wrt wsDisplayWindowMessage.args.message, message
+    callRemote shellHandle, displayMessageIndex
+    delAlloc message
+END
+
+FUNC performTravel
+    VAR nextLevelExperience, s16
+    VAR posInMeters, s16
+    VAR stringBuilder, s32
+    VAR message, s32
+    createStringBuilder stringBuilder
+    addAppDataToString stringBuilder, ?levelLabelStart, ?levelLabelEnd
+    addIntToString stringBuilder, playerLevel
+    addAppDataToString stringBuilder, ?playerNameStart, ?playerNameEnd
+    addCharToString stringBuilder, 10
+    addAppDataToString stringBuilder, ?experienceLabelStart, ?experienceLabelEnd
+    addIntToString stringBuilder, playerExperience
+    addCharToString stringBuilder, 47
+    mul nextLevelExperience, playerLevel, levelExperienceScale
+    addIntToString stringBuilder, nextLevelExperience
+    addCharToString stringBuilder, 10
+    addAppDataToString stringBuilder, ?energyLabelStart, ?energyLabelEnd
+    addIntToString stringBuilder, playerEnergy
+    addCharToString stringBuilder, 47
+    addIntToString stringBuilder, maxEnergy
+    addCharToString stringBuilder, 10
+    addAppDataToString stringBuilder, ?posLabelStart, ?posLabelEnd
+    mul posInMeters, playerPos, 10
+    addIntToString stringBuilder, posInMeters
+    addCharToString stringBuilder, 109
+    finishString message, stringBuilder
+    
+    LBL promptLoop
+    VAR index, s8
+    newArgFrame wsPromptWindowOption.argsSize
+    wrt wsPromptWindowOption.args.window, window
+    wrt wsPromptWindowOption.args.message, message
+    wrt wsPromptWindowOption.args.options, travelOptions
+    callRemote shellHandle, promptOptionIndex
+    wrt index, wsPromptWindowOption.args.dest
+    delAlloc message
+    jmpE handleRest, index, 0
+    jmpE handleForward, index, 1
+    jmpE handleBackward, index, 2
+    jmp promptLoop
+    
+    LBL handleRest
+    add playerEnergy, prevArg, 5
+    jmpNG skipClampEnergy, playerEnergy, maxEnergy
+    wrt playerEnergy, maxEnergy
+    LBL skipClampEnergy
+    newArgFrame wsDisplayWindowMessage.argsSize
+    wrt wsDisplayWindowMessage.args.window, window
+    wrt wsDisplayWindowMessage.args.message, restMessage
+    callRemote shellHandle, displayMessageIndex
+    ret
+    
+    LBL handleForward
+    inc playerPos
+    ret
+    
+    LBL handleBackward
+    dec playerPos
+END
+
+FUNC performBattle
+    # TODO: Implement.
 END
 
 FUNC windowKeyPressed, wsWindowKeyPressed.id, guarded
@@ -74,6 +212,82 @@ APP_DATA
     LBL utilsNameStart
     DATA "utils"
     LBL utilsNameEnd
+    LBL enemyTableStart
+    DATA ?spiderNameStart:s32, ?spiderNameEnd:s32
+    DATA ?spiderAttackStart:s32, ?spiderAttackEnd:s32
+    DATA ?snakeNameStart:s32, ?snakeNameEnd:s32
+    DATA ?snakeAttackStart:s32, ?snakeAttackEnd:s32
+    DATA ?batNameStart:s32, ?batNameEnd:s32
+    DATA ?batAttackStart:s32, ?batAttackEnd:s32
+    DATA ?bearNameStart:s32, ?bearNameEnd:s32
+    DATA ?bearAttackStart:s32, ?bearAttackEnd:s32
+    LBL enemyTableEnd
+    LBL spiderNameStart
+    DATA "Spider"
+    LBL spiderNameEnd
+    LBL spiderAttackStart
+    DATA "Venom"
+    LBL spiderAttackEnd
+    LBL snakeNameStart
+    DATA "Snake"
+    LBL snakeNameEnd
+    LBL snakeAttackStart
+    DATA "Tail Whip"
+    LBL snakeAttackEnd
+    LBL batNameStart
+    DATA "Bat"
+    LBL batNameEnd
+    LBL batAttackStart
+    DATA "Shriek"
+    LBL batAttackEnd
+    LBL bearNameStart
+    DATA "Bear"
+    LBL bearNameEnd
+    LBL bearAttackStart
+    DATA "Scratch"
+    LBL bearAttackEnd
+    LBL introMessageStart
+    DATA "Before you lies the mouth of a spooky cave. Legend has it that the cave contains the riches of Old Man Herman. Are you tough enough to reach the treasure?"
+    LBL introMessageEnd
+    LBL cowardMessageStart
+    DATA "You chicken out and decide that Old Man Herman's treasure is not worth the risk. (Bad end)"
+    LBL cowardMessageEnd
+    LBL deathMessageStart
+    DATA "You have come to an untimely demise. The treasure of Old Man Herman remains undiscovered."
+    LBL deathMessageEnd
+    LBL victoryMessageStart
+    DATA "At the farthest depths of the cave, you spot the treasure of Old Man Herman. Brushing off the dust, you find that it is a jar of fancy olives. YOU WIN! (Good end)"
+    LBL victoryMessageEnd
+    LBL levelLabelStart
+    DATA "LV "
+    LBL levelLabelEnd
+    LBL playerNameStart
+    DATA " Player"
+    LBL playerNameEnd
+    LBL posLabelStart
+    DATA "Dist="
+    LBL posLabelEnd
+    LBL healthLabelStart
+    DATA "HP="
+    LBL healthLabelEnd
+    LBL energyLabelStart
+    DATA "EP="
+    LBL energyLabelEnd
+    LBL experienceLabelStart
+    DATA "XP="
+    LBL experienceLabelEnd
+    LBL restOptionStart
+    DATA "Rest"
+    LBL restOptionEnd
+    LBL forwardOptionStart
+    DATA "Travel deeper"
+    LBL forwardOptionEnd
+    LBL backwardOptionStart
+    DATA "Retreat"
+    LBL backwardOptionEnd
+    LBL restMessageStart
+    DATA "You took a nap, and regained energy."
+    LBL restMessageEnd
 END
 
 
