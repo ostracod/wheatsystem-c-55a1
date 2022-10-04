@@ -3,9 +3,20 @@ INCLUDE "../macros.wbasm"
 INCLUDE "../utils.wbasm"
 INCLUDE "../stringBuilder.wbasm"
 
+MACRO readEnemyTable, dest, index
+    add offset, entryOffset, index
+    wrt startOffset, appData[offset]:s32
+    add offset, prevArg, 4
+    wrt endOffset, appData[offset]:s32
+    sub size, endOffset, startOffset
+    newAlloc dest, guardedAllocAttr, size
+    wrtBuff dest[0]:s8, appData[startOffset]:s8, size
+END
+
 DEF maxHealthScale, 5
 DEF levelExperienceScale, 2
 DEF maxEnergy, 10
+DEF enemyEntrySize, 16
 
 VAR shellHandle, s32
 VAR utilsHandle, s32
@@ -16,13 +27,17 @@ VAR window, s32
 
 VAR restMessage, s32
 VAR travelOptions, s32
+VAR battleOptions, s32
 
 VAR playerLevel, s8
 VAR playerExperience, s16
 VAR playerHealth, s16
 VAR playerEnergy, s16
 VAR playerPos, s8
+VAR enemySpeciesAmount, s8
 VAR enemySpecies, s8
+VAR enemySpeciesName, s32
+VAR enemyAttackName, s32
 VAR enemyLevel, s8
 VAR enemyHealth, s16
 
@@ -54,6 +69,14 @@ FUNC init, wsInit.id, guarded
     newTextAlloc text, backwardOptionStart, backwardOptionEnd
     wrt travelOptions[8]:s32, text
     
+    newAlloc battleOptions, guardedAllocAttr, 12
+    newTextAlloc text, punchOptionStart, punchOptionEnd
+    wrt battleOptions[0]:s32, text
+    newTextAlloc text, kickboxOptionStart, kickboxOptionEnd
+    wrt battleOptions[4]:s32, text
+    newTextAlloc text, helpOptionStart, helpOptionEnd
+    wrt battleOptions[8]:s32, text
+    
     VAR newWindowIndex, s32
     findFunc newWindowIndex, shellHandle, wsNewWindow.id
     newArgFrame wsNewWindow.argsSize
@@ -65,6 +88,10 @@ FUNC init, wsInit.id, guarded
     newArgFrame promptRandomSeed.argsSize
     wrt promptRandomSeed.args.window, window
     callRemote utilsHandle, promptSeedIndex
+    
+    VAR tableSize, s16
+    sub tableSize, ?enemyTableEnd, ?enemyTableStart
+    div enemySpeciesAmount, tableSize, enemyEntrySize
     
     LBL runLoop
     call runGame
@@ -146,7 +173,6 @@ FUNC performTravel
     wrt wsPromptWindowOption.args.options, travelOptions
     callRemote shellHandle, promptOptionIndex
     wrt index, wsPromptWindowOption.args.dest
-    delAlloc message
     jmpE handleRest, index, 0
     jmpE handleForward, index, 1
     jmpE handleBackward, index, 2
@@ -161,18 +187,162 @@ FUNC performTravel
     wrt wsDisplayWindowMessage.args.window, window
     wrt wsDisplayWindowMessage.args.message, restMessage
     callRemote shellHandle, displayMessageIndex
-    ret
+    jmp cleanUp
     
     LBL handleForward
     inc playerPos
-    ret
+    jmp cleanUp
     
     LBL handleBackward
     dec playerPos
+    
+    LBL cleanUp
+    delAlloc message
 END
 
 FUNC performBattle
-    # TODO: Implement.
+    newArgFrame generateRandomInt.argsSize
+    wrt generateRandomInt.args.maximumValue, enemySpeciesAmount
+    callRemote utilsHandle, randomIntIndex
+    wrt enemySpecies, generateRandomInt.args.dest
+    
+    newArgFrame generateRandomInt.argsSize
+    wrt generateRandomInt.args.maximumValue, 3
+    callRemote utilsHandle, randomIntIndex
+    add enemyLevel, playerPos, generateRandomInt.args.dest
+    add enemyLevel, prevArg, 2
+    mul enemyHealth, enemyLevel, maxHealthScale
+    
+    VAR entryOffset, s32
+    VAR offset, s32
+    VAR startOffset, s32
+    VAR endOffset, s32
+    VAR size, s8
+    mul entryOffset, enemySpecies, enemyEntrySize
+    add entryOffset, prevArg, ?enemyTableStart
+    readEnemyTable enemySpeciesName, 0
+    readEnemyTable enemyAttackName, 8
+    
+    VAR stringBuilder, s32
+    VAR message, s32
+    createStringBuilder stringBuilder
+    addAppDataToString stringBuilder, ?wildMessageStart, ?wildMessageEnd
+    addTextToString stringBuilder, enemySpeciesName
+    addAppDataToString stringBuilder, ?appearedMessageStart, ?appearedMessageEnd
+    finishString message, stringBuilder
+    
+    newArgFrame wsDisplayWindowMessage.argsSize
+    wrt wsDisplayWindowMessage.args.window, window
+    wrt wsDisplayWindowMessage.args.message, message
+    callRemote shellHandle, displayMessageIndex
+    delAlloc message
+    
+    LBL turnLoop
+    call performBattleTurn
+    jmpNG handleVictory, enemyHealth, 0
+    jmpNG cleanUp, playerHealth, 0
+    jmp turnLoop
+    
+    LBL handleVictory
+    createStringBuilder stringBuilder
+    addAppDataToString stringBuilder, ?defeatEnemyMessageStart, ?defeatEnemyMessageEnd
+    addTextToString stringBuilder, enemySpeciesName
+    addCharToString stringBuilder, 33
+    finishString message, stringBuilder
+    newArgFrame wsDisplayWindowMessage.argsSize
+    wrt wsDisplayWindowMessage.args.window, window
+    wrt wsDisplayWindowMessage.args.message, message
+    callRemote shellHandle, displayMessageIndex
+    delAlloc message
+    
+    VAR experienceReward, s16
+    sub experienceReward, enemyLevel, playerLevel
+    add experienceReward, prevArg, 3
+    jmpG skipClamp, experienceReward, 0
+    wrt experienceReward, 1
+    LBL skipClamp
+    add playerExperience, prevArg, experienceReward
+    
+    createStringBuilder stringBuilder
+    addAppDataToString stringBuilder, ?earnedMessageStart, ?earnedMessageEnd
+    addIntToString stringBuilder, experienceReward
+    addAppDataToString stringBuilder, ?experienceMessageStart, ?experienceMessageEnd
+    finishString message, stringBuilder
+    newArgFrame wsDisplayWindowMessage.argsSize
+    wrt wsDisplayWindowMessage.args.window, window
+    wrt wsDisplayWindowMessage.args.message, message
+    callRemote shellHandle, displayMessageIndex
+    delAlloc message
+    
+    VAR hasLeveledUp, s8
+    VAR nextLevelExperience, s16
+    wrt hasLeveledUp, 0
+    LBL levelUpLoop
+    mul nextLevelExperience, playerLevel, levelExperienceScale
+    jmpG breakLevelUp, nextLevelExperience, playerExperience
+    inc playerLevel
+    sub playerExperience, prevArg, nextLevelExperience
+    wrt hasLeveledUp, 1
+    jmp levelUpLoop
+    LBL breakLevelUp
+    jmpZ cleanUp, hasLeveledUp
+    
+    createStringBuilder stringBuilder
+    addAppDataToString stringBuilder, ?levelUpMessageStart, ?levelUpMessageEnd
+    addIntToString stringBuilder, playerLevel
+    addCharToString stringBuilder, 33
+    finishString message, stringBuilder
+    newArgFrame wsDisplayWindowMessage.argsSize
+    wrt wsDisplayWindowMessage.args.window, window
+    wrt wsDisplayWindowMessage.args.message, message
+    callRemote shellHandle, displayMessageIndex
+    delAlloc message
+    
+    LBL cleanUp
+    delAlloc enemySpeciesName
+    delAlloc enemyAttackName
+END
+
+FUNC performBattleTurn
+    VAR stringBuilder, s32
+    VAR message, s32
+    createStringBuilder stringBuilder
+    addAppDataToString stringBuilder, ?levelLabelStart, ?levelLabelEnd
+    addIntToString stringBuilder, playerLevel
+    addAppDataToString stringBuilder, ?playerNameStart, ?playerNameEnd
+    addCharToString stringBuilder, 10
+    addAppDataToString stringBuilder, ?healthLabelStart, ?healthLabelEnd
+    addIntToString stringBuilder, playerHealth
+    addCharToString stringBuilder, 32
+    addAppDataToString stringBuilder, ?energyLabelStart, ?energyLabelEnd
+    addIntToString stringBuilder, playerEnergy
+    addCharToString stringBuilder, 10
+    addAppDataToString stringBuilder, ?levelLabelStart, ?levelLabelEnd
+    addIntToString stringBuilder, enemyLevel
+    addCharToString stringBuilder, 32
+    addTextToString stringBuilder, enemySpeciesName
+    addCharToString stringBuilder, 10
+    addAppDataToString stringBuilder, ?healthLabelStart, ?healthLabelEnd
+    addIntToString stringBuilder, enemyHealth
+    finishString message, stringBuilder
+    
+    LBL promptLoop
+    VAR index, s8
+    newArgFrame wsPromptWindowOption.argsSize
+    wrt wsPromptWindowOption.args.window, window
+    wrt wsPromptWindowOption.args.message, message
+    wrt wsPromptWindowOption.args.options, battleOptions
+    callRemote shellHandle, promptOptionIndex
+    wrt index, wsPromptWindowOption.args.dest
+    jmpE handlePunch, index, 0
+    # TODO: Handle more options.
+    jmp promptLoop
+    
+    LBL handlePunch
+    wrt enemyHealth, 0
+    
+    LBL cleanUp
+    delAlloc message
 END
 
 FUNC windowKeyPressed, wsWindowKeyPressed.id, guarded
@@ -288,6 +458,33 @@ APP_DATA
     LBL restMessageStart
     DATA "You took a nap, and regained energy."
     LBL restMessageEnd
+    LBL wildMessageStart
+    DATA "A wild "
+    LBL wildMessageEnd
+    LBL appearedMessageStart
+    DATA " appeared!"
+    LBL appearedMessageEnd
+    LBL punchOptionStart
+    DATA "Punch (0 EP)"
+    LBL punchOptionEnd
+    LBL kickboxOptionStart
+    DATA "Kickbox (2 EP)"
+    LBL kickboxOptionEnd
+    LBL helpOptionStart
+    DATA "Call for help (0 EP)"
+    LBL helpOptionEnd
+    LBL defeatEnemyMessageStart
+    DATA "You defeated "
+    LBL defeatEnemyMessageEnd
+    LBL earnedMessageStart
+    DATA "You earned "
+    LBL earnedMessageEnd
+    LBL experienceMessageStart
+    DATA " XP!"
+    LBL experienceMessageEnd
+    LBL levelUpMessageStart
+    DATA "You reached level "
+    LBL levelUpMessageEnd
 END
 
 
