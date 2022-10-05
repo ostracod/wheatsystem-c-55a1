@@ -70,6 +70,12 @@
             "type": "bytecodeApp",
             "hasAdminPerm": false,
             "isGuarded": false
+        },
+        {
+            "name": "hangman",
+            "type": "bytecodeApp",
+            "hasAdminPerm": false,
+            "isGuarded": false
         }
     ]
 }

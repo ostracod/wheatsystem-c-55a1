@@ -85,5 +85,7 @@ This repository includes the following example volumes:
     * `calculator` performs addition, subtraction, multiplication, and division on floating-point numbers.
     * `wheatText` is a text editor for multi-line text files.
     * `hexEdit` allows the user to view and edit binary files.
+    * `caveJourney` is a simple roll-playing game.
+    * `hangman` is a word puzzle game.
 
 

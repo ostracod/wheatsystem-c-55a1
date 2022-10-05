@@ -1,0 +1,174 @@
+
+INCLUDE "../macros.wbasm"
+INCLUDE "../utils.wbasm"
+INCLUDE "../stringBuilder.wbasm"
+
+DEF answerEntrySize, 8
+DEF letterAmount, 26
+DEF maxGuessAmount, 6
+
+VAR shellHandle, s32
+VAR utilsHandle, s32
+VAR displayMessageIndex, s32
+VAR promptTextIndex, s32
+VAR randomIntIndex, s32
+VAR window, s32
+
+VAR answerAmount, s16
+VAR answer, s32
+VAR answerLen, s16
+# Contains one boolean value for each letter.
+VAR hasGuessedList, s8, letterAmount
+VAR guessedLetters, s8, maxGuessAmount
+VAR guessCount, s8
+
+FUNC init, wsInit.id, guarded
+    VAR shellName, s32
+    newTextAlloc shellName, shellNameStart, shellNameEnd
+    openFile shellHandle, shellName
+    delAlloc shellName
+    findFunc displayMessageIndex, shellHandle, wsDisplayWindowMessage.id
+    findFunc promptTextIndex, shellHandle, wsPromptWindowText.id
+    
+    VAR utilsName, s32
+    newTextAlloc utilsName, utilsNameStart, utilsNameEnd
+    openFile utilsHandle, utilsName
+    delAlloc utilsName
+    launch utilsHandle
+    initStringBuilderVars
+    findFunc randomIntIndex, utilsHandle, generateRandomInt.id
+    
+    VAR newWindowIndex, s32
+    findFunc newWindowIndex, shellHandle, wsNewWindow.id
+    newArgFrame wsNewWindow.argsSize
+    callRemote shellHandle, newWindowIndex
+    wrt window, wsNewWindow.args.dest
+    
+    VAR promptSeedIndex, s32
+    findFunc promptSeedIndex, utilsHandle, promptRandomSeed.id
+    newArgFrame promptRandomSeed.argsSize
+    wrt promptRandomSeed.args.window, window
+    callRemote utilsHandle, promptSeedIndex
+    
+    sub answerAmount, ?answerTableEnd, ?answerTableStart
+    div answerAmount, prevArg, answerEntrySize
+    
+    LBL gameLoop
+    call runGame
+    jmp gameLoop
+END
+
+FUNC runGame
+    VAR offset, s32
+    VAR startOffset, s32
+    VAR endOffset, s32
+    newArgFrame generateRandomInt.argsSize
+    wrt generateRandomInt.args.maximumValue, answerAmount
+    callRemote utilsHandle, randomIntIndex
+    mul offset, generateRandomInt.args.dest, answerEntrySize
+    add offset, prevArg, ?answerTableStart
+    wrt startOffset, appData[offset]:s32
+    add offset, prevArg, 4
+    wrt endOffset, appData[offset]:s32
+    sub answerLen, endOffset, startOffset
+    newAlloc answer, guardedAllocAttr, answerLen
+    wrtBuff answer[0]:s8, appData[startOffset]:s8, answerLen
+    
+    fillBuff hasGuessedList, letterAmount, 0:s8
+    wrt guessCount, 0
+    
+    LBL guessLoop
+    call promptGuess
+    jmp guessLoop
+    
+    delAlloc answer
+END
+
+FUNC promptGuess
+    VAR stringBuilder, s32
+    VAR index, s16
+    VAR char, s8
+    VAR offset, s8
+    VAR message, s32
+    createStringBuilder stringBuilder
+    wrt index, 0
+    LBL charLoop
+    wrt char, answer[index]:s8
+    jmpE skipHide, char, 32
+    sub offset, char, 65
+    add offset, prevArg, ?hasGuessedList
+    jmpNZ skipHide, globalFrame[offset]:s8
+    wrt char, 95
+    LBL skipHide
+    addCharToString stringBuilder, char
+    inc index
+    jmpG charLoop, answerLen, index
+    finishString message, stringBuilder
+    
+    LBL promptLoop
+    VAR guessText, s32
+    newArgFrame wsPromptWindowText.argsSize
+    wrt wsPromptWindowText.args.window, window
+    wrt wsPromptWindowText.args.message, message
+    callRemote shellHandle, promptTextIndex
+    wrt guessText, wsPromptWindowText.args.dest
+    jmpZ promptLoop, guessText
+    
+    delAlloc message
+    delAlloc guessText
+END
+
+FUNC windowKeyPressed, wsWindowKeyPressed.id, guarded
+    ARG window, s32
+    ARG key, s8
+    
+    VAR finishSeedIndex, s32
+    findFunc finishSeedIndex, utilsHandle, finishRandomSeed.id
+    newArgFrame finishRandomSeed.argsSize
+    wrt finishRandomSeed.args.key, key
+    callRemote utilsHandle, finishSeedIndex
+END
+
+FUNC cleanUpAndQuit, 0, guarded
+    VAR delWindowIndex, s32
+    findFunc delWindowIndex, shellHandle, wsDelWindow.id
+    newArgFrame wsDelWindow.argsSize
+    wrt wsDelWindow.args.window, window
+    callRemote shellHandle, delWindowIndex
+    closeFile shellHandle
+    closeFile utilsHandle
+    quitApp
+END
+
+FUNC kill, wsKill.id, guarded
+    call cleanUpAndQuit
+END
+
+FUNC reqDelWindow, wsReqDelWindow.id, guarded
+    call cleanUpAndQuit
+END
+
+APP_DATA
+    LBL shellNameStart
+    DATA "wsShell"
+    LBL shellNameEnd
+    LBL utilsNameStart
+    DATA "utils"
+    LBL utilsNameEnd
+    LBL answerTableStart
+    DATA ?answer1Start:s32, ?answer1End:s32
+    DATA ?answer2Start:s32, ?answer2End:s32
+    DATA ?answer3Start:s32, ?answer3End:s32
+    LBL answerTableEnd
+    LBL answer1Start
+    DATA "KITTY CAT"
+    LBL answer1End
+    LBL answer2Start
+    DATA "CRAB CLAW"
+    LBL answer2End
+    LBL answer3Start
+    DATA "HORSE STABLE"
+    LBL answer3End
+END
+
+
