@@ -14,13 +14,16 @@ VAR promptTextIndex, s32
 VAR randomIntIndex, s32
 VAR window, s32
 
+VAR malformedMessage, s32
+VAR redundantMessage, s32
+
 VAR answerAmount, s16
 VAR answer, s32
 VAR answerLen, s16
 # Contains one boolean value for each letter.
 VAR hasGuessedList, s8, letterAmount
-VAR guessedLetters, s8, maxGuessAmount
-VAR guessCount, s8
+VAR badGuesses, s8, maxGuessAmount
+VAR badGuessCount, s8
 
 FUNC init, wsInit.id, guarded
     VAR shellName, s32
@@ -43,6 +46,9 @@ FUNC init, wsInit.id, guarded
     newArgFrame wsNewWindow.argsSize
     callRemote shellHandle, newWindowIndex
     wrt window, wsNewWindow.args.dest
+    
+    newTextAlloc malformedMessage, malformedMessageStart, malformedMessageEnd
+    newTextAlloc redundantMessage, redundantMessageStart, redundantMessageEnd
     
     VAR promptSeedIndex, s32
     findFunc promptSeedIndex, utilsHandle, promptRandomSeed.id
@@ -75,20 +81,48 @@ FUNC runGame
     wrtBuff answer[0]:s8, appData[startOffset]:s8, answerLen
     
     fillBuff hasGuessedList, letterAmount, 0:s8
-    wrt guessCount, 0
+    wrt badGuessCount, 0
     
     LBL guessLoop
+    VAR hasWon, s8
+    newArgFrame promptGuess.argsSize
     call promptGuess
-    jmp guessLoop
+    wrt hasWon, promptGuess.args.dest
+    jmpNZ finishGame, hasWon
+    jmpG guessLoop, maxGuessAmount, badGuessCount
     
+    LBL finishGame
+    VAR stringBuilder, s32
+    VAR message, s32
+    createStringBuilder stringBuilder
+    jmpZ handleFailure, hasWon
+    addAppDataToString stringBuilder, ?successMessageStart, ?successMessageEnd
+    jmp skipFailure
+    LBL handleFailure
+    addAppDataToString stringBuilder, ?failureMessageStart, ?failureMessageEnd
+    LBL skipFailure
+    addCharToString stringBuilder, 10
+    addTextToString stringBuilder, answer
+    finishString message, stringBuilder
+    
+    newArgFrame wsDisplayWindowMessage.argsSize
+    wrt wsDisplayWindowMessage.args.window, window
+    wrt wsDisplayWindowMessage.args.message, message
+    callRemote shellHandle, displayMessageIndex
+    delAlloc message
     delAlloc answer
 END
 
 FUNC promptGuess
-    VAR stringBuilder, s32
+    # Returns whether the answer has been guessed completely.
+    ARG dest, s8
+    
     VAR index, s16
     VAR char, s8
     VAR offset, s8
+    VAR size, s16
+    
+    VAR stringBuilder, s32
     VAR message, s32
     createStringBuilder stringBuilder
     wrt index, 0
@@ -103,6 +137,16 @@ FUNC promptGuess
     addCharToString stringBuilder, char
     inc index
     jmpG charLoop, answerLen, index
+    addCharToString stringBuilder, 10
+    addAppDataToString stringBuilder, ?guessesLabelStart, ?guessesLabelEnd
+    wrt index, 0
+    LBL badGuessLoop
+    jmpNG breakBadGuess, badGuessCount, index
+    add offset, ?badGuesses, index
+    addCharToString stringBuilder, globalFrame[offset]:s8
+    inc index
+    jmp badGuessLoop
+    LBL breakBadGuess
     finishString message, stringBuilder
     
     LBL promptLoop
@@ -114,8 +158,79 @@ FUNC promptGuess
     wrt guessText, wsPromptWindowText.args.dest
     jmpZ promptLoop, guessText
     
-    delAlloc message
+    VAR guess, s8
+    allocSize size, guessText
+    jmpNE malformedGuess, size, 1
+    wrt guess, guessText[0]:s8
+    jmpG skipLowercase, 97, guess
+    jmpG skipLowercase, guess, 122
+    sub guess, prevArg, 32
+    LBL skipLowercase
+    jmpG malformedGuess, 65, guess
+    jmpG malformedGuess, guess, 90
     delAlloc guessText
+    
+    VAR hasGuessed, s8
+    sub offset, guess, 65
+    add offset, prevArg, ?hasGuessedList
+    wrt hasGuessed, globalFrame[offset]:s8
+    jmpNZ redundantGuess, hasGuessed
+    wrt globalFrame[offset]:s8, 1
+    newArgFrame evaluateGuess.argsSize
+    wrt evaluateGuess.args.guess, guess
+    call evaluateGuess
+    wrt dest, evaluateGuess.args.dest
+    jmp cleanUp
+    
+    LBL malformedGuess
+    newArgFrame wsDisplayWindowMessage.argsSize
+    wrt wsDisplayWindowMessage.args.window, window
+    wrt wsDisplayWindowMessage.args.message, malformedMessage
+    callRemote shellHandle, displayMessageIndex
+    delAlloc guessText
+    jmp promptLoop
+    
+    LBL redundantGuess
+    newArgFrame wsDisplayWindowMessage.argsSize
+    wrt wsDisplayWindowMessage.args.window, window
+    wrt wsDisplayWindowMessage.args.message, redundantMessage
+    callRemote shellHandle, displayMessageIndex
+    jmp promptLoop
+    
+    LBL cleanUp
+    delAlloc message
+END
+
+FUNC evaluateGuess
+    ARG dest, s8
+    ARG guess, s8
+    
+    VAR guessIsCorrect, s8
+    VAR index, s8
+    VAR offset, s8
+    wrt guessIsCorrect, 0
+    wrt dest, 1
+    wrt index, 0
+    LBL charLoop
+    VAR char, s8
+    wrt char, answer[index]:s8
+    jmpNE skipCorrect, char, guess
+    wrt guessIsCorrect, 1
+    LBL skipCorrect
+    jmpE skipIncomplete, char, 32
+    sub offset, char, 65
+    add offset, prevArg, ?hasGuessedList
+    jmpNZ skipIncomplete, globalFrame[offset]:s8
+    wrt dest, 0
+    LBL skipIncomplete
+    inc index
+    jmpG charLoop, answerLen, index
+    
+    jmpNZ skipBadGuess, guessIsCorrect
+    add offset, ?badGuesses, badGuessCount
+    wrt globalFrame[offset]:s8, guess
+    inc badGuessCount
+    LBL skipBadGuess
 END
 
 FUNC windowKeyPressed, wsWindowKeyPressed.id, guarded
@@ -159,16 +274,79 @@ APP_DATA
     DATA ?answer1Start:s32, ?answer1End:s32
     DATA ?answer2Start:s32, ?answer2End:s32
     DATA ?answer3Start:s32, ?answer3End:s32
+    DATA ?answer4Start:s32, ?answer4End:s32
+    DATA ?answer5Start:s32, ?answer5End:s32
+    DATA ?answer6Start:s32, ?answer6End:s32
+    DATA ?answer7Start:s32, ?answer7End:s32
+    DATA ?answer8Start:s32, ?answer8End:s32
+    DATA ?answer9Start:s32, ?answer9End:s32
+    DATA ?answer10Start:s32, ?answer10End:s32
+    DATA ?answer11Start:s32, ?answer11End:s32
+    DATA ?answer12Start:s32, ?answer12End:s32
+    DATA ?answer13Start:s32, ?answer13End:s32
+    DATA ?answer14Start:s32, ?answer14End:s32
+    DATA ?answer15Start:s32, ?answer15End:s32
     LBL answerTableEnd
     LBL answer1Start
-    DATA "KITTY CAT"
+    DATA "WHEAT SYSTEM"
     LBL answer1End
     LBL answer2Start
-    DATA "CRAB CLAW"
+    DATA "BYTECODE APPLICATION"
     LBL answer2End
     LBL answer3Start
-    DATA "HORSE STABLE"
+    DATA "UNIFIED HEAP"
     LBL answer3End
+    LBL answer4Start
+    DATA "ADMIN PERMISSION"
+    LBL answer4End
+    LBL answer5Start
+    DATA "THROTTLE ERROR"
+    LBL answer5End
+    LBL answer6Start
+    DATA "INSTRUCTION SET"
+    LBL answer6End
+    LBL answer7Start
+    DATA "SIGNED INTEGER"
+    LBL answer7End
+    LBL answer8Start
+    DATA "LITTLE ENDIAN"
+    LBL answer8End
+    LBL answer9Start
+    DATA "FUNCTION TABLE"
+    LBL answer9End
+    LBL answer10Start
+    DATA "ARGUMENT FRAME"
+    LBL answer10End
+    LBL answer11Start
+    DATA "SENTRY ALLOCATION"
+    LBL answer11End
+    LBL answer12Start
+    DATA "TERMINAL DRIVER"
+    LBL answer12End
+    LBL answer13Start
+    DATA "FILE HANDLE"
+    LBL answer13End
+    LBL answer14Start
+    DATA "SERIAL PORT"
+    LBL answer14End
+    LBL answer15Start
+    DATA "SHELL WINDOW"
+    LBL answer15End
+    LBL guessesLabelStart
+    DATA "Guesses: "
+    LBL guessesLabelEnd
+    LBL malformedMessageStart
+    DATA "Please guess one letter."
+    LBL malformedMessageEnd
+    LBL redundantMessageStart
+    DATA "You already guessed that letter."
+    LBL redundantMessageEnd
+    LBL successMessageStart
+    DATA "You got the answer!"
+    LBL successMessageEnd
+    LBL failureMessageStart
+    DATA "You lost! The answer was:"
+    LBL failureMessageEnd
 END
 
 
