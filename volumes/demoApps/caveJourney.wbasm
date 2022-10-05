@@ -17,6 +17,7 @@ DEF maxHealthScale, 5
 DEF levelExperienceScale, 2
 DEF maxEnergy, 10
 DEF enemyEntrySize, 16
+DEF kickboxEnergy, 2
 
 VAR shellHandle, s32
 VAR utilsHandle, s32
@@ -26,6 +27,12 @@ VAR randomIntIndex, s32
 VAR window, s32
 
 VAR restMessage, s32
+VAR lowEnergyMessage, s32
+VAR helpMessage, s32
+VAR helplessMessage, s32
+VAR catMessage, s32
+VAR dogMessage, s32
+VAR stalactiteMessage, s32
 VAR travelOptions, s32
 VAR battleOptions, s32
 
@@ -58,6 +65,12 @@ FUNC init, wsInit.id, guarded
     findFunc randomIntIndex, utilsHandle, generateRandomInt.id
     
     newTextAlloc restMessage, restMessageStart, restMessageEnd
+    newTextAlloc lowEnergyMessage, lowEnergyMessageStart, lowEnergyMessageEnd
+    newTextAlloc helpMessage, helpMessageStart, helpMessageEnd
+    newTextAlloc helplessMessage, helplessMessageStart, helplessMessageEnd
+    newTextAlloc catMessage, catMessageStart, catMessageEnd
+    newTextAlloc dogMessage, dogMessageStart, dogMessageEnd
+    newTextAlloc stalactiteMessage, stalactiteMessageStart, stalactiteMessageEnd
     
     VAR text, s32
     
@@ -306,6 +319,7 @@ END
 FUNC performBattleTurn
     VAR stringBuilder, s32
     VAR message, s32
+    VAR promptMessage, s32
     createStringBuilder stringBuilder
     addAppDataToString stringBuilder, ?levelLabelStart, ?levelLabelEnd
     addIntToString stringBuilder, playerLevel
@@ -324,25 +338,146 @@ FUNC performBattleTurn
     addCharToString stringBuilder, 10
     addAppDataToString stringBuilder, ?healthLabelStart, ?healthLabelEnd
     addIntToString stringBuilder, enemyHealth
-    finishString message, stringBuilder
+    finishString promptMessage, stringBuilder
     
     LBL promptLoop
     VAR index, s8
     newArgFrame wsPromptWindowOption.argsSize
     wrt wsPromptWindowOption.args.window, window
-    wrt wsPromptWindowOption.args.message, message
+    wrt wsPromptWindowOption.args.message, promptMessage
     wrt wsPromptWindowOption.args.options, battleOptions
     callRemote shellHandle, promptOptionIndex
     wrt index, wsPromptWindowOption.args.dest
     jmpE handlePunch, index, 0
-    # TODO: Handle more options.
+    jmpE handleKickbox, index, 1
+    jmpE handleHelp, index, 2
     jmp promptLoop
     
+    VAR damageAmount, s16
     LBL handlePunch
+    wrt damageAmount, playerLevel
+    jmp damageEnemy
+    LBL handleKickbox
+    jmpG handleLowEnergy, kickboxEnergy, playerEnergy
+    mul damageAmount, playerLevel, 2
+    sub playerEnergy, prevArg, kickboxEnergy
+    
+    LBL damageEnemy
+    newArgFrame generateRandomInt.argsSize
+    wrt generateRandomInt.args.maximumValue, 3
+    callRemote utilsHandle, randomIntIndex
+    add damageAmount, prevArg, generateRandomInt.args.dest
+    sub enemyHealth, prevArg, damageAmount
+    jmpNG skipClampEnemy, 0, enemyHealth
     wrt enemyHealth, 0
+    LBL skipClampEnemy
+    
+    createStringBuilder stringBuilder
+    addTextToString stringBuilder, enemySpeciesName
+    addAppDataToString stringBuilder, ?lostMessageStart, ?lostMessageEnd
+    addIntToString stringBuilder, damageAmount
+    addAppDataToString stringBuilder, ?healthMessageStart, ?healthMessageEnd
+    finishString message, stringBuilder
+    newArgFrame wsDisplayWindowMessage.argsSize
+    wrt wsDisplayWindowMessage.args.window, window
+    wrt wsDisplayWindowMessage.args.message, message
+    callRemote shellHandle, displayMessageIndex
+    delAlloc message
+    jmp enemyAttack
+    
+    LBL handleLowEnergy
+    newArgFrame wsDisplayWindowMessage.argsSize
+    wrt wsDisplayWindowMessage.args.window, window
+    wrt wsDisplayWindowMessage.args.message, lowEnergyMessage
+    callRemote shellHandle, displayMessageIndex
+    jmp promptLoop
+    
+    LBL handleHelp
+    newArgFrame wsDisplayWindowMessage.argsSize
+    wrt wsDisplayWindowMessage.args.window, window
+    wrt wsDisplayWindowMessage.args.message, helpMessage
+    callRemote shellHandle, displayMessageIndex
+    
+    newArgFrame generateRandomInt.argsSize
+    wrt generateRandomInt.args.maximumValue, 6
+    callRemote utilsHandle, randomIntIndex
+    wrt index, generateRandomInt.args.dest
+    jmpE handleCat, index, 0
+    jmpE handleDog, index, 1
+    jmpE handleStalactite, index, 2
+    
+    newArgFrame wsDisplayWindowMessage.argsSize
+    wrt wsDisplayWindowMessage.args.window, window
+    wrt wsDisplayWindowMessage.args.message, helplessMessage
+    callRemote shellHandle, displayMessageIndex
+    jmp enemyAttack
+    
+    LBL handleCat
+    wrt playerEnergy, maxEnergy
+    newArgFrame wsDisplayWindowMessage.argsSize
+    wrt wsDisplayWindowMessage.args.window, window
+    wrt wsDisplayWindowMessage.args.message, catMessage
+    callRemote shellHandle, displayMessageIndex
+    jmp enemyAttack
+    
+    LBL handleDog
+    mul playerHealth, playerLevel, maxHealthScale
+    newArgFrame wsDisplayWindowMessage.argsSize
+    wrt wsDisplayWindowMessage.args.window, window
+    wrt wsDisplayWindowMessage.args.message, dogMessage
+    callRemote shellHandle, displayMessageIndex
+    jmp enemyAttack
+    
+    LBL handleStalactite
+    createStringBuilder stringBuilder
+    addAppDataToString stringBuilder, ?stalactiteMessageStart, ?stalactiteMessageEnd
+    addTextToString stringBuilder, enemySpeciesName
+    addCharToString stringBuilder, 33
+    finishString message, stringBuilder
+    newArgFrame wsDisplayWindowMessage.argsSize
+    wrt wsDisplayWindowMessage.args.window, window
+    wrt wsDisplayWindowMessage.args.message, message
+    callRemote shellHandle, displayMessageIndex
+    delAlloc message
+    wrt damageAmount, 50
+    jmp damageEnemy
+    
+    LBL enemyAttack
+    jmpNG cleanUp, enemyHealth, 0
+    createStringBuilder stringBuilder
+    addTextToString stringBuilder, enemySpeciesName
+    addAppDataToString stringBuilder, ?usedMessageStart, ?usedMessageEnd
+    addTextToString stringBuilder, enemyAttackName
+    addCharToString stringBuilder, 33
+    finishString message, stringBuilder
+    newArgFrame wsDisplayWindowMessage.argsSize
+    wrt wsDisplayWindowMessage.args.window, window
+    wrt wsDisplayWindowMessage.args.message, message
+    callRemote shellHandle, displayMessageIndex
+    delAlloc message
+    
+    newArgFrame generateRandomInt.argsSize
+    wrt generateRandomInt.args.maximumValue, 3
+    callRemote utilsHandle, randomIntIndex
+    add damageAmount, enemyLevel, generateRandomInt.args.dest
+    sub playerHealth, prevArg, damageAmount
+    jmpNG skipClampPlayer, 0, playerHealth
+    wrt playerHealth, 0
+    LBL skipClampPlayer
+    
+    createStringBuilder stringBuilder
+    addAppDataToString stringBuilder, ?youMessageStart, ?lostMessageEnd
+    addIntToString stringBuilder, damageAmount
+    addAppDataToString stringBuilder, ?healthMessageStart, ?healthMessageEnd
+    finishString message, stringBuilder
+    newArgFrame wsDisplayWindowMessage.argsSize
+    wrt wsDisplayWindowMessage.args.window, window
+    wrt wsDisplayWindowMessage.args.message, message
+    callRemote shellHandle, displayMessageIndex
+    delAlloc message
     
     LBL cleanUp
-    delAlloc message
+    delAlloc promptMessage
 END
 
 FUNC windowKeyPressed, wsWindowKeyPressed.id, guarded
@@ -485,6 +620,37 @@ APP_DATA
     LBL levelUpMessageStart
     DATA "You reached level "
     LBL levelUpMessageEnd
+    LBL youMessageStart
+    DATA "You"
+    LBL youMessageEnd
+    # Note that youMessage and lostMessage may sometimes be referenced together.
+    LBL lostMessageStart
+    DATA " lost "
+    LBL lostMessageEnd
+    LBL healthMessageStart
+    DATA " HP!"
+    LBL healthMessageEnd
+    LBL usedMessageStart
+    DATA " used "
+    LBL usedMessageEnd
+    LBL lowEnergyMessageStart
+    DATA "You don't have enough energy!"
+    LBL lowEnergyMessageEnd
+    LBL helpMessageStart
+    DATA "You shout for help..."
+    LBL helpMessageEnd
+    LBL helplessMessageStart
+    DATA "...but nothing happened."
+    LBL helplessMessageEnd
+    LBL catMessageStart
+    DATA "A cat brings you a protein bar. Your EP is restored!"
+    LBL catMessageEnd
+    LBL dogMessageStart
+    DATA "A dog brings you a first aid kit. Your HP is restored!"
+    LBL dogMessageEnd
+    LBL stalactiteMessageStart
+    DATA "A stalactite falls on the "
+    LBL stalactiteMessageEnd
 END
 
 
