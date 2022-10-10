@@ -337,7 +337,7 @@ FUNC insertData
     newAlloc nextFileBuffer, guardedAllocAttr, fileAllocSize
     wrtBuff nextFileBuffer[0]:s8, fileBuffer[0]:s8, fileSize
     delAlloc fileBuffer
-    wrt nextFileBuffer, fileBuffer
+    wrt fileBuffer, nextFileBuffer
     LBL skipResize
     
     VAR endPos, s32
