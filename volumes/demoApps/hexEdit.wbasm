@@ -341,8 +341,12 @@ FUNC insertData
     LBL skipResize
     
     VAR endPos, s32
+    VAR sizeToMove, s32
     add endPos, filePos, bufferSize
-    wrtBuff fileBuffer[endPos]:s8, fileBuffer[filePos]:s8, bufferSize
+    sub sizeToMove, fileSize, filePos
+    jmpZ skipMove, sizeToMove
+    wrtBuff fileBuffer[endPos]:s8, fileBuffer[filePos]:s8, sizeToMove
+    LBL skipMove
     wrtBuff fileBuffer[filePos]:s8, buffer[0]:s8, bufferSize
     add fileSize, prevArg, bufferSize
     delAlloc buffer
